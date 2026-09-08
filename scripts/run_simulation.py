@@ -43,7 +43,10 @@ def load_trades():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenarios", type=int, default=2000)
-    parser.add_argument("--method", default="pseudo_random")
+    parser.add_argument("--method", default="latin_hypercube",
+                         help="Default is latin_hypercube -- validated as the best speed/accuracy "
+                              "tradeoff on both a controlled option test and the real 39-factor "
+                              "engine, see docs/notes/simulation_engine_and_variance_reduction.md")
     parser.add_argument("--confidence", type=float, default=0.95)
     parser.add_argument("--serial", action="store_true", help="Force serial repricing (skip multiprocessing)")
     parser.add_argument("--curve-date", default="2026-08-28",
