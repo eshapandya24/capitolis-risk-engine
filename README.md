@@ -17,17 +17,17 @@ TRS.
 ├── capitolis_pricers/           # pricing library (Capitolis-supplied, standard-library only)
 ├── src/risk_engine/
 │   ├── market/                 # MarketState construction: fetch/clean/cache per source
-│   ├── models/                 # stochastic risk factor models (scaffolding, not yet implemented)
-│   ├── simulation/             # Monte Carlo engine (scaffolding, not yet implemented)
-│   ├── exposure/                # EE/PFE/MPE aggregation (scaffolding, not yet implemented)
+│   ├── models/                 # Hull-White rate model + correlated GBM equity/FX, calibrated to real data
+│   ├── simulation/             # Monte Carlo engine: paths, repricing, multiprocessing, RNG techniques
+│   ├── exposure/                # EE/PFE/MPE aggregation, netted by counterparty
 │   └── validation/              # analytical benchmarks (e.g. bond forward closed form)
-├── scripts/                     # standalone data-pull / demo scripts
+├── scripts/                     # data pulls, full-book pricing, simulation driver, benchmarks
 ├── notebooks/                   # exploration notebooks
 ├── tests/                       # validation + unit tests
 └── docs/
     ├── kickoff_deck.pdf
     ├── pricer_contract.md       # original capitolis_pricers/README.md
-    └── notes/                    # dated check-in / review notes
+    └── notes/                    # dated check-in / review / analysis notes
 ```
 
 ## Install
@@ -63,10 +63,32 @@ Databento, equity spots + FX via yfinance):
 python scripts/price_full_book_real_data.py
 ```
 
+Calculate today's Current Exposure, gross and netted by counterparty:
+
+```bash
+python scripts/calculate_current_exposure.py
+```
+
+Run the full Monte Carlo simulation — calibrates models from real data,
+simulates correlated paths, reprices the book at every scenario/node, and
+produces EE/PFE/MPE profiles (self-validates against Current Exposure):
+
+```bash
+python scripts/run_simulation.py --scenarios 2000
+```
+
 Pull 3 years of historical data for volatility/correlation calibration:
 
 ```bash
 python scripts/pull_historical_data.py
+```
+
+Compare random-number-generation techniques for speed/accuracy, and Greeks
+techniques (pathwise vs. bump-and-reprice):
+
+```bash
+python scripts/benchmark_variance_reduction.py
+python scripts/compute_greeks_demo.py
 ```
 
 Run tests:
@@ -83,36 +105,44 @@ pytest tests/
   ([`docs/pricer_contract.md`](docs/pricer_contract.md)); summarized field
   contracts and conventions in
   [`docs/notes/pricer_review.md`](docs/notes/pricer_review.md).
-- Repo reorganized into the structure above; flattened the doubled
-  `capitolis_pricers/capitolis_pricers/` nesting from the original zip.
+- Repo reorganized; flattened the doubled `capitolis_pricers/capitolis_pricers/`
+  nesting from the original zip.
 - Inventoried all 16 trades by instrument type and counterparty, listed the
   41 underlying equity basket rows (37 unique names) and 5 bond types.
-- Built [`data/MARKET_DATA.md`](data/MARKET_DATA.md), a per-series checklist
-  (source, identifier, date range, frequency, status) for all required
-  market data, reconciled against the pricer package's own spec.
-- All five market data series are pulled, built, and validated: the USD
-  discount curve (bootstrapped from Databento SOFR futures, cross-checked
-  against Treasury.gov par yields), equity spots + dividends for all 37
-  names, USDJPY spot, historical realized volatilities, and the pairwise
-  correlation matrix (PSD-confirmed) — see `data/MARKET_DATA.md` for full
-  detail on sources, methods, and the bugs found and fixed along the way.
-- All 16 trades price successfully end-to-end against real market data
-  (`scripts/price_full_book_real_data.py`).
-- A validation sanity test
-  ([`tests/test_bond_forward_validation.py`](tests/test_bond_forward_validation.py))
-  prices a risk-free bond forward off a flat USD curve, cross-checked
-  against an independent closed-form recomputation, plus directional
-  (ITM/OTM/long-short-symmetry) checks.
-- `models/`, `simulation/`, `exposure/` scaffolded with `__init__.py` +
-  docstrings only — no modeling logic yet.
+- All five market data series pulled, built, and independently validated
+  (USD curve vs. Treasury.gov, historical vols/correlations sanity-checked)
+  — see [`data/MARKET_DATA.md`](data/MARKET_DATA.md) for sources, methods,
+  and bugs found and fixed along the way.
+- All 16 trades price end-to-end against real market data; Current Exposure
+  (gross and netted by counterparty) calculated from real MTMs.
+- **The Monte Carlo simulation engine is built end-to-end**: a Hull-White
+  one-factor rate model + correlated GBM for all 37 equities/USDJPY,
+  calibrated entirely from data already collected, simulating the book
+  forward and producing full EE/PFE/MPE exposure profiles. Self-validates
+  (EE(t=0) matches hand-calculated Current Exposure to ~0.02%; the exposure
+  profile correctly collapses once trades mature). See
+  [`docs/notes/simulation_engine_and_variance_reduction.md`](docs/notes/simulation_engine_and_variance_reduction.md)
+  for the full build writeup, two measured speed optimizations (10.6x from
+  an exact analytic discount curve; a further 2.2x from fixing a Windows
+  multiprocessing bug), a controlled comparison of 5 random-number
+  techniques (Latin Hypercube wins on both a toy option case and the real
+  39-factor engine), and an extension to Greeks (pathwise vs.
+  bump-and-reprice, with and without common random numbers).
+- 18 tests across pricer validation, market data (SOFR curve, correlations),
+  and the simulation engine (Hull-White/curve identity, GBM martingale
+  property, MC convergence, variance reduction, Cholesky correlation) — all
+  passing.
 
 **Open:**
-- FX forward points beyond spot (no confirmed source yet) — only needed
-  once FX is simulated as a risk factor, not for pricing today's snapshot.
-- JPY compo trade count is confirmed at 2 (`EQTRS_0005`, `EQTRS_0006`),
-  resolving the earlier discrepancy against the kickoff brief.
-- Next: risk factor models (`src/risk_engine/models/`), then the Monte
-  Carlo simulation engine and exposure aggregation.
+- FX forward points beyond spot (no confirmed source yet) — a minor
+  simplification in the current FX model, not a blocker.
+- Databento's data-availability lag means the rate curve is pinned a few
+  days behind the equity/FX spots' live timestamp — a small, disclosed
+  inconsistency, not a correctness issue.
+- Next: PFE-sensitivity Greeks (d(PFE)/dS at a future node, same
+  bump-and-reprice + common-random-numbers mechanism already validated);
+  a vectorized pricer reimplementation if scenario counts need to scale
+  into the tens of thousands.
 
 ## Trades at a glance
 
