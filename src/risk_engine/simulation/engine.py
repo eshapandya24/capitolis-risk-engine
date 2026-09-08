@@ -38,30 +38,60 @@ def trade_expiry(trade):
     raise AttributeError(f"Don't know how to find the expiry of {trade!r}")
 
 
-def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS):
-    """Monthly nodes from ref_date to the last trade's expiry (inclusive)."""
+def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days=None):
+    """Monthly "reporting" nodes from ref_date to the last trade's expiry
+    (inclusive). If `mpor_days` is given, an extra look-ahead node is
+    inserted `mpor_days` calendar days after EVERY reporting node (used for
+    MPOR-shifted/collateralized exposure -- see exposure/collateral.py) --
+    both node types sit on the SAME simulated path, so the look-ahead value
+    is a genuine "what does this same scenario look like a bit later"
+    query, not a separate simulation. Returns (dates, times, reporting_idx)
+    where reporting_idx maps each reporting node's position in `dates` to
+    {"reporting": i, "lookahead": j or None} (None if mpor_days wasn't
+    requested, or the look-ahead would fall past the trade horizon)."""
     ref_date = to_date(ref_date)
     horizon = max(trade_expiry(t) for t in trades.values())
-    dates = [ref_date]
+    reporting_dates = [ref_date]
     d = ref_date
     while d < horizon:
         d = _add_months(d, step_months)
-        dates.append(min(d, horizon))
+        reporting_dates.append(min(d, horizon))
         if d >= horizon:
             break
+
+    if mpor_days is None:
+        times = [year_fraction(ref_date, d, "ACT/365F") for d in reporting_dates]
+        return reporting_dates, times, {i: {"reporting": i, "lookahead": None} for i in range(len(reporting_dates))}
+
+    all_dates = set(reporting_dates)
+    lookahead_for = {}
+    for rd in reporting_dates:
+        la = rd + timedelta(days=mpor_days)
+        if la <= horizon:
+            all_dates.add(la)
+            lookahead_for[rd] = la
+    dates = sorted(all_dates)
+    date_to_idx = {d: i for i, d in enumerate(dates)}
     times = [year_fraction(ref_date, d, "ACT/365F") for d in dates]
-    return dates, times
+
+    node_map = {}
+    for i, rd in enumerate(reporting_dates):
+        node_map[i] = {"reporting": date_to_idx[rd],
+                        "lookahead": date_to_idx.get(lookahead_for.get(rd))}
+    return dates, times, node_map
 
 
 class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
-                 step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10)):
+                 step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
+                 mpor_days=None):
         self.calib = calib
         self.trades = trades
         self.method = method
         self.n_scenarios = n_scenarios
         self.seed = seed
         self.curve_tenors = curve_tenors
+        self.mpor_days = mpor_days
 
         self.hw = calib["hw"]
         self.gbm = calib["gbm"]
@@ -76,7 +106,8 @@ class SimulationEngine:
         corr = _nearest_psd(corr)
         self.L = np.linalg.cholesky(corr)
 
-        self.dates, self.times = build_time_grid(calib["ref_date"], trades, step_months)
+        self.dates, self.times, self.node_map = build_time_grid(
+            calib["ref_date"], trades, step_months, mpor_days=mpor_days)
         self.n_steps = len(self.times) - 1
 
         self.trade_expiries = {tid: trade_expiry(t) for tid, t in trades.items()}
