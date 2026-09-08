@@ -101,23 +101,50 @@ def _third_wednesday(year, month):
     return date(year, month, first_wednesday_day + 14)
 
 
+_MAX_PLAUSIBLE_EXPIRY_LAG_DAYS = 400  # see _contract_period docstring
+
+
 def _contract_period(symbol, ref_date):
     """Map an outright symbol (e.g. 'SR3Z6') to its 3-month reference period
     (start, end), both `date`s. Period runs IMM-date to IMM-date + 3 months.
 
-    The year code is a single digit (last digit of the year), resolved to
-    `ref_date`'s own decade. A contract whose resulting IMM date has already
-    passed relative to `ref_date` is a recently-expired one still lingering
-    in the feed, not a contract 10 years out -- build_curve() filters those
-    out via its "already covered" check rather than us guessing a wrapped
-    decade here (an earlier version did that and produced a spurious
-    multi-year gap in the curve; see data/MARKET_DATA.md #1)."""
+    The year code is a single digit (last digit of the year) and is
+    genuinely ambiguous across decades -- two real, distinct situations
+    produce a "same-decade" resolution that lands in the past, and they
+    must be told apart, not treated identically:
+
+      (a) A recently-expired serial contract still lingering in the feed
+          (e.g. 'SR3Q6' quoted alongside 2026 contracts, expiring within
+          the current decade) -- correctly a past date; build_curve()'s
+          "already covered" check filters these out, which is the right
+          outcome, achieved by NOT wrapping.
+      (b) A genuinely far-future contract whose digit wraps to the NEXT
+          decade (e.g. 'SR3H0' quoted in 2026 meaning March 2030, not
+          March 2020) -- an earlier version of this function never wrapped
+          at all, which fixed (a) but silently broke (b): far-dated real
+          contracts (digits below ref_date's own decade digit) resolved a
+          full decade too early and got wrongly dropped as "expired",
+          quietly truncating the curve's usable maturity range.
+
+    Distinguished by how far in the past the same-decade resolution lands:
+    within `_MAX_PLAUSIBLE_EXPIRY_LAG_DAYS` (~400 days) is treated as case
+    (a) (recently expired -- believable for a contract genuinely still in
+    the feed); anything further is case (b) (implausible for a live quote
+    -- must mean the next decade), and gets wrapped forward by exactly one
+    decade."""
     if not _OUTRIGHT_RE.match(symbol):
         raise ValueError(f"Not an outright SR3/SR1 symbol: {symbol!r}")
     month = _MONTH_CODE[symbol[3]]
     year_digit = int(symbol[4])
-    year = ref_date.year - (ref_date.year % 10) + year_digit
-    start = _third_wednesday(year, month)
+    base_decade = ref_date.year - (ref_date.year % 10)
+
+    same_decade_start = _third_wednesday(base_decade + year_digit, month)
+    days_in_past = (ref_date - same_decade_start).days
+    if days_in_past > _MAX_PLAUSIBLE_EXPIRY_LAG_DAYS:
+        start = _third_wednesday(base_decade + 10 + year_digit, month)
+    else:
+        start = same_decade_start
+
     end = add_months(start, 3)
     return start, end
 

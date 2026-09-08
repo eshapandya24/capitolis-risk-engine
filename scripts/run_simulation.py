@@ -4,10 +4,14 @@ data, simulate correlated paths, reprice the full 16-trade book at every
 (scenario, time-node), and aggregate into EE / PFE / MPE profiles per
 counterparty and for the book.
 
-Validates itself on every run: EE(t=0) (no randomness yet) must match the
-hand-calculated Current Exposure from scripts/calculate_current_exposure.py
-to within live-data drift (spots/FX are fetched fresh each run -- see that
-script's own docstring for why this isn't bit-identical between runs).
+Validates itself on every run: EE(t=0) (no randomness yet) must match a
+direct Current Exposure calculation computed from the EXACT SAME calibrated
+market snapshot (not a separately-cached file from a possibly-earlier run,
+which can go stale against real intervening market moves -- found exactly
+this failure mode once: a ~12hr-old cached comparison file showed 7-15%
+"discrepancies" that were entirely real overnight price moves, not a bug;
+computing the comparison from the same in-memory snapshot removes that
+whole failure mode, since both numbers are now built from identical data).
 
 Heavy imports (calibration, which pulls in databento/yfinance) are done
 INSIDE main(), not at module top-level -- required so Windows multiprocessing
@@ -62,6 +66,8 @@ def main():
     from risk_engine.models.calibration import build_calibration
     from risk_engine.simulation.engine import SimulationEngine
     from risk_engine.exposure.aggregate import build_profiles
+    from capitolis_pricers.market import MarketState
+    from capitolis_pricers.curves import FxCurve
 
     ref_date = date.fromisoformat(args.curve_date)
     calib = build_calibration(ref_date)
@@ -92,17 +98,34 @@ def main():
     for cpty, p in profiles.items():
         print(f"  {cpty:16s} EE(0)={p['EE'][0]:15,.2f}  PFE{int(args.confidence*100)}(0)={p['PFE'][0]:15,.2f}  MPE={p['MPE']:15,.2f}")
 
-    ce_path = os.path.join(ROOT, "data", "processed", f"current_exposure_{ref_date}.json")
-    if os.path.exists(ce_path):
-        with open(ce_path) as f:
-            ce = json.load(f)
-        print(f"\nCross-check against {os.path.basename(ce_path)}:")
-        for cpty, row in ce["netted_ce_by_counterparty"].items():
-            sim_ee0 = profiles[cpty]["EE"][0]
-            hand_ce = row["netted_ce"]
-            pct_diff = abs(sim_ee0 - hand_ce) / max(abs(hand_ce), 1.0) * 100
-            flag = "OK" if pct_diff < 5 else "CHECK (live-data drift between runs, or a real bug -- investigate if large)"
-            print(f"  {cpty:16s} sim EE(0)={sim_ee0:15,.2f}  hand CE={hand_ce:15,.2f}  diff={pct_diff:.2f}%  {flag}")
+    print(f"\nInternal consistency check (t=0 is deterministic -- EE(0) must match a direct "
+          f"reprice off the SAME calibrated snapshot, no live-data staleness possible):")
+    direct_npv = {}
+    # Use the SAME curve object the engine itself uses at t=0 (the exact
+    # analytic FastNodeCurve, not the original fixed-pillar interpolated
+    # Curve) -- those two differ by a documented, tiny (~2e-5 discount
+    # factor) interpolation gap, which would otherwise show up here as a
+    # false ~0.02-0.03% "discrepancy" that isn't actually a bug.
+    r0 = calib["hw"].short_rate0()
+    t0_curve = calib["hw"].fast_node_curve(calib["ref_date"], 0.0, r0)
+    market_t0 = MarketState(
+        ref_date=calib["ref_date"], reporting_ccy="USD",
+        discount_curves={"USD": t0_curve}, equity_spots=calib["equity_spots"],
+        equity_dividend_rates=calib["dividends"],
+        fx_curves={("USD", "JPY"): FxCurve("USD", "JPY", calib["fx_spot"], t0_curve)},
+    )
+    for tid, trade in trades.items():
+        direct_npv[tid] = trade.npv(market_t0, reporting=True)
+    direct_by_cpty = {}
+    for tid, npv in direct_npv.items():
+        direct_by_cpty.setdefault(trades[tid].counterparty, 0.0)
+        direct_by_cpty[trades[tid].counterparty] += npv
+    for cpty, net_mtm in sorted(direct_by_cpty.items()):
+        direct_ce = max(net_mtm, 0.0)
+        sim_ee0 = profiles[cpty]["EE"][0]
+        pct_diff = abs(sim_ee0 - direct_ce) / max(abs(direct_ce), 1.0) * 100
+        flag = "OK" if pct_diff < 0.5 else "BUG -- investigate (should match to float precision)"
+        print(f"  {cpty:16s} sim EE(0)={sim_ee0:15,.2f}  direct CE={direct_ce:15,.2f}  diff={pct_diff:.4f}%  {flag}")
 
     print(f"\nFull portfolio EE/PFE{int(args.confidence*100)} profile:")
     port = profiles["__portfolio__"]

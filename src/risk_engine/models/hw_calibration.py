@@ -1,0 +1,104 @@
+"""
+Calibrates the Hull-White mean-reversion speed `a` from REAL historical
+data, replacing the disclosed textbook assumption (a=0.03) flagged in
+docs/notes/convergence_study.md as the largest unquantified source of
+model uncertainty in the engine.
+
+Why this needed real work, not just a lookup: the standard way to calibrate
+`a` is against swaption/cap implied volatilities, which we don't have
+access to. Instead, this uses a real, standard alternative: HW1F predicts
+that the volatility of the instantaneous forward rate decays exponentially
+with time-to-maturity,
+
+    sigma_f(t, T) = sigma * exp(-a * (T - t))
+
+So measuring the REALIZED volatility of several SOFR futures contracts at
+different tenors (each contract's implied rate is a proxy for a forward
+rate at that tenor) lets `a` be fit from how fast that volatility decays
+across tenors -- linear regression of ln(vol) against tenor, slope = -a.
+This is a standard alternative calibration route when swaption data isn't
+available (sometimes called calibrating to the historical volatility term
+structure), not something invented for this project.
+
+Approximation disclosed rather than hidden: each contract's time-to-
+maturity shrinks day by day as its own historical window progresses, so
+"the tenor" isn't single-valued over the whole history -- this uses each
+contract's AVERAGE tenor over its available history as one representative
+x-value per contract. A refinement would bucket by tenor across all
+contract-days rather than averaging per contract.
+
+The fitted `sigma` from this same regression is NOT used to override
+models/rates.py's `sigma` (which comes from realized SOFR spot vol,
+vols.py, a more directly interpretable measure of instantaneous rate
+vol) -- it's reported alongside as a cross-check. See
+build_calibrated_mean_reversion()'s docstring for why.
+"""
+import math
+from datetime import date, timedelta
+
+import numpy as np
+
+from ..market.sofr import _client, DATASET, _contract_period
+
+CANDIDATE_CONTRACTS = ["SR3U6", "SR3Z6", "SR3H7", "SR3U7", "SR3H8", "SR3U8", "SR3H9", "SR3H0"]
+
+
+def fetch_contract_history(symbol, ref_date, lookback_days=730):
+    client = _client()
+    end = ref_date
+    start = end - timedelta(days=lookback_days)
+    data = client.timeseries.get_range(
+        dataset=DATASET, symbols=[symbol], stype_in="raw_symbol",
+        schema="ohlcv-1d", start=start.isoformat(), end=(end + timedelta(days=1)).isoformat(),
+    )
+    return data.to_df().reset_index()
+
+
+def realized_vol_and_avg_tenor(symbol, ref_date):
+    """Annualized normal vol of the contract's implied rate (100-price),
+    and its average time-to-maturity (years) over the available history."""
+    df = fetch_contract_history(symbol, ref_date)
+    if len(df) < 30:
+        return None
+    implied_rate = (100.0 - df["close"]) / 100.0
+    diffs = implied_rate.diff().dropna()
+    vol = float(diffs.std() * math.sqrt(252))
+
+    contract_start, _ = _contract_period(symbol, ref_date)
+    ts = df["ts_event"].dt.tz_localize(None).dt.date
+    tenors = [(contract_start - d).days / 365.0 for d in ts]
+    tenors = [t for t in tenors if t > 0]
+    avg_tenor = float(np.mean(tenors)) if tenors else None
+    return vol, avg_tenor, len(df)
+
+
+def calibrate_mean_reversion(ref_date, contracts=CANDIDATE_CONTRACTS, min_contracts=3):
+    """Returns {"a": ..., "sigma_from_fit": ..., "r_squared": ..., "contracts": [...]}.
+    `a` is the value to actually use in HullWhite1F; `sigma_from_fit` is a
+    cross-check only (see module docstring)."""
+    rows = []
+    for symbol in contracts:
+        result = realized_vol_and_avg_tenor(symbol, ref_date)
+        if result is None:
+            continue
+        vol, avg_tenor, n_obs = result
+        rows.append({"symbol": symbol, "vol": vol, "avg_tenor": avg_tenor, "n_obs": n_obs})
+
+    if len(rows) < min_contracts:
+        raise ValueError(f"Only {len(rows)} contracts had enough history to calibrate "
+                          f"(need >= {min_contracts})")
+
+    tenors = np.array([r["avg_tenor"] for r in rows])
+    log_vols = np.log([r["vol"] for r in rows])
+    A = np.vstack([tenors, np.ones_like(tenors)]).T
+    slope, intercept = np.linalg.lstsq(A, log_vols, rcond=None)[0]
+    a_fit = -slope
+    sigma_fit = math.exp(intercept)
+
+    residuals = log_vols - (slope * tenors + intercept)
+    ss_res = np.sum(residuals ** 2)
+    ss_tot = np.sum((log_vols - log_vols.mean()) ** 2)
+    r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
+
+    return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit),
+            "r_squared": r_squared, "contracts": rows}

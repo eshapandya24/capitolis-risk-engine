@@ -10,12 +10,21 @@ Real data used:
   - Volatilities: data/processed/volatilities.csv (src/risk_engine/market/vols.py)
   - Correlation matrix: data/processed/correlation_matrix.csv (correlations.py)
 
-Disclosed assumptions (can't be derived from data we have access to):
-  - Hull-White mean reversion `a` = 0.03 (models/rates.py DEFAULT_MEAN_REVERSION)
-  - JPY equities' drift uses r_USD(t) minus a CONSTANT differential backed out
-    from real CME JPY futures (6J, via Databento) vs. our own real USD curve,
-    via covered interest rate parity -- real data, but a constant-differential
-    simplification rather than a full second stochastic JPY curve.
+Hull-White mean reversion `a` is CALIBRATED (models/hw_calibration.py) from
+the historical volatility term structure of SOFR futures at different
+tenors -- not the textbook a=0.03 guess used before that calibration was
+built (see docs/notes/convergence_study.md for why that guess was flagged
+as the largest unquantified source of model uncertainty). Cached in
+data/processed/hull_white_calibration.json; refresh via
+scripts/calibrate_hull_white.py. Falls back to the textbook value only if
+both the cache and a live recalibration are unavailable.
+
+Remaining disclosed simplification (can't be derived from data we have
+access to): JPY equities' drift uses r_USD(t) minus a CONSTANT differential
+backed out from real CME JPY futures (6J, via Databento) vs. our own real
+USD curve, via covered interest rate parity -- real data, but a
+constant-differential simplification rather than a full second stochastic
+JPY curve.
 """
 import csv
 import math
@@ -125,6 +134,39 @@ def load_correlation_matrix():
     return pd.read_csv(os.path.join(PROCESSED, "correlation_matrix.csv"), index_col=0)
 
 
+HW_CALIBRATION_CACHE = os.path.join(PROCESSED, "hull_white_calibration.json")
+DEFAULT_MEAN_REVERSION_FALLBACK = 0.03  # only used if calibration is unavailable AND uncached
+
+
+def load_or_calibrate_mean_reversion(ref_date, use_cache=True):
+    """Hull-White mean reversion `a`, calibrated from real SOFR futures
+    history (models/hw_calibration.py) rather than assumed. Cached to disk
+    (like vols.csv/correlation_matrix.csv) since it fetches ~2 years of
+    history for 8 contracts via Databento -- too slow to redo on every
+    simulation run. Run `python scripts/calibrate_hull_white.py` to refresh
+    the cache; falls back to a live calibration (then caches it) if missing,
+    and to the disclosed textbook value only if live calibration itself
+    fails (e.g. no network)."""
+    import json
+    if use_cache and os.path.exists(HW_CALIBRATION_CACHE):
+        with open(HW_CALIBRATION_CACHE) as f:
+            cached = json.load(f)
+        return cached["a"], cached
+
+    print("  Hull-White mean reversion (calibrating from SOFR futures history, no cache found)...")
+    try:
+        from .hw_calibration import calibrate_mean_reversion
+        result = calibrate_mean_reversion(ref_date)
+        os.makedirs(PROCESSED, exist_ok=True)
+        with open(HW_CALIBRATION_CACHE, "w") as f:
+            json.dump(result, f, indent=2)
+        return result["a"], result
+    except Exception as exc:
+        print(f"  WARN: Hull-White calibration failed ({exc}); falling back to disclosed "
+              f"assumption a={DEFAULT_MEAN_REVERSION_FALLBACK} (see models/rates.py)")
+        return DEFAULT_MEAN_REVERSION_FALLBACK, None
+
+
 def build_calibration(ref_date):
     """Returns a dict with everything the simulation engine needs:
     hw (HullWhite1F), gbm (CorrelatedGBM), corr_matrix (DataFrame, ordered),
@@ -152,7 +194,8 @@ def build_calibration(ref_date):
     jpy_diff = implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot)
 
     rate_vol = vol_table["RATE_USD"]
-    hw = HullWhite1F(usd_curve, sigma=rate_vol)
+    mean_reversion_a, hw_calib_detail = load_or_calibrate_mean_reversion(ref_date)
+    hw = HullWhite1F(usd_curve, sigma=rate_vol, a=mean_reversion_a)
 
     equity_factor_names = [f for f in factor_order if f not in ("FX_USDJPY", "RATE_USD")]
     currencies = _isin_currency()
@@ -176,4 +219,6 @@ def build_calibration(ref_date):
         "dividends": dividends,
         "fx_spot": fx_spot,
         "jpy_usd_rate_diff": jpy_diff,
+        "hw_mean_reversion_a": mean_reversion_a,
+        "hw_calibration_detail": hw_calib_detail,
     }
