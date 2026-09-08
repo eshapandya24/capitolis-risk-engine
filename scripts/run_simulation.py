@@ -42,7 +42,13 @@ def load_trades():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scenarios", type=int, default=2000)
+    parser.add_argument("--scenarios", type=int, default=1000,
+                         help="Default 1000: empirically crosses below 0.5% relative standard "
+                              "error on portfolio PFE95 in ~73s (8 cores) -- see "
+                              "docs/notes/convergence_study.md. Use 2000-3000 for final/reporting "
+                              "runs (~0.1-0.3% error, ~2-3 min); beyond ~4000 the dominant error "
+                              "is model uncertainty (Hull-White mean reversion, vol proxy), not "
+                              "Monte Carlo noise, so more paths stop being the limiting factor.")
     parser.add_argument("--method", default="latin_hypercube",
                          help="Default is latin_hypercube -- validated as the best speed/accuracy "
                               "tradeoff on both a controlled option test and the real 39-factor "
