@@ -102,3 +102,72 @@ def calibrate_mean_reversion(ref_date, contracts=CANDIDATE_CONTRACTS, min_contra
 
     return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit),
             "r_squared": r_squared, "contracts": rows}
+
+
+_TENOR_YEARS = {"1M": 1/12, "2M": 2/12, "3M": 0.25, "6M": 0.5, "1Y": 1, "18M": 1.5,
+                "2Y": 2, "3Y": 3, "4Y": 4, "5Y": 5, "6Y": 6, "7Y": 7, "8Y": 8, "9Y": 9,
+                "10Y": 10, "12Y": 12, "15Y": 15, "20Y": 20, "25Y": 25, "30Y": 30}
+
+
+def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15):
+    """Calibrates `a` from a REAL ATM normal swaption volatility cube
+    (data/raw/bloomberg/ -- a one-time Bloomberg export the user provided,
+    not a live feed; see market/bloomberg.py's module docstring), the
+    standard textbook route this project's original docstring above flagged
+    as unavailable when it was first written.
+
+    Method, disclosed as a real simplification rather than a full 2D
+    swaption-cube fit: take ATM normal vol at ONE short expiry (default 1M,
+    close to "an option starting almost immediately") across swap tenors,
+    and fit the same exponential-decay relationship used for the futures-
+    based calibration above:
+
+        vol(tenor) = sigma * exp(-a * tenor)
+
+    A swaption's ATM vol is technically the vol of the underlying SWAP
+    RATE observed at the option's expiry, not a point forward rate -- using
+    a single short-expiry row as a proxy for "how fast forward-rate vol
+    decays with tenor" is standard practice for a quick HW1F alpha
+    estimate, but a full rigorous fit would price swaptions under HW1F
+    (e.g. via the Jamshidian decomposition) and fit across the WHOLE
+    expiry x tenor grid jointly -- a larger undertaking not done here.
+    max_tenor_years caps the fit to the tenor range most relevant to this
+    book's ~2yr horizon (the far end of the cube, 20-30Y, reflects very
+    different market dynamics -- pension-driven long-end flows -- not
+    informative for calibrating short-dated CCR exposure).
+    """
+    from ..market.bloomberg import load_usd_swaption_vols, available
+
+    if not available():
+        raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/")
+
+    cube = load_usd_swaption_vols()
+    if expiry not in cube.index:
+        raise ValueError(f"Expiry {expiry!r} not in swaption cube; available: {list(cube.index)}")
+    row = cube.loc[expiry]
+
+    tenors, vols, labels = [], [], []
+    for tenor_label, vol in row.items():
+        years = _TENOR_YEARS.get(tenor_label)
+        if years is None or years > max_tenor_years:
+            continue
+        tenors.append(years)
+        vols.append(float(vol))
+        labels.append(tenor_label)
+
+    tenors = np.array(tenors)
+    log_vols = np.log(vols)
+    A = np.vstack([tenors, np.ones_like(tenors)]).T
+    slope, intercept = np.linalg.lstsq(A, log_vols, rcond=None)[0]
+    a_fit = -slope
+    sigma_fit = math.exp(intercept)
+
+    residuals = log_vols - (slope * tenors + intercept)
+    ss_res = np.sum(residuals ** 2)
+    ss_tot = np.sum((log_vols - log_vols.mean()) ** 2)
+    r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
+
+    rows = [{"tenor": lbl, "years": float(t), "vol": float(v)} for lbl, t, v in zip(labels, tenors, vols)]
+    return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit), "r_squared": r_squared,
+            "expiry_used": expiry, "max_tenor_years": max_tenor_years, "points": rows,
+            "method": "swaption_atm_normal_vol_term_structure"}

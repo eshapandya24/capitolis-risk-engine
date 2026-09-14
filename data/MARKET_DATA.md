@@ -43,13 +43,13 @@ have since been collected from real sources; see each section for details.
 
 | Field | Value |
 |---|---|
-| Source | yfinance (`JPY=X`) for spot/history; forward points from a bank/Bloomberg FX swap points source — **needed for full forward curve, not just spot** |
+| Source | yfinance (`JPY=X`) for live spot/history; forward points now from the user's Bloomberg data export (`data/raw/bloomberg/`, gitignored — one-time static snapshot dated 2026-08-31, not a live feed) |
 | Identifier | `JPY=X` (yfinance), pair USDJPY (quoted JPY per USD, convention confirmed in pricer README §4/§6) |
 | Tenors needed | SPOT (T+2), O/N, T/N, 1W, 1M, 2M, 3M, 6M, 9M, 1Y, 2Y |
 | Date range | Snapshot as of valuation date; only needed for the JPY compo trades (EQTRS_0005, EQTRS_0006) |
 | Frequency | Daily |
-| Status | **spot pulled** (159.80 as of 2026-08-30, cached at `data/raw/usdjpy_spot_2026-08-30.json`) — sufficient to *price* the JPY compo trades. Forward points still **not started**, needed only once FX is simulated as a risk factor |
-| Note | Only spot is needed to *price*; the full forward curve (swap points) is needed once FX is simulated as a risk factor |
+| Status | **spot pulled (live)** — sufficient to *price* the JPY compo trades. **Forward points now pulled** (real, from Bloomberg) — `market/fx.py`'s `build_fx_curve` inverts covered interest parity using the real quoted forward at each tenor to back out an implied JPY discount curve, so `FxCurve.forward(T)` reproduces the actual market forward exactly (verified: 0.00e+00 diff at every tested tenor). See `docs/notes/bloomberg_data_upgrade.md` |
+| Note | Only spot is needed to *price* today's snapshot; the forward curve is a simulation-only input, now real rather than stubbed |
 
 ## 4. Volatilities (simulation calibration — not used by the linear pricers)
 

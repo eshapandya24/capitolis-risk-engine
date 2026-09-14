@@ -68,6 +68,26 @@ def _isin_currency():
     return out
 
 
+def implied_jpy_usd_rate_diff_from_bloomberg(tenor="12M"):
+    """Preferred route: the JPY-USD rate differential read directly off two
+    REAL Bloomberg-built zero curves (data/raw/bloomberg/ -- see
+    market/bloomberg.py) at a matching tenor, rather than backed out from a
+    single CME JPY futures contract. More precise: an actual quoted curve
+    point on each side, not a covered-interest-parity inversion of one
+    futures price. Raises if the Bloomberg data isn't available (caller
+    falls back to implied_jpy_usd_rate_diff below)."""
+    from ..market.bloomberg import load_usd_bloomberg_zero_curve, load_jpy_bloomberg_zero_curve, available
+    if not available():
+        raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/")
+    usd = load_usd_bloomberg_zero_curve().set_index("tenor")
+    jpy = load_jpy_bloomberg_zero_curve().set_index("tenor")
+    if tenor not in usd.index or tenor not in jpy.index:
+        raise ValueError(f"Tenor {tenor!r} not present in both Bloomberg curves")
+    diff = float(usd.loc[tenor, "zero_rate"] - jpy.loc[tenor, "zero_rate"])
+    print(f"  JPY-USD rate differential from real Bloomberg curves (tenor={tenor}): {diff:.4%}")
+    return diff
+
+
 def implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot):
     """Back out a constant (r_USD - r_JPY) differential from REAL data:
     the nearest ~1y outright CME JPY futures contract (6J, Databento, same
@@ -135,19 +155,54 @@ def load_correlation_matrix():
 
 
 HW_CALIBRATION_CACHE = os.path.join(PROCESSED, "hull_white_calibration.json")
-DEFAULT_MEAN_REVERSION_FALLBACK = 0.03  # only used if calibration is unavailable AND uncached
+HW_CALIBRATION_CACHE_SWAPTION = os.path.join(PROCESSED, "hull_white_calibration_swaption.json")
+DEFAULT_MEAN_REVERSION_FALLBACK = 0.03  # only used if no calibration route is available at all
 
 
 def load_or_calibrate_mean_reversion(ref_date, use_cache=True):
-    """Hull-White mean reversion `a`, calibrated from real SOFR futures
-    history (models/hw_calibration.py) rather than assumed. Cached to disk
-    (like vols.csv/correlation_matrix.csv) since it fetches ~2 years of
-    history for 8 contracts via Databento -- too slow to redo on every
-    simulation run. Run `python scripts/calibrate_hull_white.py` to refresh
-    the cache; falls back to a live calibration (then caches it) if missing,
-    and to the disclosed textbook value only if live calibration itself
-    fails (e.g. no network)."""
+    """Hull-White mean reversion `a`. Preference order, each real data,
+    highest-quality first:
+
+      1. Swaption-based (models/hw_calibration.calibrate_mean_reversion_
+         from_swaptions) -- the genuine industry-standard calibration route,
+         using the real ATM normal swaption vol cube from the user's
+         Bloomberg data export (data/raw/bloomberg/). Cached separately
+         (HW_CALIBRATION_CACHE_SWAPTION) since that data is a static local
+         file, not a live fetch, so "caching" is really just avoiding
+         re-parsing CSVs every run.
+      2. Futures-vol-decay proxy (calibrate_mean_reversion) -- the original
+         route, used when the Bloomberg swaption data isn't available.
+         Cached to disk (HW_CALIBRATION_CACHE) since it fetches ~2 years of
+         history for 8 contracts via Databento -- too slow to redo on every
+         simulation run.
+      3. The disclosed textbook constant, only if neither real route works.
+
+    Both real calibrations disagree somewhat (swaption: a~0.017; futures
+    proxy: a~0.046) -- expected, since they use different instruments and
+    methods; see docs/notes/hull_white_calibration.md for the full
+    comparison and why the swaption route is preferred when available.
+    """
     import json
+
+    if use_cache and os.path.exists(HW_CALIBRATION_CACHE_SWAPTION):
+        with open(HW_CALIBRATION_CACHE_SWAPTION) as f:
+            cached = json.load(f)
+        return cached["a"], cached
+
+    try:
+        from .hw_calibration import calibrate_mean_reversion_from_swaptions
+        from ..market.bloomberg import available as bbg_available
+        if bbg_available():
+            print("  Hull-White mean reversion (calibrating from real USD swaption vol cube, Bloomberg data)...")
+            result = calibrate_mean_reversion_from_swaptions()
+            os.makedirs(PROCESSED, exist_ok=True)
+            with open(HW_CALIBRATION_CACHE_SWAPTION, "w") as f:
+                json.dump(result, f, indent=2)
+            return result["a"], result
+    except Exception as exc:
+        print(f"  WARN: swaption-based Hull-White calibration failed ({exc}); "
+              f"falling back to the SOFR-futures-vol-decay proxy")
+
     if use_cache and os.path.exists(HW_CALIBRATION_CACHE):
         with open(HW_CALIBRATION_CACHE) as f:
             cached = json.load(f)
@@ -191,7 +246,12 @@ def build_calibration(ref_date):
     corr_matrix = load_correlation_matrix()
     factor_order = list(corr_matrix.columns)  # ISINs..., FX_USDJPY, RATE_USD
 
-    jpy_diff = implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot)
+    try:
+        jpy_diff = implied_jpy_usd_rate_diff_from_bloomberg()
+    except Exception as exc:
+        print(f"  WARN: Bloomberg-curve JPY-USD differential unavailable ({exc}); "
+              f"falling back to the 6J-futures-implied route")
+        jpy_diff = implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot)
 
     rate_vol = vol_table["RATE_USD"]
     mean_reversion_a, hw_calib_detail = load_or_calibrate_mean_reversion(ref_date)
