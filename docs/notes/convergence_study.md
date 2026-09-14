@@ -52,11 +52,14 @@ table:
 2. **Sampling error is not the dominant source of uncertainty in this
    engine.** Several unquantified model assumptions likely contribute more
    error than a well-converged Monte Carlo estimate does:
-   - Hull-White mean reversion `a=0.03` — a disclosed textbook value, not
-     calibrated to real swaption/cap data (which we don't have access to).
-   - Historical realized vol used as a proxy for implied vol.
+   - Historical realized vol used as a proxy for implied vol (no options
+     market data available).
    - A constant JPY-USD rate differential (from one 6J futures contract)
      standing in for a full stochastic JPY curve.
+   - *(Hull-White mean reversion `a` was the third item here originally —
+     it has since been calibrated from real SOFR-futures volatility data,
+     `a=0.0458`, R²=0.82, removing it from this list; see
+     `docs/notes/hull_white_calibration.md`.)*
 
    Driving Monte Carlo sampling error down to, say, 0.05% while these other
    assumptions remain unquantified is false precision — it makes the number
@@ -78,3 +81,93 @@ table:
 `scripts/run_simulation.py`'s default `--scenarios` is set to 1,000
 accordingly; pass `--scenarios 2000` (or higher) explicitly for a
 reporting-quality run.
+
+---
+
+## Extension: the 99.9th percentile needs its own convergence study
+
+The above all used the 95th percentile (`--confidence 0.95`, the original
+default). Asked to redo it at the **99.9th percentile** instead — a
+materially harder statistical problem: at the 95th percentile, roughly 1
+in 20 scenarios sits past the threshold, giving the empirical quantile
+plenty of data to work with; at the 99.9th, it's roughly 1 in 1,000 — the
+estimate depends on the sparsest, noisiest part of the sample, and needs
+meaningfully more paths to stabilize.
+
+### Method
+
+Same bootstrap-resampling technique as above, extended to a much larger
+reference pool (N=30,000, still Latin Hypercube) so there's room to test
+convergence all the way out to 30,000 paths, per request. `script:
+scripts/convergence_study_tail.py`.
+
+### Results (Node ~1y, 2027-08-28)
+
+| N | PFE99.9 | Relative SE | Bias vs. N=30,000 reference | Marginal SE gain | Time (8 cores) |
+|---|---|---|---|---|---|
+| 500 | $149,371 | 1.54% | -1.20% | — | 58s |
+| 1,000 | $150,058 | 1.39% | -0.75% | +9.1% | 87s |
+| 2,000 | $150,553 | 1.24% | -0.42% | +10.7% | 144s |
+| 5,000 | $150,791 | 0.77% | -0.27% | **+37.6% (peak)** | 318s |
+| 10,000 | $150,930 | 0.52% | -0.17% | +32.6% | 607s |
+| 15,000 | $151,091 | 0.37% | -0.07% | +28.2% | 897s |
+| 20,000 | $151,092 | 0.29% | -0.07% | +21.1% | 1,186s |
+| 25,000 | $151,150 | 0.27% | -0.03% | +7.6% | 1,475s |
+| 30,000 | $151,192 | 0.00%* | 0.00% | (reference itself) | 1,765s |
+
+*N=30,000 is the reference pool being measured against itself — 0.00% SE
+here isn't a real converged number, just the anchor point everything else
+is compared to.
+
+### Where convergence actually shows up
+
+The **relative SE** column alone doesn't show a clean stopping point (it
+never truly plateaus, same 1/√N reasoning as the 95th-percentile study).
+The **marginal SE gain** column is the one that answers "keep increasing
+paths until no material improvement" directly: it *rises* through N=5,000
+(each doubling buying more than the last, because the tail estimate is
+still data-starved below that), **peaks at N=5,000 (+37.6%)**, then
+**declines steadily** from there — 32.6% → 28.2% → 21.1% → 7.6%. That
+declining trend past the peak is the empirical convergence signature
+asked for: each additional batch of paths past ~10,000-15,000 buys
+noticeably less than the batch before it.
+
+### Recommendation for PFE99.9 specifically
+
+- **N=10,000-15,000** is the real knee — past the point of peak marginal
+  returns, ~0.37-0.52% relative error, 10-15 minutes.
+- **N=15,000-20,000** is where it clearly flattens: 20,000→25,000 only
+  bought a 7.6% SE improvement for ~5 more minutes of compute — a poor
+  trade.
+- **Not recommended to run at 30,000 in production** — it was the right
+  choice as a reference anchor for this study, not as an actual operating
+  point; the marginal-gain trend shows diminishing returns well before it.
+- Confirms the general principle from the 95th-percentile study still
+  holds at a stricter confidence level: the tail genuinely needs more
+  paths than the body of the distribution does, but "more" still plateaus
+  — just at a higher N than the 95th percentile's ~1,000-2,000.
+
+Raw results: `data/processed/convergence_study_tail_pfe999.json`
+(gitignored, regenerable via `scripts/convergence_study_tail.py`).
+
+---
+
+## Test coverage
+
+The statistical mechanisms behind both convergence studies above are
+covered by regression tests, not just this one-off analysis:
+
+- `tests/test_simulation_engine.py` — Monte Carlo standard error shrinking
+  as 1/√N (the 95th-percentile study's core assumption, verified directly
+  on a synthetic sample), the GBM martingale property, Hull-White
+  reproducing the real curve exactly at t=0, antithetic variance reduction
+  measured correctly, Cholesky recovering a target correlation.
+- `tests/test_convergence_tail.py` — the 99.9th-percentile-specific
+  behavior demonstrated above: tail-quantile standard error shrinking with
+  N on a synthetic distribution (self-contained, no network/simulation
+  needed so it runs in CI), and a real-data regression check (skipped
+  automatically if the JSON artifact isn't present) that the actual
+  `convergence_study_tail_pfe999.json` results have a declining marginal
+  SE gain past its peak and a bias that shrinks monotonically toward the
+  N=30,000 reference as N grows — so this specific empirical finding can't
+  silently regress unnoticed.
