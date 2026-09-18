@@ -167,7 +167,20 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
 class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
                  step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
-                 mpor_days=None, grid_mode="pillar", include_trade_event_dates=True):
+                 mpor_days=None, grid_mode="pillar", include_trade_event_dates=True,
+                 corr_mode="full", n_pca_factors=5):
+        """
+        corr_mode: "full" (default) -- exact Cholesky factor of the full
+            39x39 empirical correlation matrix (unchanged behavior).
+            "factor" -- PCA/factor-model approximation (see
+            models/equity_factor_model.py): correlated shocks come from
+            n_pca_factors common systematic drivers plus per-name
+            idiosyncratic noise, instead of one full-rank Cholesky factor.
+            Approximate by construction (see reconstruction_error there);
+            offered as a more parsimonious, more estimation-robust
+            alternative, not a replacement default.
+        n_pca_factors: only used when corr_mode="factor".
+        """
         self.calib = calib
         self.trades = trades
         self.method = method
@@ -175,6 +188,8 @@ class SimulationEngine:
         self.seed = seed
         self.curve_tenors = curve_tenors
         self.mpor_days = mpor_days
+        self.corr_mode = corr_mode
+        self.n_pca_factors = n_pca_factors
 
         self.hw = calib["hw"]
         self.gbm = calib["gbm"]
@@ -187,7 +202,14 @@ class SimulationEngine:
 
         corr = calib["corr_matrix"].loc[self.factor_order, self.factor_order].values
         corr = _nearest_psd(corr)
-        self.L = np.linalg.cholesky(corr)
+
+        if corr_mode == "full":
+            self.L = np.linalg.cholesky(corr)
+        elif corr_mode == "factor":
+            from ..models.equity_factor_model import build_pca_factor_loadings
+            self.pca_B, self.pca_idio_var = build_pca_factor_loadings(corr, n_pca_factors)
+        else:
+            raise ValueError(f"Unsupported corr_mode {corr_mode!r}; expected 'full' or 'factor'")
 
         self.dates, self.times, self.node_map = build_time_grid(
             calib["ref_date"], trades, step_months, mpor_days=mpor_days,
@@ -199,10 +221,26 @@ class SimulationEngine:
 
     # ------------------------------------------------------------------
     def _correlated_draws(self):
+        if self.corr_mode == "factor":
+            return self._factor_correlated_draws()
         z = gen_randoms(self.method, self.n_scenarios, self.n_steps, self.n_factors, seed=self.seed)
         # correlate each step's cross-sectional draw: (n_scenarios, n_factors) @ L.T
         correlated = np.einsum("snf,gf->sng", z, self.L)
         return correlated
+
+    def _factor_correlated_draws(self):
+        """corr_mode="factor": build correlated shocks as
+        B @ f + sqrt(idio_var) * e, f = k systematic draws, e = n
+        idiosyncratic draws (own seed offset, so the idiosyncratic noise
+        isn't spuriously correlated with the systematic factors through
+        RNG-stream reuse)."""
+        n_scen, n_steps, n = self.n_scenarios, self.n_steps, self.n_factors
+        k = self.n_pca_factors
+        f = gen_randoms(self.method, n_scen, n_steps, k, seed=self.seed)          # (n_scen, n_steps, k)
+        e = gen_randoms(self.method, n_scen, n_steps, n, seed=self.seed + 1)       # (n_scen, n_steps, n)
+        systematic = np.einsum("snk,fk->snf", f, self.pca_B)
+        idio = e * np.sqrt(self.pca_idio_var)[None, None, :]
+        return systematic + idio
 
     def simulate_paths(self):
         """Returns dict: 'x_rate' (n_scen, n_nodes), 'ln_spot' {factor: (n_scen, n_nodes)}."""
