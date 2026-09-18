@@ -35,6 +35,13 @@ def expected_exposure(exposure_array):
     return exposure_array.mean(axis=1)
 
 
+def median_exposure(exposure_array):
+    """Median (50th percentile) exposure per time node -- the typical
+    scenario, vs. EE (the mean, pulled up by the right tail) and PFE (the
+    tail)."""
+    return np.quantile(exposure_array, 0.5, axis=1)
+
+
 def potential_future_exposure(exposure_array, confidence=0.95):
     """PFE(t) at `confidence` = that percentile of the exposure distribution
     across scenarios, per time node."""
@@ -55,9 +62,9 @@ def build_profiles(trade_ids, trade_counterparty, npv, dates, confidence=0.95):
     for cpty, arr in by_cpty.items():
         ee = expected_exposure(arr)
         pfe = potential_future_exposure(arr, confidence)
-        profiles[cpty] = {"dates": dates, "EE": ee, "PFE": pfe, "MPE": maximum_pfe(pfe)}
+        profiles[cpty] = {"dates": dates, "EE": ee, "MedianExposure": median_exposure(arr), "PFE": pfe, "MPE": maximum_pfe(pfe)}
 
     ee_p = expected_exposure(portfolio)
     pfe_p = potential_future_exposure(portfolio, confidence)
-    profiles["__portfolio__"] = {"dates": dates, "EE": ee_p, "PFE": pfe_p, "MPE": maximum_pfe(pfe_p)}
+    profiles["__portfolio__"] = {"dates": dates, "EE": ee_p, "MedianExposure": median_exposure(portfolio), "PFE": pfe_p, "MPE": maximum_pfe(pfe_p)}
     return profiles

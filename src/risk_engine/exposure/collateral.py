@@ -78,7 +78,7 @@ def mpor_vs_uncollateralized_comparison(trade_ids, trade_counterparty, npv, node
     reporting node) vs MPOR-shifted (collateralized-style, exposure at
     reporting node + MPOR, net of collateral). Both computed from the SAME
     npv array/paths for a clean apples-to-apples comparison."""
-    from .aggregate import expected_exposure, potential_future_exposure, maximum_pfe
+    from .aggregate import expected_exposure, median_exposure, potential_future_exposure, maximum_pfe
 
     reporting_node_idx = {i: m["reporting"] for i, m in node_map.items()}
     cptys = sorted(set(trade_counterparty[tid] for tid in trade_ids))
@@ -92,10 +92,12 @@ def mpor_vs_uncollateralized_comparison(trade_ids, trade_counterparty, npv, node
             [np.maximum(net_npv[reporting_node_idx[i], :], 0.0) for i in range(len(node_map))], axis=0)
 
         plain[cpty] = {"EE": expected_exposure(plain_exposure_at_reporting),
+                        "MedianExposure": median_exposure(plain_exposure_at_reporting),
                         "PFE": potential_future_exposure(plain_exposure_at_reporting, confidence)}
         plain[cpty]["MPE"] = maximum_pfe(plain[cpty]["PFE"])
 
         mpor[cpty] = {"EE": expected_exposure(mpor_exposure[cpty]),
+                      "MedianExposure": median_exposure(mpor_exposure[cpty]),
                       "PFE": potential_future_exposure(mpor_exposure[cpty], confidence)}
         mpor[cpty]["MPE"] = maximum_pfe(mpor[cpty]["PFE"])
 
