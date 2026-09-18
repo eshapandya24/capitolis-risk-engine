@@ -84,15 +84,17 @@ reporting-quality run.
 
 ---
 
-## Extension: the 99.9th percentile needs its own convergence study
+## Extension: the 99th percentile needs its own convergence study
 
 The above all used the 95th percentile (`--confidence 0.95`, the original
-default). Asked to redo it at the **99.9th percentile** instead — a
-materially harder statistical problem: at the 95th percentile, roughly 1
-in 20 scenarios sits past the threshold, giving the empirical quantile
-plenty of data to work with; at the 99.9th, it's roughly 1 in 1,000 — the
-estimate depends on the sparsest, noisiest part of the sample, and needs
-meaningfully more paths to stabilize.
+default). Asked to redo it at the **99th percentile** instead (note: an
+earlier run of this study used 99.9% by mistake -- corrected to the
+actually-intended 99%, results below are the corrected ones) -- a
+materially harder statistical problem than the 95th: at the 95th
+percentile, roughly 1 in 20 scenarios sits past the threshold, giving the
+empirical quantile plenty of data to work with; at the 99th, it's roughly
+1 in 100 -- the estimate depends on a sparser, noisier part of the sample,
+and needs more paths to stabilize.
 
 ### Method
 
@@ -103,17 +105,17 @@ scripts/convergence_study_tail.py`.
 
 ### Results (Node ~1y, 2027-08-28)
 
-| N | PFE99.9 | Relative SE | Bias vs. N=30,000 reference | Marginal SE gain | Time (8 cores) |
+| N | PFE99 | Relative SE | Bias vs. N=30,000 reference | Marginal SE gain | Time (8 cores) |
 |---|---|---|---|---|---|
-| 500 | $149,371 | 1.54% | -1.20% | — | 58s |
-| 1,000 | $150,058 | 1.39% | -0.75% | +9.1% | 87s |
-| 2,000 | $150,553 | 1.24% | -0.42% | +10.7% | 144s |
-| 5,000 | $150,791 | 0.77% | -0.27% | **+37.6% (peak)** | 318s |
-| 10,000 | $150,930 | 0.52% | -0.17% | +32.6% | 607s |
-| 15,000 | $151,091 | 0.37% | -0.07% | +28.2% | 897s |
-| 20,000 | $151,092 | 0.29% | -0.07% | +21.1% | 1,186s |
-| 25,000 | $151,150 | 0.27% | -0.03% | +7.6% | 1,475s |
-| 30,000 | $151,192 | 0.00%* | 0.00% | (reference itself) | 1,765s |
+| 500 | $149,036 | 1.15% | -0.30% | — | 74s |
+| 1,000 | $149,353 | 0.66% | -0.09% | +42.1% | 119s |
+| 2,000 | $149,341 | 0.52% | -0.09% | +21.2% | 209s |
+| 5,000 | $149,457 | 0.29% | -0.02% | **+44.4% (peak)** | 479s |
+| 10,000 | $149,411 | 0.21% | -0.05% | +26.6% | 929s |
+| 15,000 | $149,477 | 0.13% | -0.00% | +37.3% | 1,379s |
+| 20,000 | $149,535 | 0.09% | +0.04% | +29.1% | 1,829s |
+| 25,000 | $149,505 | 0.07% | +0.02% | +31.1% | 2,279s |
+| 30,000 | $149,482 | 0.00%* | 0.00% | (reference itself) | 2,729s |
 
 *N=30,000 is the reference pool being measured against itself — 0.00% SE
 here isn't a real converged number, just the anchor point everything else
@@ -122,32 +124,36 @@ is compared to.
 ### Where convergence actually shows up
 
 The **relative SE** column alone doesn't show a clean stopping point (it
-never truly plateaus, same 1/√N reasoning as the 95th-percentile study).
-The **marginal SE gain** column is the one that answers "keep increasing
-paths until no material improvement" directly: it *rises* through N=5,000
-(each doubling buying more than the last, because the tail estimate is
-still data-starved below that), **peaks at N=5,000 (+37.6%)**, then
-**declines steadily** from there — 32.6% → 28.2% → 21.1% → 7.6%. That
-declining trend past the peak is the empirical convergence signature
-asked for: each additional batch of paths past ~10,000-15,000 buys
-noticeably less than the batch before it.
+never truly plateaus, same 1/sqrt(N) reasoning as the 95th-percentile
+study). The **marginal SE gain** column is the one that answers "keep
+increasing paths until no material improvement" directly: it **peaks at
+N=5,000 (+44.4%)**, then trends down from there with some bootstrap noise
+between individual points (26.6% -> 37.3% -> 29.1% -> 31.1%) -- the last
+point measured (N=25,000, +31.1%) is well below the peak. That declining
+trend past the peak, not a strictly monotone one, is the empirical
+convergence signature at this confidence level: each additional large
+batch of paths past ~10,000-15,000 buys noticeably less than the N=5,000
+batch did, even though the noise between adjacent large-N points is bigger
+in relative terms than the underlying SE itself (all these later points
+already sit under 0.1% relative SE).
 
-### Recommendation for PFE99.9 specifically
+### Recommendation for PFE99 specifically
 
-- **N=10,000-15,000** is the real knee — past the point of peak marginal
-  returns, ~0.37-0.52% relative error, 10-15 minutes.
-- **N=15,000-20,000** is where it clearly flattens: 20,000→25,000 only
-  bought a 7.6% SE improvement for ~5 more minutes of compute — a poor
-  trade.
-- **Not recommended to run at 30,000 in production** — it was the right
+- **N=5,000-10,000** is the real knee -- right at or just past peak
+  marginal returns, ~0.21-0.29% relative error, 8-15 minutes.
+- **N=15,000+** is where it clearly flattens: relative SE is already under
+  0.15% there, and later doublings buy proportionally less for
+  meaningfully more compute (15-45 minutes).
+- **Not recommended to run at 30,000 in production** -- it was the right
   choice as a reference anchor for this study, not as an actual operating
   point; the marginal-gain trend shows diminishing returns well before it.
-- Confirms the general principle from the 95th-percentile study still
-  holds at a stricter confidence level: the tail genuinely needs more
-  paths than the body of the distribution does, but "more" still plateaus
-  — just at a higher N than the 95th percentile's ~1,000-2,000.
+- The 99th percentile needs noticeably fewer paths than the 99.9th did to
+  reach the same relative precision (consistent with it being the easier
+  of the two tail estimation problems -- roughly 10x more scenarios land
+  past a 99th-percentile threshold than a 99.9th-percentile one), while
+  still needing more than the 95th percentile's ~1,000-2,000 knee.
 
-Raw results: `data/processed/convergence_study_tail_pfe999.json`
+Raw results: `data/processed/convergence_study_tail_pfe99.json`
 (gitignored, regenerable via `scripts/convergence_study_tail.py`).
 
 ---
@@ -162,12 +168,12 @@ covered by regression tests, not just this one-off analysis:
   on a synthetic sample), the GBM martingale property, Hull-White
   reproducing the real curve exactly at t=0, antithetic variance reduction
   measured correctly, Cholesky recovering a target correlation.
-- `tests/test_convergence_tail.py` — the 99.9th-percentile-specific
-  behavior demonstrated above: tail-quantile standard error shrinking with
-  N on a synthetic distribution (self-contained, no network/simulation
-  needed so it runs in CI), and a real-data regression check (skipped
-  automatically if the JSON artifact isn't present) that the actual
-  `convergence_study_tail_pfe999.json` results have a declining marginal
-  SE gain past its peak and a bias that shrinks monotonically toward the
+- `tests/test_convergence_tail.py` — the 99th-percentile-specific behavior
+  demonstrated above: tail-quantile standard error shrinking with N on a
+  synthetic distribution (self-contained, no network/simulation needed so
+  it runs in CI), and a real-data regression check (skipped automatically
+  if the JSON artifact isn't present) that the actual
+  `convergence_study_tail_pfe99.json` results have a marginal SE gain that
+  peaks before the largest N tested and a bias that shrinks toward the
   N=30,000 reference as N grows — so this specific empirical finding can't
   silently regress unnoticed.

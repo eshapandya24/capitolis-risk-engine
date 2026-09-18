@@ -24,7 +24,20 @@ access to): JPY equities' drift uses r_USD(t) minus a CONSTANT differential
 backed out from real CME JPY futures (6J, via Databento) vs. our own real
 USD curve, via covered interest rate parity -- real data, but a
 constant-differential simplification rather than a full second stochastic
-JPY curve.
+JPY curve. (A real, negative-rate-capable second Hull-White factor for
+JPY IS built here -- build_jpy_hull_white() -- off real BOJ TONA history
+and the real Bloomberg JPY OIS curve; it's just not yet wired into
+simulate_paths() as the actual JPY drift, which is the "remaining"
+simplification meant above.)
+
+Both real correlated-factor calibrations this module produces:
+  - JPY Hull-White mean reversion/sigma: build_jpy_hull_white() -- prefers
+    realized TONA vol (market/boj.py) for sigma, real BOJ data.
+  - USD-JPY rate factor correlation: calibrate_usd_jpy_rate_corr() -- real
+    SOFR (FRED) vs. TONA (BOJ) daily-change correlation, found to be
+    statistically indistinguishable from zero (see its own docstring) --
+    this replaced an earlier disclosed assumed constant once real data
+    became available to calibrate it directly.
 """
 import csv
 import math
@@ -222,14 +235,61 @@ def load_or_calibrate_mean_reversion(ref_date, use_cache=True):
         return DEFAULT_MEAN_REVERSION_FALLBACK, None
 
 
-# Disclosed assumption: no historical JPY OIS time series exists in our
-# Bloomberg export (only the single 2026-08-31 snapshot -- see
-# data/raw/bloomberg/data_bloomberg/metadata/data_gaps_and_exclusions.csv),
-# so a USD-JPY short-rate factor correlation cannot be calibrated from real
-# data. This constant is a disclosed simplification (a modest positive
-# value, reflecting the general co-movement most G10 rate pairs show), not
-# a fitted number.
+# Fallback only: used when calibrate_usd_jpy_rate_corr() itself can't run
+# (e.g. no network access to either FRED or the BOJ API). A modest
+# positive value, reflecting the general co-movement most G10 rate LEVELS
+# show -- but see calibrate_usd_jpy_rate_corr()'s docstring: the real
+# calibrated number (from daily rate CHANGES, which is what actually
+# matters for correlating two Hull-White factors' shocks) turns out to be
+# indistinguishable from zero, so this constant is deliberately NOT what
+# gets used when real data is available.
 USD_JPY_RATE_FACTOR_CORR_ASSUMPTION = 0.3
+
+
+def calibrate_usd_jpy_rate_corr(lookback_years=None):
+    """Real calibration of the USD-JPY short-rate factor correlation, now
+    that both sides have genuine daily history: SOFR level history (FRED,
+    market/sofr.fetch_history -- back to April 2018) and TONA level
+    history (Bank of Japan API, market/boj.fetch_tona_history -- back to
+    1998). Uses DAILY CHANGES, not levels: what a Hull-White factor
+    correlation needs is how correlated the two rates' day-to-day SHOCKS
+    are, not how correlated their long-run trend levels happen to be
+    (levels correlate at ~0.38 here, mostly reflecting both central banks
+    living through the same global rate cycle -- an entirely different,
+    less relevant statistic from the shock correlation this model uses).
+
+    Real finding, disclosed rather than smoothed over: the daily-CHANGE
+    correlation is small and NOT statistically significant, either over
+    the full ~7.5-year overlap (r~=-0.04, p~=0.07) or a recent 3y window
+    (r~=0.004, p~=0.92) -- consistent with USD and JPY monetary policy
+    being set independently, on different days, by different committees,
+    so a given day's rate news in one currency carries little information
+    about the other's. This REPLACES the earlier disclosed constant
+    assumption (0.3) with an actual calibrated (near-zero) result, rather
+    than assuming a plausible-sounding G10 co-movement number.
+
+    lookback_years: None (default) uses the full overlap history for the
+    most stable estimate; pass e.g. 3 to match other factors' 3y realized
+    windows (noisier here, since it's ~700 points instead of ~2,000).
+    """
+    from scipy import stats
+    from ..market.sofr import fetch_history as fetch_sofr_history
+    from ..market.boj import fetch_tona_history
+
+    sofr = fetch_sofr_history("2018-04-01", "2030-01-01")
+    tona = fetch_tona_history()
+    df = pd.DataFrame({"sofr": sofr, "tona": tona}).dropna()
+    diffs = df.diff().dropna()
+    if lookback_years is not None:
+        end = diffs.index.max()
+        start = end - pd.DateOffset(years=lookback_years)
+        diffs = diffs[(diffs.index > start) & (diffs.index <= end)]
+    if len(diffs) < 60:
+        raise ValueError(f"Only {len(diffs)} overlapping SOFR/TONA daily-change "
+                          f"observations -- too few to calibrate a correlation")
+    corr, p_value = stats.pearsonr(diffs["sofr"], diffs["tona"])
+    return {"corr": float(corr), "p_value": float(p_value), "n_obs": len(diffs),
+            "method": "pearson_daily_rate_changes", "lookback_years": lookback_years}
 
 
 def load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a):
@@ -280,13 +340,33 @@ def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
                                  "the JPY Hull-White factor needs the real JPY OIS curve")
     jpy_curve = build_curve_from_bloomberg_zero_curve(load_jpy_bloomberg_zero_curve(), ref_date)
     a_jpy, calib_detail = load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a)
-    # sigma: prefer the JPY swaption fit's own level (real data, even when its
-    # `a` isn't usable -- the vol LEVEL from the fit is still informative,
-    # only the tenor-decay slope was the problem); fall back to a small
-    # disclosed constant if no swaption-based detail is available at all.
-    sigma_jpy = calib_detail["sigma_from_fit"] if calib_detail else 0.01
+
+    # sigma: preference order, same "prefer a real level, cross-check via
+    # fit" pattern already used for RATE_USD (see models/rates.py's module
+    # docstring):
+    #   1. Realized vol of TONA (Bank of Japan's own free daily history,
+    #      market/boj.py) -- now available (unlike when this module was
+    #      first written, when the only JPY data was one Bloomberg
+    #      snapshot). Mirrors exactly how RATE_USD's sigma comes from
+    #      realized SOFR vol (vols.py), not a swaption/futures fit.
+    #   2. The JPY swaption fit's own vol LEVEL (real data, usable even
+    #      when its `a` fit isn't -- see load_or_calibrate_jpy_mean_
+    #      reversion's docstring for why the fit's slope was unusable).
+    #   3. A small disclosed constant, only if neither real route works.
+    sigma_source = "fallback_constant"
+    try:
+        from ..market.boj import jpy_realized_rate_vol
+        sigma_jpy = jpy_realized_rate_vol(ref_date)
+        sigma_source = "tona_realized_vol"
+    except Exception as exc:
+        print(f"  WARN: TONA-realized JPY rate vol unavailable ({exc}); "
+              f"falling back to the swaption-fit vol level")
+        sigma_jpy = calib_detail["sigma_from_fit"] if calib_detail else 0.01
+        sigma_source = "swaption_fit_level" if calib_detail else "fallback_constant"
+
     hw_jpy = HullWhite1F(jpy_curve, sigma=sigma_jpy, a=a_jpy)
-    return hw_jpy, {"a": a_jpy, "sigma": sigma_jpy, "calibration_detail": calib_detail}
+    return hw_jpy, {"a": a_jpy, "sigma": sigma_jpy, "sigma_source": sigma_source,
+                    "calibration_detail": calib_detail}
 
 
 def build_calibration(ref_date):
@@ -327,12 +407,25 @@ def build_calibration(ref_date):
     try:
         hw_jpy, hw_jpy_detail = build_jpy_hull_white(ref_date, mean_reversion_a)
         print(f"  JPY Hull-White factor built (real JPY OIS curve, a={hw_jpy_detail['a']:.4f}, "
-              f"sigma={hw_jpy_detail['sigma']:.4%}) -- Gaussian, so it natively supports negative "
-              f"rates like JPY saw historically, no floor")
+              f"sigma={hw_jpy_detail['sigma']:.4%}, sigma_source={hw_jpy_detail['sigma_source']}) -- "
+              f"Gaussian, so it natively supports negative rates like JPY saw historically, no floor")
     except Exception as exc:
         print(f"  WARN: could not build JPY Hull-White factor ({exc}); JPY equities/FX keep using "
               f"the constant rate-differential approximation only")
         hw_jpy, hw_jpy_detail = None, None
+
+    try:
+        usd_jpy_corr_detail = calibrate_usd_jpy_rate_corr()
+        usd_jpy_rate_corr = usd_jpy_corr_detail["corr"]
+        print(f"  USD-JPY rate factor correlation calibrated from real SOFR/TONA daily changes: "
+              f"{usd_jpy_rate_corr:+.4f} (n={usd_jpy_corr_detail['n_obs']}, "
+              f"p={usd_jpy_corr_detail['p_value']:.3f} -- not statistically significant, "
+              f"consistent with independently-set monetary policy)")
+    except Exception as exc:
+        print(f"  WARN: could not calibrate USD-JPY rate correlation from real data ({exc}); "
+              f"falling back to the disclosed assumption {USD_JPY_RATE_FACTOR_CORR_ASSUMPTION}")
+        usd_jpy_rate_corr = USD_JPY_RATE_FACTOR_CORR_ASSUMPTION
+        usd_jpy_corr_detail = None
 
     equity_factor_names = [f for f in factor_order if f not in ("FX_USDJPY", "RATE_USD")]
     currencies = _isin_currency()
@@ -351,7 +444,8 @@ def build_calibration(ref_date):
         "hw": hw,
         "hw_jpy": hw_jpy,
         "hw_jpy_detail": hw_jpy_detail,
-        "usd_jpy_rate_factor_corr_assumption": USD_JPY_RATE_FACTOR_CORR_ASSUMPTION,
+        "usd_jpy_rate_factor_corr": usd_jpy_rate_corr,
+        "usd_jpy_rate_factor_corr_detail": usd_jpy_corr_detail,
         "gbm": gbm,
         "corr_matrix": corr_matrix,
         "factor_order": factor_order,
