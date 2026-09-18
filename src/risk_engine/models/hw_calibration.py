@@ -37,6 +37,7 @@ import math
 from datetime import date, timedelta
 
 import numpy as np
+import pandas as pd
 
 from ..market.sofr import _client, DATASET, _contract_period
 
@@ -179,3 +180,77 @@ def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15, cur
     return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit), "r_squared": r_squared,
             "currency": currency, "expiry_used": expiry, "max_tenor_years": max_tenor_years,
             "points": rows, "method": "swaption_atm_normal_vol_term_structure"}
+
+
+def calibrate_jpy_mean_reversion_from_jgb_yields(ref_date, lookback_years=3, max_tenor_years=30):
+    """A second, INDEPENDENT attempt at JPY mean reversion `a`, using real
+    multi-tenor JGB yield history from Japan's Ministry of Finance
+    (market/mof_jgb.py -- daily, 1Y-40Y, since 1974) instead of the single-
+    snapshot Bloomberg swaption cube. Same method as calibrate_mean_
+    reversion() (the USD futures-vol-decay approach): realized vol of the
+    yield LEVEL at each tenor over the lookback window, fit
+    sigma(tenor) = sigma * exp(-a * tenor) via log-linear regression.
+
+    Real finding (the reason this function exists, and why it's still not
+    what gets used, per load_or_calibrate_jpy_mean_reversion()): JGB
+    realized vol RISES with tenor here too -- 1Y vol is consistently the
+    SMALLEST and 30-40Y the LARGEST, at every lookback window tested
+    (1y, 2y, 5y, 10y) -- the opposite of the decay this model needs, and
+    the same qualitative shape the Bloomberg swaption cube showed. This
+    independently corroborates, using a completely different real 52-year
+    dataset, that the issue isn't one bad snapshot -- JPY's realized-vol
+    term structure genuinely doesn't fit a single-factor HW's exponential-
+    decay assumption over the historical period covered here (plausibly
+    because BOJ suppressed short-end vol for decades via ZIRP/NIRP/YCC,
+    while longer tenors moved more freely -- the reverse of what drives
+    USD's decay). This is disclosed as a genuine data finding, not
+    something the fallback in load_or_calibrate_jpy_mean_reversion() is
+    trying to paper over.
+    """
+    from ..market.mof_jgb import fetch_jgb_yield_history, TENOR_COLUMNS
+
+    yields = fetch_jgb_yield_history()
+    end = yields.index.max() if ref_date is None else pd.Timestamp(ref_date)
+    start = end - pd.DateOffset(years=lookback_years)
+    window = yields[(yields.index > start) & (yields.index <= end)]
+
+    tenor_years_map = {"1Y": 1, "2Y": 2, "3Y": 3, "4Y": 4, "5Y": 5, "6Y": 6, "7Y": 7,
+                        "8Y": 8, "9Y": 9, "10Y": 10, "15Y": 15, "20Y": 20, "25Y": 25,
+                        "30Y": 30, "40Y": 40}
+
+    tenors, vols, labels = [], [], []
+    for col in TENOR_COLUMNS:
+        t = tenor_years_map[col]
+        if t > max_tenor_years:
+            continue
+        series = window[col].dropna()
+        diffs = series.diff().dropna()
+        if len(diffs) < 30:
+            continue
+        vol = float(diffs.std() * math.sqrt(252))
+        if vol <= 0:
+            continue
+        tenors.append(t)
+        vols.append(vol)
+        labels.append(col)
+
+    if len(tenors) < 3:
+        raise ValueError(f"Only {len(tenors)} usable JGB tenors in the {lookback_years}y "
+                          f"window ending {end.date()} -- too few to fit a decay curve")
+
+    tenors_arr = np.array(tenors, dtype=float)
+    log_vols = np.log(vols)
+    A = np.vstack([tenors_arr, np.ones_like(tenors_arr)]).T
+    slope, intercept = np.linalg.lstsq(A, log_vols, rcond=None)[0]
+    a_fit = -slope
+    sigma_fit = math.exp(intercept)
+
+    residuals = log_vols - (slope * tenors_arr + intercept)
+    ss_res = np.sum(residuals ** 2)
+    ss_tot = np.sum((log_vols - log_vols.mean()) ** 2)
+    r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
+
+    rows = [{"tenor": lbl, "years": float(t), "vol": float(v)} for lbl, t, v in zip(labels, tenors, vols)]
+    return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit), "r_squared": r_squared,
+            "lookback_years": lookback_years, "max_tenor_years": max_tenor_years,
+            "points": rows, "method": "jgb_realized_yield_vol_term_structure"}

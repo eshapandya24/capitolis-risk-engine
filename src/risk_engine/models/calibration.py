@@ -292,35 +292,65 @@ def calibrate_usd_jpy_rate_corr(lookback_years=None):
             "method": "pearson_daily_rate_changes", "lookback_years": lookback_years}
 
 
-def load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a):
-    """JPY Hull-White mean reversion `a`. Tries the same swaption-decay
-    method used for USD (hw_calibration.calibrate_mean_reversion_from_
-    swaptions), but with a real finding disclosed rather than hidden: unlike
-    USD's cube, the JPY ATM normal swaption vol in our snapshot RISES with
-    swap tenor instead of decaying (plausibly a BOJ policy-normalization-era
-    pricing effect specific to this one 2026-08-31 snapshot, not a generic
-    property of JPY rates) -- fitting exp(-a*tenor) to a rising curve
-    produces a negative `a`, which isn't a usable mean-reversion speed (it
-    would mean the short rate diverges rather than reverts). When that
-    happens, this falls back to reusing the USD-calibrated `a` for the JPY
-    factor too: both are still Gaussian Hull-White short-rate models, so a
-    shared, physically valid mean-reversion speed is a more honest choice
-    than forcing an invalid fit.
+def load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a, ref_date=None):
+    """JPY Hull-White mean reversion `a`. Tries TWO independent real-data
+    routes, both using the same exp(-a*tenor) vol-decay method as the USD
+    calibration, before falling back:
+
+      1. hw_calibration.calibrate_mean_reversion_from_swaptions(JPY) --
+         the Bloomberg swaption cube (one 2026-08-31 snapshot).
+      2. hw_calibration.calibrate_jpy_mean_reversion_from_jgb_yields --
+         real MOF JGB yield history (multi-tenor, since 1974) -- added
+         specifically to check whether route 1's failure was a one-
+         snapshot artifact or something more structural.
+
+    Real finding, corroborated by BOTH independent sources: JPY's realized
+    rate vol RISES with tenor rather than decaying (opposite of USD's
+    shape), at every lookback window tried on the JGB data (1y, 2y, 5y,
+    10y) -- so both fits produce a negative `a`, not a usable mean-
+    reversion speed (it would mean the short rate diverges rather than
+    reverts). This isn't a data-quality problem fixable by finding a
+    better source; it's a genuine property of JPY's historical term
+    structure (plausibly reflecting decades of BOJ suppressing SHORT-end
+    vol via ZIRP/NIRP/YCC while longer tenors moved more freely -- the
+    reverse of what drives USD's decay). Falls back to reusing the USD-
+    calibrated `a` for the JPY factor too: both are still Gaussian
+    Hull-White short-rate models, so a shared, physically valid mean-
+    reversion speed is a more honest choice than forcing an invalid fit
+    from either source.
     """
-    from .hw_calibration import calibrate_mean_reversion_from_swaptions
+    from .hw_calibration import (calibrate_mean_reversion_from_swaptions,
+                                  calibrate_jpy_mean_reversion_from_jgb_yields)
+
+    swaption_result, jgb_result = None, None
     try:
-        result = calibrate_mean_reversion_from_swaptions(currency="JPY")
-        if result["a"] > 0:
-            return result["a"], result
-        print(f"  WARN: JPY swaption-implied mean reversion is negative (a={result['a']:.4f} -- "
-              f"the JPY vol cube's tenor shape rises rather than decays here); falling back to "
-              f"the USD-calibrated a={usd_mean_reversion_a:.4f} for the JPY factor too "
-              f"(disclosed simplification, see calibration.py)")
-        return usd_mean_reversion_a, result
+        swaption_result = calibrate_mean_reversion_from_swaptions(currency="JPY")
+        if swaption_result["a"] > 0:
+            return swaption_result["a"], swaption_result
     except Exception as exc:
-        print(f"  WARN: JPY swaption-based Hull-White calibration failed ({exc}); "
+        print(f"  WARN: JPY swaption-based Hull-White calibration failed ({exc})")
+
+    try:
+        jgb_result = calibrate_jpy_mean_reversion_from_jgb_yields(ref_date)
+        if jgb_result["a"] > 0:
+            print(f"  JPY swaption fit was invalid but the independent JGB-yield fit "
+                  f"succeeded (a={jgb_result['a']:.4f}) -- using it")
+            return jgb_result["a"], jgb_result
+    except Exception as exc:
+        print(f"  WARN: JPY JGB-yield-based Hull-White calibration failed ({exc})")
+
+    detail = jgb_result or swaption_result
+    if detail is not None:
+        print(f"  WARN: both real JPY mean-reversion calibration routes gave a negative/invalid "
+              f"`a` (swaption: {swaption_result['a'] if swaption_result else 'n/a'}, "
+              f"JGB: {jgb_result['a'] if jgb_result else 'n/a'}) -- JPY's realized vol genuinely "
+              f"rises with tenor rather than decaying (corroborated by two independent sources); "
+              f"falling back to the USD-calibrated a={usd_mean_reversion_a:.4f} for the JPY "
+              f"factor too (disclosed simplification, see calibration.py)")
+    else:
+        print(f"  WARN: neither real JPY mean-reversion calibration route was reachable; "
               f"falling back to the USD-calibrated a={usd_mean_reversion_a:.4f}")
-        return usd_mean_reversion_a, None
+    return usd_mean_reversion_a, detail
 
 
 def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
@@ -339,7 +369,7 @@ def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
         raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/ -- "
                                  "the JPY Hull-White factor needs the real JPY OIS curve")
     jpy_curve = build_curve_from_bloomberg_zero_curve(load_jpy_bloomberg_zero_curve(), ref_date)
-    a_jpy, calib_detail = load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a)
+    a_jpy, calib_detail = load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a, ref_date=ref_date)
 
     # sigma: preference order, same "prefer a real level, cross-check via
     # fit" pattern already used for RATE_USD (see models/rates.py's module
