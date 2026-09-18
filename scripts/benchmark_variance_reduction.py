@@ -103,7 +103,7 @@ def real_engine_confirmatory_check(n_scenarios=120, n_repeats=4):
             eng = SimulationEngine(calib, trades, method=method, n_scenarios=n_scenarios, seed=2000 + trial)
             paths = eng.simulate_paths()
             trade_ids, npv = eng.reprice_all(paths)
-            profiles = build_profiles(trade_ids, eng.trade_counterparty, npv, eng.dates, confidence=0.95)
+            profiles = build_profiles(trade_ids, eng.trade_counterparty, npv, eng.dates, confidence=0.99)
             # 1-year-ish node: index for the node closest to +1y (node 12 with monthly grid)
             node_1y = min(12, len(eng.dates) - 1)
             pfe_1y_estimates.append(profiles["__portfolio__"]["PFE"][node_1y])

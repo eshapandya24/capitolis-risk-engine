@@ -73,7 +73,7 @@ def mpor_shifted_exposure_by_counterparty(trade_ids, trade_counterparty, npv, no
 
 
 def mpor_vs_uncollateralized_comparison(trade_ids, trade_counterparty, npv, node_map,
-                                          reporting_dates, threshold=0.0, confidence=0.95):
+                                          reporting_dates, threshold=0.0, confidence=0.99):
     """Side-by-side EE/PFE: plain (uncollateralized-style, exposure AT each
     reporting node) vs MPOR-shifted (collateralized-style, exposure at
     reporting node + MPOR, net of collateral). Both computed from the SAME

@@ -42,7 +42,7 @@ def median_exposure(exposure_array):
     return np.quantile(exposure_array, 0.5, axis=1)
 
 
-def potential_future_exposure(exposure_array, confidence=0.95):
+def potential_future_exposure(exposure_array, confidence=0.99):
     """PFE(t) at `confidence` = that percentile of the exposure distribution
     across scenarios, per time node."""
     return np.quantile(exposure_array, confidence, axis=1)
@@ -53,7 +53,7 @@ def maximum_pfe(pfe_curve):
     return float(np.max(pfe_curve))
 
 
-def build_profiles(trade_ids, trade_counterparty, npv, dates, confidence=0.95):
+def build_profiles(trade_ids, trade_counterparty, npv, dates, confidence=0.99):
     """Full profile: EE(t)/PFE(t)/MPE per counterparty and for the book."""
     by_cpty = netted_exposure_by_counterparty(trade_ids, trade_counterparty, npv)
     portfolio = portfolio_exposure(by_cpty)
