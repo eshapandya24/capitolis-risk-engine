@@ -23,6 +23,7 @@ This module only loads/parses; it does not decide what to do with the
 data -- see hw_calibration.py and fx.py for the actual model wiring.
 """
 import os
+import re
 
 import pandas as pd
 
@@ -41,6 +42,15 @@ def load_usd_swaption_vols():
     (Bloomberg quotes in bp -- divide by 10000). Returns a DataFrame
     indexed by expiry, columns = swap tenor labels, values = decimal vol."""
     path = os.path.join(BBG_ROOT, "rates", f"usd_sofr_atm_normal_swaption_vol_{BBG_DATE}_wide.csv")
+    df = pd.read_csv(path, index_col="expiry")
+    return df / 10000.0
+
+
+def load_jpy_swaption_vols():
+    """ATM normal swaption vol cube for JPY OIS, same shape/units as
+    load_usd_swaption_vols() -- used to calibrate a genuine JPY Hull-White
+    factor (models/rates.py), not just a constant differential."""
+    path = os.path.join(BBG_ROOT, "rates", f"jpy_ois_atm_normal_swaption_vol_{BBG_DATE}_wide.csv")
     df = pd.read_csv(path, index_col="expiry")
     return df / 10000.0
 
@@ -79,6 +89,40 @@ def load_usdjpy_forward_points():
         tenor = col.split(" ")[0].replace("JPY", "")  # "JPY1M BGN Curncy" -> "1M"
         out[tenor] = float(row[col]) / 100.0  # FWD_SCALE=2, per manifest
     return out
+
+
+def _tenor_to_years(label):
+    """Generic tenor-label parser (e.g. "1W","3M","18M","2Y") -> year
+    fraction. Handles every label format seen in both the USD and JPY
+    Bloomberg zero curves (including odd JPY-only ones like "11M","21M",
+    "35M") without a hardcoded per-tenor lookup table."""
+    m = re.match(r"^(\d+)([WMY])$", label.strip().upper())
+    if not m:
+        raise ValueError(f"Unrecognized tenor label: {label!r}")
+    n, unit = int(m.group(1)), m.group(2)
+    return {"W": n / 52.0, "M": n / 12.0, "Y": float(n)}[unit]
+
+
+def build_curve_from_bloomberg_zero_curve(df, ref_date):
+    """Turn a load_*_bloomberg_zero_curve() DataFrame into a
+    capitolis_pricers.curves.Curve, using Bloomberg's OWN discount factors
+    directly (not re-derived from zero_rate, so no compounding-convention
+    mismatch is introduced). Used to build a real JPY curve for the JPY
+    Hull-White factor (models/rates.py), rather than only a constant
+    USD-JPY rate differential."""
+    from capitolis_pricers.curves import Curve
+    from capitolis_pricers.daycount import to_date
+
+    ref_date = to_date(ref_date)
+    pillar_times = [0.0]
+    dfs = [1.0]
+    for _, row in df.iterrows():
+        pillar_times.append(_tenor_to_years(row["tenor"]))
+        dfs.append(float(row["discount_factor"]))
+    order = sorted(range(len(pillar_times)), key=lambda i: pillar_times[i])
+    pillar_times = [pillar_times[i] for i in order]
+    dfs = [dfs[i] for i in order]
+    return Curve(ref_date, pillar_times, dfs, basis="ACT/365F")
 
 
 def load_usdjpy_spot():

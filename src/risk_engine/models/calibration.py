@@ -222,6 +222,73 @@ def load_or_calibrate_mean_reversion(ref_date, use_cache=True):
         return DEFAULT_MEAN_REVERSION_FALLBACK, None
 
 
+# Disclosed assumption: no historical JPY OIS time series exists in our
+# Bloomberg export (only the single 2026-08-31 snapshot -- see
+# data/raw/bloomberg/data_bloomberg/metadata/data_gaps_and_exclusions.csv),
+# so a USD-JPY short-rate factor correlation cannot be calibrated from real
+# data. This constant is a disclosed simplification (a modest positive
+# value, reflecting the general co-movement most G10 rate pairs show), not
+# a fitted number.
+USD_JPY_RATE_FACTOR_CORR_ASSUMPTION = 0.3
+
+
+def load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a):
+    """JPY Hull-White mean reversion `a`. Tries the same swaption-decay
+    method used for USD (hw_calibration.calibrate_mean_reversion_from_
+    swaptions), but with a real finding disclosed rather than hidden: unlike
+    USD's cube, the JPY ATM normal swaption vol in our snapshot RISES with
+    swap tenor instead of decaying (plausibly a BOJ policy-normalization-era
+    pricing effect specific to this one 2026-08-31 snapshot, not a generic
+    property of JPY rates) -- fitting exp(-a*tenor) to a rising curve
+    produces a negative `a`, which isn't a usable mean-reversion speed (it
+    would mean the short rate diverges rather than reverts). When that
+    happens, this falls back to reusing the USD-calibrated `a` for the JPY
+    factor too: both are still Gaussian Hull-White short-rate models, so a
+    shared, physically valid mean-reversion speed is a more honest choice
+    than forcing an invalid fit.
+    """
+    from .hw_calibration import calibrate_mean_reversion_from_swaptions
+    try:
+        result = calibrate_mean_reversion_from_swaptions(currency="JPY")
+        if result["a"] > 0:
+            return result["a"], result
+        print(f"  WARN: JPY swaption-implied mean reversion is negative (a={result['a']:.4f} -- "
+              f"the JPY vol cube's tenor shape rises rather than decays here); falling back to "
+              f"the USD-calibrated a={usd_mean_reversion_a:.4f} for the JPY factor too "
+              f"(disclosed simplification, see calibration.py)")
+        return usd_mean_reversion_a, result
+    except Exception as exc:
+        print(f"  WARN: JPY swaption-based Hull-White calibration failed ({exc}); "
+              f"falling back to the USD-calibrated a={usd_mean_reversion_a:.4f}")
+        return usd_mean_reversion_a, None
+
+
+def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
+    """A genuine second Hull-White factor for JPY, built off the REAL JPY
+    OIS curve (Bloomberg, 2026-08-31 snapshot) -- Gaussian, so it natively
+    supports negative short rates with no floor, unlike CIR/Black-Karasinski
+    -- the right structural choice given JPY's real NIRP-era history (see
+    tests/test_rates.py's negative-rate regression). Replaces treating JPY
+    only as "USD minus a constant differential" with an actual simulatable
+    JPY rate model; calibration.py's `hw_jpy` is not yet wired into the
+    simulation engine's path generation (engine.py currently only steps the
+    USD factor) -- that's the next step, tracked separately.
+    """
+    from ..market.bloomberg import load_jpy_bloomberg_zero_curve, build_curve_from_bloomberg_zero_curve, available
+    if not available():
+        raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/ -- "
+                                 "the JPY Hull-White factor needs the real JPY OIS curve")
+    jpy_curve = build_curve_from_bloomberg_zero_curve(load_jpy_bloomberg_zero_curve(), ref_date)
+    a_jpy, calib_detail = load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a)
+    # sigma: prefer the JPY swaption fit's own level (real data, even when its
+    # `a` isn't usable -- the vol LEVEL from the fit is still informative,
+    # only the tenor-decay slope was the problem); fall back to a small
+    # disclosed constant if no swaption-based detail is available at all.
+    sigma_jpy = calib_detail["sigma_from_fit"] if calib_detail else 0.01
+    hw_jpy = HullWhite1F(jpy_curve, sigma=sigma_jpy, a=a_jpy)
+    return hw_jpy, {"a": a_jpy, "sigma": sigma_jpy, "calibration_detail": calib_detail}
+
+
 def build_calibration(ref_date):
     """Returns a dict with everything the simulation engine needs:
     hw (HullWhite1F), gbm (CorrelatedGBM), corr_matrix (DataFrame, ordered),
@@ -257,6 +324,16 @@ def build_calibration(ref_date):
     mean_reversion_a, hw_calib_detail = load_or_calibrate_mean_reversion(ref_date)
     hw = HullWhite1F(usd_curve, sigma=rate_vol, a=mean_reversion_a)
 
+    try:
+        hw_jpy, hw_jpy_detail = build_jpy_hull_white(ref_date, mean_reversion_a)
+        print(f"  JPY Hull-White factor built (real JPY OIS curve, a={hw_jpy_detail['a']:.4f}, "
+              f"sigma={hw_jpy_detail['sigma']:.4%}) -- Gaussian, so it natively supports negative "
+              f"rates like JPY saw historically, no floor")
+    except Exception as exc:
+        print(f"  WARN: could not build JPY Hull-White factor ({exc}); JPY equities/FX keep using "
+              f"the constant rate-differential approximation only")
+        hw_jpy, hw_jpy_detail = None, None
+
     equity_factor_names = [f for f in factor_order if f not in ("FX_USDJPY", "RATE_USD")]
     currencies = _isin_currency()
     gbm = CorrelatedGBM(
@@ -272,6 +349,9 @@ def build_calibration(ref_date):
         "ref_date": usd_curve.ref_date,
         "usd_curve": usd_curve,
         "hw": hw,
+        "hw_jpy": hw_jpy,
+        "hw_jpy_detail": hw_jpy_detail,
+        "usd_jpy_rate_factor_corr_assumption": USD_JPY_RATE_FACTOR_CORR_ASSUMPTION,
         "gbm": gbm,
         "corr_matrix": corr_matrix,
         "factor_order": factor_order,

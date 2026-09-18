@@ -109,12 +109,17 @@ _TENOR_YEARS = {"1M": 1/12, "2M": 2/12, "3M": 0.25, "6M": 0.5, "1Y": 1, "18M": 1
                 "10Y": 10, "12Y": 12, "15Y": 15, "20Y": 20, "25Y": 25, "30Y": 30}
 
 
-def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15):
+def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15, currency="USD"):
     """Calibrates `a` from a REAL ATM normal swaption volatility cube
     (data/raw/bloomberg/ -- a one-time Bloomberg export the user provided,
     not a live feed; see market/bloomberg.py's module docstring), the
     standard textbook route this project's original docstring above flagged
     as unavailable when it was first written.
+
+    `currency`: "USD" (SOFR, default) or "JPY" (OIS) -- selects which
+    swaption vol cube to load. Same method either way; JPY's cube is a
+    single 2026-08-31 snapshot rather than a history, which is fine here
+    since this fit only ever uses one snapshot's cross-tenor shape anyway.
 
     Method, disclosed as a real simplification rather than a full 2D
     swaption-cube fit: take ATM normal vol at ONE short expiry (default 1M,
@@ -136,12 +141,15 @@ def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15):
     different market dynamics -- pension-driven long-end flows -- not
     informative for calibrating short-dated CCR exposure).
     """
-    from ..market.bloomberg import load_usd_swaption_vols, available
+    from ..market.bloomberg import load_usd_swaption_vols, load_jpy_swaption_vols, available
 
     if not available():
         raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/")
 
-    cube = load_usd_swaption_vols()
+    loaders = {"USD": load_usd_swaption_vols, "JPY": load_jpy_swaption_vols}
+    if currency not in loaders:
+        raise ValueError(f"Unsupported currency {currency!r}; expected one of {list(loaders)}")
+    cube = loaders[currency]()
     if expiry not in cube.index:
         raise ValueError(f"Expiry {expiry!r} not in swaption cube; available: {list(cube.index)}")
     row = cube.loc[expiry]
@@ -169,5 +177,5 @@ def calibrate_mean_reversion_from_swaptions(expiry="1M", max_tenor_years=15):
 
     rows = [{"tenor": lbl, "years": float(t), "vol": float(v)} for lbl, t, v in zip(labels, tenors, vols)]
     return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit), "r_squared": r_squared,
-            "expiry_used": expiry, "max_tenor_years": max_tenor_years, "points": rows,
-            "method": "swaption_atm_normal_vol_term_structure"}
+            "currency": currency, "expiry_used": expiry, "max_tenor_years": max_tenor_years,
+            "points": rows, "method": "swaption_atm_normal_vol_term_structure"}
