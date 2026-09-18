@@ -1,10 +1,14 @@
 """
 Tail-focused convergence study: how many paths are needed for a RELIABLE
-99.9th-percentile PFE estimate (much noisier than the 95th percentile --
-only ~1 in 1000 scenarios sits past that threshold, vs ~1 in 20 for the
-95th). Extends docs/notes/convergence_study.md's method (one large pool,
+99th-percentile PFE estimate (noisier than the 95th percentile -- only ~1
+in 100 scenarios sits past that threshold, vs ~1 in 20 for the 95th).
+Extends docs/notes/convergence_study.md's method (one large pool,
 bootstrap-resampled subsets) out through 30,000 paths specifically to see
-where PFE99.9's accuracy/time tradeoff stops improving materially.
+where PFE99's accuracy/time tradeoff stops improving materially.
+
+(Note: an earlier run of this script used 99.9% by mistake -- corrected to
+99%, the actually-intended confidence level. The mechanism/method is
+identical; only CONFIDENCE below changed.)
 
     python scripts/convergence_study_tail.py
 """
@@ -16,7 +20,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 N_POOL = 30000
 N_VALUES = [500, 1000, 2000, 5000, 10000, 15000, 20000, 25000, 30000]
-CONFIDENCE = 0.999
+CONFIDENCE = 0.99
 N_BOOTSTRAP = 150
 
 
@@ -101,10 +105,10 @@ def main():
             "est_time_s": float(est_time_parallel),
         })
         mi_str = f"{marginal_improvement:+.1f}%" if marginal_improvement is not None else "   n/a"
-        print(f"N={N:6d}  PFE99.9={pfe_mean:12,.0f} (+/-{pfe_std:9,.0f}, {rel_se_pct:5.2f}%)  "
+        print(f"N={N:6d}  PFE{CONFIDENCE*100:.0f}={pfe_mean:12,.0f} (+/-{pfe_std:9,.0f}, {rel_se_pct:5.2f}%)  "
               f"bias_vs_pool={bias_vs_pool_pct:+6.2f}%  marginal_SE_gain={mi_str}  est.time={est_time_parallel:7.1f}s")
 
-    out_path = os.path.join(ROOT, "data", "processed", "convergence_study_tail_pfe999.json")
+    out_path = os.path.join(ROOT, "data", "processed", "convergence_study_tail_pfe99.json")
     with open(out_path, "w") as f:
         json.dump({"N_pool": N_POOL, "confidence": CONFIDENCE, "pool_pfe_reference": float(pool_pfe),
                    "per_scenario_parallel_ms_used": per_scenario_parallel * 1000,

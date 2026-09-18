@@ -23,10 +23,41 @@ from .random_numbers import generate as gen_randoms
 
 MONTHLY_STEP_MONTHS = 1
 
+# Standard market curve pillar tenors -- the SAME convention already
+# documented for our own SOFR curve (data/MARKET_DATA.md #1: "O/N, T/N,
+# 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 7Y, 10Y"). Named
+# directly by Capitolis as the intended convention for simulation reporting
+# dates, not just curve-building tenors: (days, months) pairs, used up to
+# 1Y in days for precision (O/N=1 calendar day, not "1/365 months"), then
+# in months beyond that (add_months handles month-length variation
+# correctly, e.g. day-of-month clamping, which raw day-counting wouldn't).
+PILLAR_TENORS_DAYS = [1, 2, 7, 14]              # O/N, T/N, 1W, 2W
+PILLAR_TENORS_MONTHS = [1, 2, 3, 6, 9, 12, 18, 24, 36, 48, 60, 84, 120]  # 1M..10Y
+
 
 def _add_months(d, n):
     from capitolis_pricers.daycount import add_months
     return add_months(d, n)
+
+
+def pillar_dates(ref_date, horizon):
+    """Standard market curve pillar dates from ref_date, capped at horizon
+    -- see PILLAR_TENORS_* above. This is the industry-standard convention
+    for where to observe/report exposure (dense near-term, sparse further
+    out, because pillar tenor spacing is itself front-loaded), rather than
+    an arbitrary uniform calendar grid."""
+    ref_date = to_date(ref_date)
+    dates = {ref_date}
+    for days in PILLAR_TENORS_DAYS:
+        d = ref_date + timedelta(days=days)
+        if d <= horizon:
+            dates.add(d)
+    for months in PILLAR_TENORS_MONTHS:
+        d = _add_months(ref_date, months)
+        if d <= horizon:
+            dates.add(d)
+    dates.add(horizon)  # always include the final maturity itself
+    return sorted(dates)
 
 
 def trade_expiry(trade):
@@ -38,10 +69,47 @@ def trade_expiry(trade):
     raise AttributeError(f"Don't know how to find the expiry of {trade!r}")
 
 
-def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days=None):
-    """Monthly "reporting" nodes from ref_date to the last trade's expiry
-    (inclusive). If `mpor_days` is given, an extra look-ahead node is
-    inserted `mpor_days` calendar days after EVERY reporting node (used for
+def trade_event_dates(trade):
+    """Every cashflow/reset/termination date for a trade -- used as
+    MANDATORY simulation grid nodes (see build_time_grid). Why this
+    matters: a trade's exposure can jump discontinuously exactly on a
+    reset or maturity date (a TRS funding leg re-strikes; a trade rolls off
+    the book entirely), and a generic monthly grid has no reason to land on
+    that exact date -- it would smooth over a real cliff instead of
+    capturing it. Industry CCR engines handle this by forcing trade event
+    dates into the monitoring-date grid rather than relying on a uniform
+    schedule alone; this does the same, cheaply, since the engine already
+    supports arbitrary non-uniform node spacing (proven by the MPOR
+    look-ahead nodes, which use the same mechanism)."""
+    from capitolis_pricers.daycount import schedule_forward
+    if hasattr(trade, "reset_m"):  # Equity TRS, Bond TRS: full reset schedule
+        return [to_date(d) for d in schedule_forward(trade.start_date, trade.end_date, trade.reset_m)]
+    if hasattr(trade, "forward_date"):  # Bond Forward: single settlement date
+        return [to_date(trade.forward_date)]
+    return []
+
+
+def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days=None,
+                     include_trade_event_dates=True, grid_mode="pillar"):
+    """Base "reporting" nodes from ref_date to the last trade's expiry
+    (inclusive), UNIONED with every trade's own reset/maturity/forward
+    dates (see trade_event_dates) so exposure discontinuities land exactly
+    on a simulated node rather than being smoothed over by the nearest
+    generic grid point -- set include_trade_event_dates=False to disable.
+
+    grid_mode picks how the BASE reporting dates (before the event-date
+    union above) are chosen:
+      - "pillar" (default, industry-standard): standard market curve pillar
+        tenors (see pillar_dates/PILLAR_TENORS_* above) -- the same
+        convention already used for building our own SOFR curve, dense
+        near-term and progressively sparser further out, matching how
+        production CCR/PFE systems actually choose monitoring dates.
+      - "monthly": uniform monthly steps (the original, simpler approach --
+        kept for comparison/backward compatibility, not recommended as the
+        production default).
+
+    If `mpor_days` is given, an extra look-ahead node is inserted
+    `mpor_days` calendar days after EVERY reporting node (used for
     MPOR-shifted/collateralized exposure -- see exposure/collateral.py) --
     both node types sit on the SAME simulated path, so the look-ahead value
     is a genuine "what does this same scenario look like a bit later"
@@ -51,13 +119,28 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
     requested, or the look-ahead would fall past the trade horizon)."""
     ref_date = to_date(ref_date)
     horizon = max(trade_expiry(t) for t in trades.values())
-    reporting_dates = [ref_date]
-    d = ref_date
-    while d < horizon:
-        d = _add_months(d, step_months)
-        reporting_dates.append(min(d, horizon))
-        if d >= horizon:
-            break
+
+    if grid_mode == "pillar":
+        base_dates = set(pillar_dates(ref_date, horizon))
+    elif grid_mode == "monthly":
+        base_dates = {ref_date}
+        d = ref_date
+        while d < horizon:
+            d = _add_months(d, step_months)
+            base_dates.add(min(d, horizon))
+            if d >= horizon:
+                break
+    else:
+        raise ValueError(f"grid_mode must be 'pillar' or 'monthly', got {grid_mode!r}")
+
+    event_dates = set()
+    if include_trade_event_dates:
+        for t in trades.values():
+            for ed in trade_event_dates(t):
+                if ref_date < ed <= horizon:
+                    event_dates.add(ed)
+
+    reporting_dates = sorted(base_dates | event_dates)
 
     if mpor_days is None:
         times = [year_fraction(ref_date, d, "ACT/365F") for d in reporting_dates]
@@ -84,7 +167,7 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
 class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
                  step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
-                 mpor_days=None):
+                 mpor_days=None, grid_mode="pillar", include_trade_event_dates=True):
         self.calib = calib
         self.trades = trades
         self.method = method
@@ -107,7 +190,8 @@ class SimulationEngine:
         self.L = np.linalg.cholesky(corr)
 
         self.dates, self.times, self.node_map = build_time_grid(
-            calib["ref_date"], trades, step_months, mpor_days=mpor_days)
+            calib["ref_date"], trades, step_months, mpor_days=mpor_days,
+            grid_mode=grid_mode, include_trade_event_dates=include_trade_event_dates)
         self.n_steps = len(self.times) - 1
 
         self.trade_expiries = {tid: trade_expiry(t) for tid, t in trades.items()}

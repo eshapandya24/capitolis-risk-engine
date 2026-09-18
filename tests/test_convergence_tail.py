@@ -1,5 +1,5 @@
 """
-Regression tests for the 99.9th-percentile convergence study
+Regression tests for the 99th-percentile convergence study
 (docs/notes/convergence_study.md's "Extension" section,
 scripts/convergence_study_tail.py).
 
@@ -10,12 +10,15 @@ Two kinds of test here:
      does (already covered for the mean in test_simulation_engine.py), just
      slower since fewer samples land in the tail.
   2. A real-data regression check against the actual
-     data/processed/convergence_study_tail_pfe999.json artifact this
+     data/processed/convergence_study_tail_pfe99.json artifact this
      project generated -- skipped automatically if that file isn't present
      (it's gitignored/regenerable, not something a fresh clone has), so
      this only runs where the real results exist, and catches this
      specific empirical finding (marginal SE gain rises then declines;
      bias shrinks toward the reference as N grows) silently regressing.
+
+(Corrected from an earlier 99.9% target to the actually-intended 99% --
+same mechanism, only the confidence level changed.)
 """
 import json
 import math
@@ -26,7 +29,7 @@ import pytest
 
 DATA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data", "processed", "convergence_study_tail_pfe999.json",
+    "data", "processed", "convergence_study_tail_pfe99.json",
 )
 
 
@@ -42,14 +45,14 @@ def _bootstrap_quantile_se(population, N, confidence, n_bootstrap=200, seed=0):
 
 
 def test_tail_quantile_se_shrinks_with_n():
-    """The 99.9th-percentile estimator's standard error should shrink as N
+    """The 99th-percentile estimator's standard error should shrink as N
     grows, same direction as the mean's 1/sqrt(N) law -- verified on a
     synthetic population, no real simulation needed."""
     rng = np.random.default_rng(7)
     population = rng.lognormal(mean=10, sigma=1.2, size=200_000)  # a fat-tailed distribution, like exposure
 
-    _, se_small = _bootstrap_quantile_se(population, N=200, confidence=0.999, seed=1)
-    _, se_large = _bootstrap_quantile_se(population, N=5000, confidence=0.999, seed=1)
+    _, se_small = _bootstrap_quantile_se(population, N=200, confidence=0.99, seed=1)
+    _, se_large = _bootstrap_quantile_se(population, N=5000, confidence=0.99, seed=1)
 
     assert se_large < se_small, (
         f"Tail quantile SE should shrink with more scenarios: N=200 SE={se_small:.2f}, "
@@ -57,7 +60,7 @@ def test_tail_quantile_se_shrinks_with_n():
 
 
 def test_tail_quantile_needs_more_n_than_the_median_for_equal_relative_precision():
-    """The whole reason this extension study existed: a 99.9th-percentile
+    """The whole reason this extension study existed: a 99th-percentile
     estimate is noisier than a 50th-percentile (median) estimate at the
     SAME N, because far fewer samples inform the tail. Verify that
     directly, rather than just asserting it in prose."""
@@ -66,12 +69,12 @@ def test_tail_quantile_needs_more_n_than_the_median_for_equal_relative_precision
     N = 1000
 
     mean_median, se_median = _bootstrap_quantile_se(population, N, confidence=0.50, seed=2)
-    mean_tail, se_tail = _bootstrap_quantile_se(population, N, confidence=0.999, seed=2)
+    mean_tail, se_tail = _bootstrap_quantile_se(population, N, confidence=0.99, seed=2)
 
     rel_se_median = se_median / mean_median
     rel_se_tail = se_tail / mean_tail
     assert rel_se_tail > rel_se_median, (
-        f"99.9th percentile relative SE ({rel_se_tail:.4f}) should be larger than the "
+        f"99th percentile relative SE ({rel_se_tail:.4f}) should be larger than the "
         f"median's ({rel_se_median:.4f}) at equal N -- the tail is harder to estimate")
 
 
@@ -86,7 +89,7 @@ def test_marginal_se_gain_eventually_declines_with_n():
     population = rng.lognormal(mean=10, sigma=1.2, size=300_000)
 
     Ns = [500, 2000, 8000, 20000]
-    ses = [_bootstrap_quantile_se(population, N, confidence=0.999, seed=3)[1] for N in Ns]
+    ses = [_bootstrap_quantile_se(population, N, confidence=0.99, seed=3)[1] for N in Ns]
     gains = [(ses[i - 1] - ses[i]) / ses[i - 1] for i in range(1, len(ses))]
 
     # the LAST marginal gain (largest N step) should be smaller than the
@@ -96,7 +99,7 @@ def test_marginal_se_gain_eventually_declines_with_n():
 
 
 @pytest.mark.skipif(not os.path.exists(DATA_PATH),
-                     reason="convergence_study_tail_pfe999.json not present -- run "
+                     reason="convergence_study_tail_pfe99.json not present -- run "
                             "scripts/convergence_study_tail.py to regenerate it")
 def test_real_convergence_study_bias_shrinks_toward_reference():
     with open(DATA_PATH) as f:
@@ -111,7 +114,7 @@ def test_real_convergence_study_bias_shrinks_toward_reference():
 
 
 @pytest.mark.skipif(not os.path.exists(DATA_PATH),
-                     reason="convergence_study_tail_pfe999.json not present -- run "
+                     reason="convergence_study_tail_pfe99.json not present -- run "
                             "scripts/convergence_study_tail.py to regenerate it")
 def test_real_convergence_study_marginal_gain_peaks_then_declines():
     with open(DATA_PATH) as f:
