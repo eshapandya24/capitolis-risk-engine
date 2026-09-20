@@ -1,0 +1,743 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage[table,dvipsnames]{xcolor}
+\usepackage{colortbl}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\definecolor{navy}{HTML}{1F3A5F}
+\definecolor{teal}{HTML}{2A9D8F}
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{navy}}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{5pt}
+\captionsetup{font=small,labelfont=bf,justification=raggedright,singlelinecheck=false}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\sloppy
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{gray}{Monte Carlo Counterparty Credit Risk Engine - Complete Report}}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\begin{document}
+\begin{titlepage}
+\vspace*{1.6in}
+{\color{navy}\rule{\linewidth}{1.2pt}}\\[1.2em]
+{\Huge\bfseries\color{navy} Monte Carlo Counterparty Credit Risk Engine\par}
+\vspace{0.6em}
+{\Large Methodology, calibration and results for the ESF derivatives book\par}
+\vspace{0.6em}
+{\color{navy}\rule{\linewidth}{1.2pt}}\\[2em]
+{\large Prepared for Capitolis \textbar{} Berkeley MFE Industry Project\par}
+\vspace{0.4em}
+{\normalsize Valuation date 2026-08-28 \textbar{} September 2026\par}
+\end{titlepage}
+\section*{Abstract}
+This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
+
+\tableofcontents
+\clearpage
+\section*{Summary of results}
+The table reports the portfolio results for the uncollateralized book (3,000 Latin Hypercube scenarios, PFE at the 99th percentile).
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2875\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2875\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4250\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Measure}} & \textbf{\textcolor{white}{Value}} & \textbf{\textcolor{white}{Meaning}} \\
+\endhead
+Current exposure (portfolio) & \$107.7M & Loss if every counterparty defaulted today, after netting \\
+\rowcolor{gray!9}Peak EE & \$121.9M at 2026-10-16 & Highest average future exposure \\
+Peak median PFE & \$121.3M at 2026-10-16 & Typical (50th percentile) exposure at its highest date \\
+\rowcolor{gray!9}Maximum PFE99 (MPE) & \$174.7M at 2026-10-09 & Highest 99th-percentile exposure over the life of the book \\
+Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
+\rowcolor{gray!9}Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Principal modelling choices} (each is justified in Section 8):
+
+\begin{itemize}
+\item Monte Carlo under the risk-neutral measure. USD short rate: one-factor Hull-White (exact fit to today's SOFR curve). Equities and USDJPY: correlated geometric Brownian motion driven by the simulated rate.
+\item Correlation: one static 39x39 matrix estimated from 613 aligned daily returns and applied through a Cholesky factor; a PCA factor model (5 factors) is provided as an alternative.
+\item Sampling and size: Latin Hypercube sampling (lowest error of the five methods tested) with N = 5,000 scenarios for standard reporting (PFE99 relative standard error about 1\% at the worst-case date), N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
+\item Dates: standard market pillar dates (O/N to 10Y) with every trade's own reset and maturity date forced onto the grid.
+\item Mean reversion: a = 0.0167 for USD from the swaption cube; JPY reuses the USD value because real JPY volatility rises with tenor (two independent sources).
+\item JPY: a negative-rate-capable Hull-White factor is built (sigma from real TONA; correlation with the USD rate calibrated at approximately zero) but does not yet drive JPY equity drift.
+\item The book is treated as uncollateralized (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical.
+\end{itemize}
+\clearpage
+\section{The problem from scratch}
+\subsection{What is counterparty credit risk?}
+A derivative is a contract whose value changes as markets move. If we hold a contract with positive value to us, the counterparty owes us that value. If the counterparty then defaults, we lose (some of) it. \textbf{Counterparty credit risk (CCR)} is that loss risk. It is not the same as market risk: market risk is about our profit and loss moving; CCR is about whether the other side can pay when the contract is in our favour.
+
+Two properties make CCR different from ordinary risk measures:
+
+\begin{itemize}
+\item \textbf{It is one-sided.} If a contract is worth -5M to us we owe them; their default does not cost us that 5M back. So exposure is max(V, 0), a call option on the value (Figure 1).
+\item \textbf{It is about the future.} A default can happen at any date, so what matters is not today's value but the distribution of what the book could be worth on every future date. That needs simulation.
+\end{itemize}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig01.pdf}
+\caption{Exposure is the positive part of the net value V. Negative value is not a credit exposure.}
+\end{figure}
+\subsection{Netting}
+Trades with the same counterparty under one legal netting agreement are combined before applying max(V,0): a +10M trade and a -6M trade give exposure 4M, not 10M. Netting never crosses counterparties. The portfolio exposure is therefore the \emph{sum over counterparties} of each counterparty's own max(sum of trade values, 0).
+
+\subsection{The four measures reported}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1948\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3377\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4675\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Measure}} & \textbf{\textcolor{white}{Definition}} & \textbf{\textcolor{white}{How to read it}} \\
+\endhead
+Exposure profile V+(t) & max(net MTM, 0) at each future date t, in each simulated scenario & The raw object; everything below summarises its distribution across scenarios \\
+\rowcolor{gray!9}EE (Expected Exposure) & Mean of exposure across scenarios at date t & Average loss if default happens at t; used for pricing credit charges (CVA) \\
+Median PFE & 50th percentile of exposure across scenarios at date t & The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY\_C forward \\
+\rowcolor{gray!9}PFE99 (Potential Future Exposure) & The 99th percentile of exposure at date t & In 99 of 100 scenarios exposure at t is below this level. Used to set limits \\
+MPE (Maximum PFE) & Peak of the PFE curve over all dates & One number to set a counterparty limit against \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Confidence level.} PFE is reported at the 99th percentile throughout, together with the median PFE (the 50th percentile of the same exposure distribution), which describes the typical scenario.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig02.pdf}
+\caption{Left: simulated values of a portfolio through time. Right: the same paths after applying max(V,0); EE is their average.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig03.pdf}
+\caption{The real portfolio exposure distribution $\sim$3 months out, with EE, median PFE and PFE99 marked. The long right tail is why EE, median PFE and PFE99 differ so much.}
+\end{figure}
+\subsection{Why Monte Carlo}
+The value of the book at a future date depends on the future levels of $\sim$40 market variables (37 stock prices, USDJPY, interest rates) that move together. There is no closed formula for the distribution of a netted, path-dependent-schedule book. Monte Carlo solves this by: (1) simulating thousands of joint futures for all the variables; (2) fully re-pricing every trade in every simulated future at every date; (3) netting; (4) reading off the distribution. The cost is that the answer has sampling noise, which we measure and control (Sections 5.4 and 5.5).
+
+\subsection{Real-world versus risk-neutral simulation}
+Simulating under the \emph{risk-neutral} measure (drift = short rate minus dividends) is the pricing-consistent choice used for CVA and for exposure numbers that must be consistent with today's market prices. The alternative, real-world (physical) drift, is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra unobservable inputs and is verified by a martingale test (Section 9). Because the horizon is short (under two years) and most positions are financed at the same rates, the difference between the two drifts is small relative to volatility.
+
+\clearpage
+\section{The trade book}
+The book has \textbf{16 trades} with \textbf{3 counterparties} (CPTY\_A, CPTY\_B, CPTY\_C), referencing 37 unique equities (31 USD-quoted, 6 JPY-quoted) and 5 US Treasury bonds. Trade files are supplied by Capitolis in trade\_data/.
+
+\subsection{The three instruments}
+\textbf{Equity Total Return Swap (TRS).} One party pays the total return of a basket of shares (price change plus dividends) and receives a funding leg (SOFR plus a spread, or a fixed rate) on a financed amount. Value = equity leg minus funding leg:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+equity leg  = sum_i shares_i * DF(end) * (F_i(end) - basis_i)     F(t) = S(t)/DF(end)
+funding leg = sum_k rate_k * Notional * tau_k * DF(t_k)            rate_k = SOFR_fwd + spread  (or fixed)
+NPV         = equity leg - funding leg
+\end{verbatim}}
+Eight of these (EQTRS\_0001-0008), all `pay\_equity' from our side, so we are long the funding leg and short the equity return: our value rises when the shares fall. Two are JPY \emph{compo} trades: both legs settle in USD but the equity leg pays the return of the USD value of a JPY share (S\_JPY x USDJPY), so equity and FX risk both matter.
+
+\textbf{Bond Forward.} An agreement to sell/buy a Treasury at a fixed clean price on a future date: NPV = sign x (notional/par) x DF(T) x (forward clean price - strike). The forward price is the spot financed at the repo rate less coupons in the window. Four of these, all short. BF\_0003 has a 500M notional and dominates CPTY\_C.
+
+\textbf{Bond TRS.} Same idea as an equity TRS but on a bond: return leg (price change plus coupons) versus a funding leg over a reset schedule. Four of these.
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2097\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1935\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1774\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1774\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2419\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Trade}} & \textbf{\textcolor{white}{Type}} & \textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{Ends}} & \textbf{\textcolor{white}{Today's NPV}} \\
+\endhead
+EQTRS\_0001 & EquityTRS & CPTY\_A & 2026-10-14 & -8,377,700 \\
+\rowcolor{gray!9}EQTRS\_0002 & EquityTRS & CPTY\_A & 2026-10-09 & -2,079,657 \\
+EQTRS\_0003 & EquityTRS & CPTY\_A & 2026-10-16 & 11,151,337 \\
+\rowcolor{gray!9}EQTRS\_0004 & EquityTRS & CPTY\_B & 2026-11-02 & -1,051,939 \\
+EQTRS\_0005 & EquityTRS & CPTY\_B & 2026-10-09 & 38,682 \\
+\rowcolor{gray!9}EQTRS\_0006 & EquityTRS & CPTY\_B & 2026-10-30 & 1,361,371 \\
+EQTRS\_0007 & EquityTRS & CPTY\_C & 2026-10-23 & 826,403 \\
+\rowcolor{gray!9}EQTRS\_0008 & EquityTRS & CPTY\_C & 2027-07-22 & 1,947,022 \\
+BF\_0001 & BondForwardTrade & CPTY\_A & 2026-10-30 & 512,531 \\
+\rowcolor{gray!9}BF\_0002 & BondForwardTrade & CPTY\_A & 2026-11-08 & -432,501 \\
+BF\_0003 & BondForwardTrade & CPTY\_C & 2026-12-06 & 101,417,649 \\
+\rowcolor{gray!9}BF\_0004 & BondForwardTrade & CPTY\_C & 2026-10-25 & 1,973,388 \\
+BTRS\_0001 & BondTRS & CPTY\_A & 2028-01-15 & 123,516 \\
+\rowcolor{gray!9}BTRS\_0002 & BondTRS & CPTY\_B & 2027-01-15 & 221,019 \\
+BTRS\_0003 & BondTRS & CPTY\_B & 2027-04-09 & 28,948 \\
+\rowcolor{gray!9}BTRS\_0004 & BondTRS & CPTY\_C & 2026-11-04 & 37,741 \\
+\bottomrule
+\end{longtable}}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig04.pdf}
+\caption{Life span of every trade. Nearly all exposure will therefore disappear within four months; only BTRS\_0001 and EQTRS\_0008 run past mid-2027.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig05.pdf}
+\caption{Today's mark-to-market per trade. CPTY\_C's total is dominated by BF\_0003 (+101M); CPTY\_B nets to a small negative, so it has zero exposure today.}
+\end{figure}
+\subsection{Pricing library (the `contract')}
+The trades are priced by capitolis\_pricers, a self-contained standard-library re-implementation of QuantLib/ORE-style discounted cash flows supplied with the project. Every pricer is a pure function \texttt{npv = pricer.npv(MarketState)}. Our simulation therefore never contains pricing logic of its own: at every (scenario, date) we build a \texttt{MarketState} from simulated inputs (a discount curve, equity spots, an FX curve) and call the same \texttt{.npv()}. This is a deliberate design choice: the pricers were independently reviewed (docs/notes/pricer\_review.md), so any error in the exposure numbers cannot hide inside re-implemented pricing.
+
+\clearpage
+\section{Market data: what we used and why}
+Every risk factor needs both a \emph{starting value} and \emph{dynamics} (volatility, correlation, mean reversion). We prefer real, verifiable data; where none exists we use a labelled assumption.
+
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1948\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2857\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2338\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2857\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Input}} & \textbf{\textcolor{white}{Source}} & \textbf{\textcolor{white}{Used for}} & \textbf{\textcolor{white}{Note}} \\
+\endhead
+USD discount curve & Databento: CME SR3/SR1 SOFR futures (33 live contracts), bootstrapped by us & Discounting, forwards, Hull-White fit & Validated against Treasury.gov par curve (spread 13bp at 1M to 46bp at 10Y) \\
+\rowcolor{gray!9}37 equity spots and dividend yields & yfinance & GBM start values and drift & Keyed by ISIN; BRK.B ticker mismatch found and fixed \\
+USDJPY spot & yfinance & FX start value &  \\
+\rowcolor{gray!9}Volatilities (39) & Realised, 3 years of daily data & Diffusion size & No options data available; documented proxy \\
+Correlation matrix 39x39 & 613 dates where all series exist (inner join) & Cholesky / PCA & Verified positive semi-definite \\
+\rowcolor{gray!9}SOFR level history & FRED & Rate vol, USD-JPY correlation & From April 2018 \\
+JPY OIS curve, swaption cube, USDJPY forwards & Bloomberg one-time export, 2026-08-31 snapshot & JPY factor, JPY-USD differential & Licensed data: only derived quantities are reported \\
+\rowcolor{gray!9}TONA (JPY overnight rate) & Bank of Japan public API, daily from 1998 & JPY rate vol, USD-JPY correlation & Includes real negative-rate years \\
+JGB par yields 1Y-40Y & Japan Ministry of Finance, daily from 1974 & JPY mean-reversion test & Public \\
+\bottomrule
+\end{longtable}}
+
+\subsection{The USD curve}
+Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. Beyond the last live contract (about 6.3 years out) the curve is extrapolated flat. Two real bugs were found here by cross-checking with the Treasury curve (Section 10). The curve is the starting point of the Hull-White model and the discount curve at t=0.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig06.pdf}
+\caption{The bootstrapped USD SOFR curve. The upward slope (zero rate about 3.7\% at the front, above 4\% by 6 years) means forwards exceed spot rates.}
+\end{figure}
+\subsection{Volatilities}
+Volatility is the annualised standard deviation of daily changes over the last three years (log returns for equities and FX; simple differences for the rate, because rate LEVELS near or below zero make log returns meaningless). Rate vol: 0.63\% per year (normal vol on SOFR).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig07.pdf}
+\caption{Realised volatility spans an order of magnitude across the 37 names. A few names carry 50-76\% vol, which dominates tail exposure of the trades that reference them.}
+\end{figure}
+\textbf{Choice and alternative.} Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption). A 3-year realised window is a documented, reproducible proxy. Its limitation is that it is backward-looking and cannot see regime changes; the sensitivity test (Section 9) shows how much the results move if vols are 50\% higher.
+
+\subsection{Correlations}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig08.pdf}
+\caption{Left: the 39x39 correlation matrix reordered so similar names sit together; a broad positive `market' block is visible. Right: the 741 pairwise correlations centre on 0.14.}
+\end{figure}
+\textbf{Estimation and stationarity.} The matrix is static, not re-estimated per date. We take the daily returns of all 39 factors, keep only the 613 dates on which every series has a price (US and Tokyo trade on different calendars, so series are joined by calendar date rather than timestamp), and compute one pairwise correlation matrix. It is assumed constant over the simulation horizon. The alternatives (time-varying DCC-GARCH, or stressed correlations) add parameters we cannot validate with our data; we flag this as a limitation.
+
+\clearpage
+\section{The risk-factor models}
+\subsection{USD short rate: Hull-White one-factor}
+We need the whole USD curve at every future date and scenario, because bonds and funding legs are discounted with it. The standard tool is the \textbf{Hull-White one-factor model}, a Gaussian, mean-reverting short-rate model:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+dr(t) = [ theta(t) - a * r(t) ] dt + sigma dW(t)
+\end{verbatim}}
+\textbf{a} is mean reversion (how fast rates are pulled back), \textbf{sigma} is rate volatility, and \textbf{theta(t)} is chosen so that the model prices today's curve exactly. We use the equivalent shifted Ornstein-Uhlenbeck form r(t) = x(t) + alpha(t):
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+x(t+dt) = x(t) e^{-a dt} + sigma sqrt( (1 - e^{-2 a dt}) / (2a) ) Z      (exact transition)
+alpha(t) = f(0,t) + sigma^2/(2 a^2) (1 - e^{-a t})^2                      (fits today's curve)
+P(t,T)   = A(t,T) exp( -B(t,T) r(t) ),  B = (1 - e^{-a (T-t)})/a        (analytic bond price)
+\end{verbatim}}
+\textbf{Why this model.} (1) It reproduces today's curve to 1e-9 (tested). (2) Bond prices at future nodes are analytic, so building the discount curve for a scenario costs one function evaluation (10x faster than building a curve object, and exact rather than interpolated). (3) It is Gaussian, so it can produce negative rates, essential for JPY history and harmless for USD. \textbf{Alternatives rejected:} CIR/Black-Karasinski (positive-only, cannot represent negative JPY rates); LMM/HJM multi-factor curve models (more realistic curve twists but many more parameters than our data can support and slower); a constant-rate assumption (would ignore the funding-leg and bond-forward rate risk).
+
+\textbf{Parameters.} sigma = 0.63\% (realised SOFR vol); a = 0.0167 (calibrated, Section 6). Today's short rate r(0) = 3.69\%.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig09.pdf}
+\caption{Simulated USD short rate. The median tracks today's forward curve (dashed) because the model is fitted to it; the widening bands are rate uncertainty.}
+\end{figure}
+\subsection{Equities and USDJPY: correlated geometric Brownian motion}
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+dS_i / S_i = ( r(t) - q_i ) dt + sigma_i dW_i        USD-quoted names
+dS_i / S_i = ( r_JPY(t) - q_i ) dt + sigma_i dW_i     JPY-quoted names
+dFX / FX   = ( r_USD - r_JPY ) dt + sigma_FX dW_FX    USDJPY (JPY per USD)
+\end{verbatim}}
+Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (r - q - sigma\textasciicircum{}2/2) dt + sigma sqrt(dt) Z, with r the simulated USD short rate at the start of the step (so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 9 by a martingale test.
+
+\textbf{Why GBM.} It matches the lognormal vol convention we measure, is the market default for equity CCR, and needs only a vol per name. \textbf{Alternatives:} local/stochastic vol (Heston, SABR) would capture skew and vol-of-vol but need option surfaces we do not have; jump models help tails but add unobservable parameters. We disclose that GBM understates fat tails.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig10.pdf}
+\caption{Simulated USDJPY and two equities (a low-vol and the highest-vol name) with 1-99 and 25-75 percent bands.}
+\end{figure}
+\subsection{Correlation and the Cholesky factor}
+Independent random numbers give independent assets. Real assets move together, so we transform independent standard normals Z into correlated ones. Given the target correlation matrix C, the \textbf{Cholesky decomposition} finds the lower-triangular L with L L' = C. Then Y = L Z has exactly correlation C:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+Cov(Y) = L Cov(Z) L' = L I L' = L L' = C
+\end{verbatim}}
+It is used because it is the cheapest exact way to impose an arbitrary positive-definite correlation structure. A tiny eigenvalue clip guards against CSV round-off making C numerically non-PSD.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig11.pdf}
+\caption{Demonstration on the most correlated pair in our real matrix (US21037T / US92840M, corr 0.82): independent draws (left) become correlated draws (right) after multiplying by L.}
+\end{figure}
+\subsection{Optional alternative: a PCA factor model for correlation}
+A 39x39 matrix has 741 free correlations estimated from only 613 days, so many entries are noisy. A \textbf{factor model} assumes co-movement comes from a few common drivers plus each name's own noise: C $\sim$ B B' + diag(d), where B (39 x k) are loadings on k factors. We build it by principal-component analysis: B = top-k eigenvectors x sqrt(eigenvalue), and d = 1 - row sums of squares so every name still has unit variance. Simulation then draws k systematic and 39 idiosyncratic shocks.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig12.pdf}
+\caption{Left: the first eigenvalue (7.8 of a total 39) is one dominant market factor. Middle: 5 factors explain 46\% of variance and 10 explain 62\%. Right: reconstruction error falls as k grows (exactly zero at full rank).}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig13.pdf}
+\caption{Loadings of each of the 39 factors on the first five principal factors.}
+\end{figure}
+\textbf{Trade-off.} The factor model is smoother and more robust to estimation noise and gives quasi-random sequences a low-dimensional space where they work best, but it only approximates the empirical matrix. Because it changes results, it is an option (corr\_mode=`factor'), not the default. Section 7.5 compares its exposure profiles with the full-rank engine.
+
+\clearpage
+\subsection{JPY: a negative-rate-capable rate model}
+Until recently JPY drift used r\_USD minus a constant differential. That cannot represent JPY's own rate dynamics. We therefore built a genuine second Hull-White factor for JPY (\texttt{build\_jpy\_hull\_white}): it starts from the real JPY OIS curve and, being Gaussian, has \textbf{no floor at zero}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig14.pdf}
+\caption{Real TONA history from the Bank of Japan: rates were at or below zero for most of 25 years, with 1995 negative daily fixings (2003 and 2016-2024). A model that floors at zero could not represent this.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig15.pdf}
+\caption{Demonstration of the capability: Hull-White started from a synthetic -0.10\% flat curve. 63\% of simulated points are negative and nothing is clipped. (Our only real JPY curve snapshot, Aug 2026, is positive after BOJ hikes, so the negative case is shown synthetically.)}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2338\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1818\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.5844\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{JPY factor parameter}} & \textbf{\textcolor{white}{Value}} & \textbf{\textcolor{white}{Source / status}} \\
+\endhead
+Curve & Real JPY OIS zero curve & Bloomberg snapshot 2026-08-31 \\
+\rowcolor{gray!9}sigma & 0.276\%/yr & REALISED TONA vol, 3y window: real Bank of Japan data (replaces an earlier swaption-implied 0.400\%) \\
+a (mean reversion) & 0.0167 & Fallback to the USD value: both real JPY calibrations gave a negative a (Section 6.2) \\
+\rowcolor{gray!9}USD-JPY rate-factor correlation & -0.040 & Calibrated from real SOFR vs TONA daily changes (n=1983, p=0.07): statistically zero \\
+Wired into simulate\_paths()? & NO (disclosed) & JPY equity/FX drift still uses r\_USD minus the constant differential (2.64\%, from real Bloomberg curves) \\
+\bottomrule
+\end{longtable}}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig16.pdf}
+\caption{Levels (left) rise together with the global cycle (level correlation $\sim$0.38), but day-to-day changes (right) are uncorrelated (-0.040): central banks set policy independently. A Hull-White correlation needs the CHANGES.}
+\end{figure}
+\textbf{Why this matters little for the results:} only 2 of 16 trades are JPY compo, so this simplification affects a small part of the book. It is disclosed rather than hidden, and the next engineering step is to let the simulated JPY rate drive those two trades.
+
+\clearpage
+\section{How the simulation engine works}
+\subsection{The pipeline}
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+1. calibrate:   curve, sigma, a, vols, correlation (real data)
+2. grid:        choose simulation dates (pillars + trade event dates [+ MPOR look-ahead])
+3. draw:        random numbers (Latin Hypercube) -> correlated shocks (Cholesky or PCA)
+4. step:        advance short rate, 37 equities, USDJPY along every path
+5. reprice:     for every (scenario, date): build MarketState, call npv() of all 16 trades
+6. aggregate:   net by counterparty -> max(.,0) -> EE, median PFE, PFE99, MPE
+\end{verbatim}}
+\subsection{Choosing the simulation dates}
+Monthly steps are simple but wasteful and blunt: they spend nodes evenly when the risk changes fastest near term, and a trade's own reset or maturity rarely falls on a month node. Following Capitolis' guidance, we adopt \textbf{pillar dates}: the standard market curve tenors also used to build the SOFR curve (O/N, T/N, 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y ...). This mirrors production CCR practice: dense short-term, sparse long-term. In addition, every trade's own reset/settlement/maturity date is \textbf{forced onto the grid} so exposure jumps at cash-flow dates are not smoothed over.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig17.pdf}
+\caption{For this book the pillar grid (12 dates) plus forced trade-event dates (42 in total) is more compact than a plain monthly grid (18) and hits every real cash-flow date exactly.}
+\end{figure}
+\subsection{Speed}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2469\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3951\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1481\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2099\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Bottleneck}} & \textbf{\textcolor{white}{Fix}} & \textbf{\textcolor{white}{Before}} & \textbf{\textcolor{white}{After}} \\
+\endhead
+Discount curve per (scenario, node) & Analytic Hull-White bond price instead of building a Curve object & 0.206 ms/call & 0.019 ms/call (10.6x, and exact) \\
+\rowcolor{gray!9}Pure-Python pricers ($\sim$1.2 ms each) & Multiprocessing over scenarios, 8 workers (a Windows spawn re-import bug was fixed) & 113 ms/scenario & 51 ms/scenario at the time \\
+Combined, 2,000 scenarios x 16 trades &  & $\sim$12 min projected & 93 s (7.7x) \\
+\bottomrule
+\end{longtable}}
+
+Current measured cost for the 3,000-scenario reporting run: 2 s simulation of paths, 1239 s repricing (413 ms/scenario, including the extra MPOR look-ahead nodes).
+
+\subsection{Random numbers and variance reduction}
+Plain pseudo-random draws waste information: by chance a sample can cluster. Five sampling schemes sit behind one interface: \textbf{pseudo-random} (baseline), \textbf{antithetic} (each draw z paired with -z), \textbf{moment-matched} (rescale so the sample mean is 0 and std 1), \textbf{Sobol} (low-discrepancy quasi-random), and \textbf{Latin Hypercube} (each dimension split into equal-probability bins, one draw per bin).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig18.pdf}
+\caption{Left: on a European call with a known Black-Scholes value, Latin Hypercube has about 51x lower error than pseudo-random. Right: on the real 663-dimensional engine (300 scenarios, 8 repeats) the methods are much closer, and no method is best for both PFE99 and the median PFE.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1348\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.0899\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1124\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1573\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1685\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3371\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Method}} & \textbf{\textcolor{white}{Call RMSE}} & \textbf{\textcolor{white}{vs pseudo-random}} & \textbf{\textcolor{white}{PFE99 rel. std (real engine)}} & \textbf{\textcolor{white}{Median PFE rel. std (real engine)}} & \textbf{\textcolor{white}{Verdict}} \\
+\endhead
+pseudo random & 1.4563 & - & 2.60\% (1.00x) & 0.66\% (1.00x) & Baseline \\
+\rowcolor{gray!9}antithetic & 1.0786 & 1.4x better & 1.98\% (1.31x) & 0.39\% (1.69x) & Improves both measures modestly on the real engine, but only 1.4x on the controlled test \\
+moment matched & 0.2317 & 6.3x better & 2.49\% (1.04x) & 0.35\% (1.91x) & Helps the median only; no PFE99 benefit \\
+\rowcolor{gray!9}sobol & 0.0507 & 28.7x better & 1.64\% (1.58x) & 0.70\% (0.95x) & Best PFE99 on the real engine but no median benefit; unscrambled Sobol degrades in high dimension and is harder to replicate \\
+latin hypercube & 0.0288 & 50.6x better & 2.25\% (1.15x) & 0.42\% (1.57x) & SELECTED: 50x on the controlled test and improves both PFE99 and median PFE on the real engine \\
+\bottomrule
+\end{longtable}}
+
+{\small Relative standard deviation of the estimator across 8 independent repeats at 300 scenarios (portfolio, about 6 weeks out, near the PFE99 peak); the multiple in brackets is the improvement over pseudo-random. With only 8 repeats each standard deviation is itself uncertain by roughly a quarter, so real-engine differences between the better methods are indicative rather than conclusive.}
+
+\textbf{Finding.} The controlled test gives a clear ordering (Latin Hypercube, Sobol, moment matching, antithetic, pseudo-random). On the real engine, at 663 effective dimensions (39 factors x 17 time steps), the advantages compress and the ranking depends on the statistic: the tail (PFE99) and the centre (median PFE) respond to different methods. Latin Hypercube is the only method that is both best on the controlled test and better than pseudo-random on both real-engine statistics.
+
+\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: Latin Hypercube sampling.} It is the best method on the controlled test and the most consistent across both reported statistics on the real engine, at negligible additional cost over plain pseudo-random draws. Sobol is the runner-up on the controlled test but is not recommended here because its benefit disappears for the median PFE and it is less robust at this dimensionality.\vspace{2pt}}}\end{center}
+\clearpage
+\subsection{Number of scenarios}
+Monte Carlo error falls as 1/sqrt(N). Rather than rerun the expensive repricing at every candidate N, we estimate the standard error by bootstrap resampling of a simulated pool. Two studies are combined: (i) resampling of the 3,000-scenario reporting run, at the date of peak PFE99, for both PFE99 and the median PFE; (ii) a dedicated 30,000-scenario pool for the 99th percentile at the one-year node, which extends the range to large N.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig19.pdf}
+\caption{Left: relative standard error of PFE99 and median PFE at the peak-PFE date (2026-10-09); the error follows the 1/sqrt(N) law. Middle and right: PFE99 tail study at one year; error is larger for the same N, and the marginal gain per additional batch peaks at N = 5,000 and then declines.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4000\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{N}} & \textbf{\textcolor{white}{Relative SE of PFE99}} & \textbf{\textcolor{white}{Relative SE of median PFE}} \\
+\endhead
+100 & 4.72\% & 2.02\% \\
+\rowcolor{gray!9}250 & 3.49\% & 1.39\% \\
+500 & 2.74\% & 1.03\% \\
+\rowcolor{gray!9}1,000 & 2.18\% & 0.75\% \\
+1,500 & 1.80\% & 0.59\% \\
+\rowcolor{gray!9}2,000 & 1.59\% & 0.51\% \\
+\bottomrule
+\end{longtable}}
+
+{\small Relative standard errors at the peak-PFE date, bootstrapped from the reporting run (finite-pool corrected). Extrapolating with the 1/sqrt(N) law, the 3,000-scenario run used for this report has a PFE99 relative standard error of about 1.24\% at its peak.}
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.0875\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1375\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1125\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1625\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1375\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2625\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{N}} & \textbf{\textcolor{white}{PFE99 at 1y (USD)}} & \textbf{\textcolor{white}{Rel. SE at 1y}} & \textbf{\textcolor{white}{Rel. SE at peak date (est.)}} & \textbf{\textcolor{white}{Marginal SE gain (1y)}} & \textbf{\textcolor{white}{Est. time}} & \textbf{\textcolor{white}{Verdict}} \\
+\endhead
+500 & 149,036 & 1.15\% & 3.03\% & - & 74s & Screening only \\
+\rowcolor{gray!9}1,000 & 149,353 & 0.66\% & 2.14\% & +42.1\% & 119s & Iteration and what-if runs \\
+2,000 & 149,341 & 0.52\% & 1.52\% & +21.2\% & 209s & Acceptable for routine monitoring \\
+\rowcolor{gray!9}5,000 & 149,457 & 0.29\% & 0.96\% & +44.4\% & 479s & RECOMMENDED: standard reporting \\
+10,000 & 149,411 & 0.21\% & 0.68\% & +26.6\% & 929s & Recommended for limit sign-off \\
+\rowcolor{gray!9}15,000 & 149,477 & 0.13\% & 0.55\% & +37.3\% & 1,379s & Diminishing returns \\
+20,000 & 149,535 & 0.09\% & 0.48\% & +29.1\% & 1,829s & Diminishing returns \\
+\rowcolor{gray!9}25,000 & 149,505 & 0.07\% & 0.43\% & +31.1\% & 2,279s & Diminishing returns \\
+\bottomrule
+\end{longtable}}
+
+{\small Tail study at the one-year node (pool value \$149,482, 30,000 scenarios) and the corresponding estimate at the date of peak PFE99, where the exposure distribution is wider (relative SE = 2.1\% / sqrt(N/1000), fitted to the reporting-run bootstrap). Times assume 8 cores.}
+
+\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: number of paths.} Use \textbf{N = 5,000} for standard PFE99 reporting: relative standard error 1.0\% at the worst-case date (0.29\% at the one-year node), about 8 minutes on 8 cores. Use \textbf{N = 1,000} for iteration and what-if runs (2.1\% at the worst-case date, about 2 minutes) and \textbf{N = 10,000} when a limit is being signed off (0.7\%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below 0.6\%) is an order of magnitude smaller than the model sensitivities in Section 9.4 (a 50\% increase in equity volatility moves MPE by about 9\%). The figures in this report use N = 3,000 (1.2\% at the worst-case date).\vspace{2pt}}}\end{center}
+\clearpage
+\section{Calibrating Hull-White mean reversion}
+Mean reversion a controls how fast rate shocks decay; the convergence study flagged it as the largest unquantified model uncertainty. The textbook method is to fit swaption volatilities. Hull-White predicts that the volatility of a forward rate at maturity T decays with time to maturity:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+sigma_f(t, T) = sigma * exp( -a (T - t) )      =>   ln(vol) = ln(sigma) - a * tenor   (line, slope = -a)
+\end{verbatim}}
+So measuring vol at several tenors and regressing ln(vol) on tenor gives a. We tried three real data routes, in order of preference:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig20.pdf}
+\caption{Left: USD SOFR-futures fit. Right: fitted a for each route. USD routes give sensible positive values; both JPY routes give a NEGATIVE a.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2500\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3250\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.0750\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2500\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Route}} & \textbf{\textcolor{white}{Data}} & \textbf{\textcolor{white}{a}} & \textbf{\textcolor{white}{R2}} & \textbf{\textcolor{white}{Verdict}} \\
+\endhead
+Swaption cube, USD (preferred) & Bloomberg ATM normal vol, 1M expiry, tenors 1Y-15Y & 0.0167 & 0.84 & USED for USD \\
+\rowcolor{gray!9}SOFR-futures vol decay, USD & 8 contracts, $\sim$2y Databento history & 0.0458 & 0.82 & cross-check (different instrument, higher a) \\
+Swaption cube, JPY & Bloomberg JPY OIS ATM vols (one snapshot) & -0.0374 & 0.84 & invalid (vol rises with tenor) \\
+\rowcolor{gray!9}JGB yield vol, JPY & MOF daily 1Y-30Y yields, 3y window & -0.0203 & 0.49 & invalid (vol rises with tenor) \\
+\bottomrule
+\end{longtable}}
+
+\subsection{Why the two USD numbers differ}
+0.0167 (swaptions) versus 0.0458 (futures) is not a contradiction: they use different instruments (swaption-implied vs realised vol) and different tenor ranges (1-15Y swap tenors vs 1-3Y forward reset times). The swaption route is the industry standard and is used; the gap is itself a measure of model uncertainty and motivates the sensitivity test.
+
+\subsection{Why JPY does not fit, and what we did}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig21.pdf}
+\caption{Real realised JGB yield vol by tenor. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes.}
+\end{figure}
+This is not bad data; it is a structural finding confirmed by two independent real sources (a 2026 swaption cube and 52 years of JGB yields). The plausible reason: for two decades the Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control) so short-tenor vol was suppressed while longer tenors moved more freely. A single-factor model with positive mean reversion cannot represent that shape, and a negative a would make the short rate diverge. \textbf{Choice:} reuse the USD value a = 0.0167 for the JPY factor and label it as a fallback. What would truly fix it is a two-factor or regime-dependent model, or a long history of the full JPY swap curve; this is listed under future work.
+
+\textbf{Practical impact:} small. JPY affects two trades, the JPY factor is not yet wired into the drift, and the USD parameters are the ones used for discounting the whole book.
+
+\clearpage
+\section{Results}
+\subsection{Exposure today (t = 0)}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1558\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.0909\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1948\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2208\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3377\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{Trades}} & \textbf{\textcolor{white}{Net MTM today}} & \textbf{\textcolor{white}{Netted exposure today}} & \textbf{\textcolor{white}{Comment}} \\
+\endhead
+CPTY\_A & 6 & 897,526 & 897,526 & Small positive net \\
+\rowcolor{gray!9}CPTY\_B & 5 & 598,081 & 598,081 & We owe them: zero exposure \\
+CPTY\_C & 5 & 106,202,202 & 106,202,202 & One 500M bond forward dominates \\
+\rowcolor{gray!9}Portfolio & 16 & 107,697,810 & 107,697,810 & Sum of counterparty exposures (netting does not cross counterparties) \\
+\bottomrule
+\end{longtable}}
+
+The simulated EE at t=0 equals the directly computed current exposure to 0.0000\% (the engine's built-in self-check): at t=0 there is no randomness so both must agree exactly.
+
+\subsection{Exposure profiles through time}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig22.pdf}
+\caption{EE, median PFE and PFE99 for each counterparty and the portfolio. The shaded band runs from the median PFE to PFE99.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1781\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1370\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1370\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1781\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2055\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1644\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{EE(0)}} & \textbf{\textcolor{white}{Peak EE}} & \textbf{\textcolor{white}{Peak median PFE}} & \textbf{\textcolor{white}{MPE (peak PFE99)}} & \textbf{\textcolor{white}{MPE date}} \\
+\endhead
+CPTY\_A & \$0.9M & \$11.6M & \$11.6M & \$37.9M & 2026-10-09 \\
+\rowcolor{gray!9}CPTY\_B & \$0.6M & \$3.6M & \$1.8M & \$16.6M & 2026-10-29 \\
+CPTY\_C & \$106.2M & \$107.1M & \$107.8M & \$144.5M & 2026-10-23 \\
+\rowcolor{gray!9}Portfolio & \$107.7M & \$121.9M & \$121.3M & \$174.7M & 2026-10-09 \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Reading the shape.} Exposure peaks soon after today and then falls steeply as trades mature. By the end of December 2026 the portfolio EE has fallen by more than 90\%; the remainder is the Bond TRS BTRS\_0001 and the year-long EQTRS\_0008. So almost all counterparty credit risk sits in the next four months and monitoring should be concentrated there.
+
+\textbf{EE, median PFE and PFE99.} The median PFE is far below EE for the counterparties with more than half of scenarios at zero exposure (CPTY\_B especially): EE is pulled up by the right tail, the median PFE describes the typical outcome, and PFE99 describes the adverse tail. Reporting all three prevents any single statistic from misleading.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig23.pdf}
+\caption{Probability that a counterparty has any positive exposure at all. Where this is far below 100\%, the median PFE is zero even though EE and PFE99 are large.}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig24.pdf}
+\caption{Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time.}
+\end{figure}
+\clearpage
+\subsection{Where does the risk come from?}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig25.pdf}
+\caption{Expected NPV by trade at each reporting date. CPTY\_C's BF\_0003 dominates the picture and disappears at its 2026-12-06 settlement; a few equity TRS contribute negative expected NPV.}
+\end{figure}
+\textbf{Concentration.} CPTY\_C accounts for 83\% of the portfolio's peak PFE99 and 99\% of today's exposure, and almost all of it comes from one trade, BF\_0003 (500M notional, short forward struck at 100 on a long-dated 2.88\% 2049 Treasury trading roughly 20 points below par, so we are owed the difference). This is concentration risk rather than diversified counterparty risk; a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report.
+
+\subsection{What if the counterparty posts margin? (MPOR-shifted exposure)}
+The real book is treated as \textbf{uncollateralized} because trade\_data carries no CSA terms. For a collateralized counterparty, default does not mean instant close-out: there is a Margin Period of Risk (standard 10 business days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+C(t)        = max( V(t) - threshold, 0 )        collateral held at reporting date t
+Exposure(t) = max( V(t + MPOR) - C(t), 0 )      same simulated path, MPOR days later
+\end{verbatim}}
+Implementation: an extra look-ahead node is inserted MPOR days after every reporting node on the same simulated path (no separate simulation). The demonstration below is explicitly hypothetical: full variation margin (threshold 0), MPOR 10 business days, 3,000 scenarios.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig26.pdf}
+\caption{If a full-VM CSA existed, peak PFE99 would fall sharply, most of all for CPTY\_C whose exposure is a large, already-visible MTM that margin would cover.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2239\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2985\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2985\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1791\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{Uncollateralized MPE99}} & \textbf{\textcolor{white}{MPOR-shifted MPE99}} & \textbf{\textcolor{white}{Reduction}} \\
+\endhead
+CPTY\_A & \$37.9M & \$24.9M & 34\% \\
+\rowcolor{gray!9}CPTY\_B & \$16.6M & \$9.2M & 45\% \\
+CPTY\_C & \$144.5M & \$26.7M & 82\% \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Relation to SIMM and Basel.} The 10-day figure is the convention shared by both frameworks. Under the Basel counterparty credit risk rules (SA-CCR and the internal models method) the margin period of risk for a margined bilateral OTC netting set is at least 10 business days, 5 business days for centrally cleared trades and 20 business days for large or illiquid netting sets, and it lengthens after margin disputes. The ISDA Standard Initial Margin Model (SIMM) is a different object: a sensitivity-based methodology for the \emph{initial margin} that the uncleared margin rules require counterparties to post, calibrated to a 99\% one-tailed loss over a 10-day horizon using a stress period. Initial margin is collateral posted in addition to variation margin and held against precisely the close-out window described above.
+
+Our engine does \textbf{not} implement SIMM and does not model initial margin. The calculation in this section is a variation-margin-only illustration: a threshold of zero removes any unsecured amount, but there is no initial margin buffer. If initial margin were posted it would absorb part of the 10-day move and reduce the exposure shown further; quantifying that requires computing SIMM sensitivities for each netting set, which we have not attempted. Two simplifications should also be noted: the look-ahead is exactly 10 business days (Monday to Friday, US federal holidays skipped; the SIFMA bond-market calendar differs marginally), and no minimum transfer amount is modelled.
+
+Whether any trade is actually margined is the most important open question for Capitolis: it changes the answer by roughly an order of magnitude for CPTY\_C.
+
+\clearpage
+\subsection{Full-rank correlation versus PCA factor model}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig27.pdf}
+\caption{Same seed and method (1,500 scenarios) with the full Cholesky correlation versus a k-factor PCA model. Curves coincide closely from k=5.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2174\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2609\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2609\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2609\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Model}} & \textbf{\textcolor{white}{Peak portfolio EE}} & \textbf{\textcolor{white}{MPE (peak PFE99)}} & \textbf{\textcolor{white}{MPE difference vs full}} \\
+\endhead
+full & \$121.8M & \$176.1M & - \\
+\rowcolor{gray!9}k=3 & \$121.9M & \$176.9M & +0.4\% \\
+k=5 & \$122.0M & \$175.9M & -0.1\% \\
+\rowcolor{gray!9}k=10 & \$121.8M & \$173.8M & -1.3\% \\
+\bottomrule
+\end{longtable}}
+
+This is a like-for-like comparison at one scenario count, so differences include sampling noise of a few tenths of a percent as well as the approximation itself. The factor model with about 5 factors reproduces the book's exposure closely, which supports it as a lower-dimensional, more robust alternative, but the full-rank default is kept because it is exact with respect to the estimated matrix. That five factors (only about half of the correlation matrix's total variance) suffice here is because this book's exposure is driven by the rate, a few large positions and FX, not by the fine correlation structure among all 37 names.
+
+\section{Every modelling choice, and what we rejected}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1538\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3333\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Topic}} & \textbf{\textcolor{white}{Choice}} & \textbf{\textcolor{white}{Alternatives considered}} & \textbf{\textcolor{white}{Reason}} \\
+\endhead
+Measure & Risk-neutral & Real-world drifts & No unobservable risk premia; verified martingale; horizon short \\
+\rowcolor{gray!9}Confidence & PFE99 and median PFE (with EE) & Other percentiles & 99\% is the specified target; 99.9\% needs far more paths for little added insight \\
+USD rates & Hull-White 1F & CIR, BK, LMM, constant & Exact curve fit, analytic bonds, negative-rate capable, few parameters \\
+\rowcolor{gray!9}Equities/FX & Correlated GBM & Heston, SABR, jumps & No option surfaces; matches lognormal vol convention \\
+Volatility & 3y realised & Implied vols & No single-name options data; documented proxy \\
+\rowcolor{gray!9}Correlation & One static matrix, Cholesky & Time-varying (DCC), stressed, factor & Data supports one matrix; factor model offered as alternative \\
+Equity factor model & Optional PCA (k=5) & Full rank only & Robustness, dimension reduction; approximation disclosed \\
+\rowcolor{gray!9}Dates & Pillar dates + trade event dates & Monthly grid & Industry convention, denser where risk moves, exact cash-flow dates \\
+Sampling & Latin Hypercube & Pseudo-random, antithetic, moment-matched, Sobol & Best measured error on both test and real engine \\
+\rowcolor{gray!9}Scenario count & 5,000 (reporting); 1,000 (iteration); 10,000 (sign-off) & 30,000 pool & Diminishing returns beyond 10-15k; model risk dominates \\
+Mean reversion a & Swaption-based (USD 0.0167) & Futures proxy (0.0458), textbook 0.03 & Industry-standard instrument \\
+\rowcolor{gray!9}JPY rates & Real JPY Hull-White factor (built), not yet wired & Constant differential only & Negative-rate capable; real TONA sigma; correlation calibrated $\sim$0 \\
+Collateral & Uncollateralized default; MPOR-shift option & Assume full VM & No CSA data; hypothetical shown separately \\
+\rowcolor{gray!9}Pricing & Reuse validated pricer library & Vectorised reimplementation & Correctness first; speed via multiprocessing \\
+\bottomrule
+\end{longtable}}
+
+\clearpage
+\section{Validation: how we know the engine is right}
+Each check isolates one layer (paths, pricing, calibration, aggregation) so a failure points at where to look.
+
+\subsection{Self-consistency at t = 0}
+Simulated EE(0) must equal a direct current-exposure calculation from the identical calibrated snapshot: matches to 0.0000\% (after fixing two comparison-object mismatches, Section 10).
+
+\subsection{Martingale / no-arbitrage test}
+Under the risk-neutral measure discounted asset prices must have no drift. With 8,000 paths: the bank-account check E[exp(-integral r)] = P(0,T) holds to a maximum relative difference of 0.73 bp across nodes (a small, understood trapezoid-integration effect of the coarse monthly grid), and the discounted-equity `gains process' for six names has all \textbar{}z\textbar{} below 1.4. This validates the drift terms in the engine itself, independent of any trade pricing.
+
+\subsection{Parametric (delta-normal) VaR benchmark}
+An independent standard method: portfolio dollar-deltas by bump-and-reprice with the same volatilities and correlations as the simulation, combined into a delta-normal VaR at the first simulated node (one day, the overnight pillar). The 99\% delta-normal VaR is \$11.4M against \$11.7M from the Monte Carlo P\&L distribution (ratio 0.98; accepted range 0.3-1.3). At this short horizon the book is close to linear in the risk factors, so close agreement is expected; a large discrepancy would have indicated a sign or scaling error in the deltas or the covariance.
+
+\subsection{Sensitivity (stress) test}
+Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is \$174.0M. Raising equity volatility by 50\% increases it to \$189.8M (+9.1\%); a +100bp parallel shift of the USD curve to \$230.5M (+32.5\%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50\% to \$183.4M (+5.4\%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50\% matters about ten times more than the sampling error at the recommended path count.
+
+\subsection{Statistical and unit tests}
+58 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median exposure.
+
+\subsection{Greeks (sensitivities)}
+Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.3824\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1912\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2353\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1912\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Method}} & \textbf{\textcolor{white}{Bias}} & \textbf{\textcolor{white}{Std of estimate}} & \textbf{\textcolor{white}{Time/trial}} \\
+\endhead
+Pathwise & +0.000085 & 0.003771 & 0.470 ms \\
+\rowcolor{gray!9}Bump, common random numbers & +0.000033 & 0.003742 & 0.327 ms \\
+Bump, independent random numbers & -0.003502 & 0.096885 & 0.850 ms \\
+\bottomrule
+\end{longtable}}
+
+Common random numbers make bump-and-reprice statistically indistinguishable from the pathwise estimator (26x lower noise than independent draws), and it works on any pricer as a black box, so it is the method that generalises to the real book. On the real book, the exact t=0 delta of EQTRS\_0003's NPV to its largest position is -\$212,269 per \$1 move, exactly equal to the share count (a linear-payoff consistency check).
+
+\clearpage
+\section{Defects identified and resolved}
+Each defect was identified by checking against an independent source, a hand calculation or a full end-to-end run.
+
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.0385\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4231\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.5385\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{\#}} & \textbf{\textcolor{white}{Bug}} & \textbf{\textcolor{white}{How it was caught / fix}} \\
+\endhead
+1 & BRK.B vs BRK-B ticker silently failed in two functions & Missing prices; fixed in both current and historical fetch \\
+\rowcolor{gray!9}2 & SOFR curve: recently-expired serial futures wrapped a decade forward, creating a multi-year gap & Cross-check against Treasury.gov par curve (73bp vs smooth 56bp at 10Y); fixed \\
+3 & The fix for \#2 over-corrected and dropped genuine far-dated live contracts (e.g. SR3H0, March 2030) & Found while calibrating Hull-White; fixed with a 400-day plausibility threshold; curve coverage 3.6y -\textgreater{} 6.3y \\
+\rowcolor{gray!9}4 & US and Tokyo equity histories joined by timestamp gave a $\sim$70\% blank table & Join by calendar date instead \\
+5 & Stale cached exposure file gave false 7-15\% `discrepancies' & Root cause: real overnight moves (one name has 76\% vol); check now uses the in-memory snapshot \\
+\rowcolor{gray!9}6 & Residual 0.02-0.03\% self-check gap & Different curve object; both sides now use the identical exact analytic curve: 0.0000\% \\
+7 & Tail-convergence study initially run at 99.9\% rather than the specified 99\% & Re-run at 99\%; tests and documentation updated \\
+\rowcolor{gray!9}8 & JPY mean-reversion fit gave a negative a & Diagnosed as a real structural property (two sources); guarded with documented fallback \\
+\bottomrule
+\end{longtable}}
+
+\section{Assumptions and limitations}
+\begin{itemize}
+\item \textbf{Uncollateralized and no CSA data.} If margin exists, results change by up to an order of magnitude (Section 7.4).
+\item \textbf{Volatility is a 3-year realised proxy}, not implied. Regime shifts and skew are not captured.
+\item \textbf{One static correlation matrix} from 613 days; correlations tend to rise in stress and are not stressed here.
+\item \textbf{GBM underestimates fat tails}, most relevant for PFE99 on high-vol names.
+\item \textbf{Single-factor USD rates}: no curve twists independent of the level.
+\item \textbf{Risk-neutral drift}: not a real-world forecast; regulatory PFE may need physical drift.
+\item \textbf{JPY:} mean reversion is a fallback and the JPY rate does not yet drive JPY equity/FX drift (two trades).
+\item \textbf{Model risk vs sampling risk:} above a few thousand scenarios the uncertainty is in the models, not the random numbers.
+\item \textbf{Margin modelling is partial:} the collateral illustration is variation-margin only, uses a 10-business-day window on a US federal holiday calendar, and has no initial margin (SIMM) or minimum transfer amount.
+\item \textbf{No wrong-way risk or credit dynamics of the counterparty itself}; this is exposure, not a loss estimate (that needs PD and LGD).
+\item \textbf{Bloomberg data is a single 2026-08-31 snapshot} (three days after the 2026-08-28 market data); acceptable for shape and level, disclosed.
+\end{itemize}
+\section{Conclusions and recommendations}
+\begin{itemize}
+\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 58 tests) and reproducible with a single command per stage.
+\item The uncollateralized book has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
+\item Risk is short-dated (about four months) and concentrated (one trade, one counterparty).
+\item We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.
+\item Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
+\item Next engineering steps: wire the JPY Hull-White factor into JPY equity/FX drift; PFE Greeks (d PFE / d spot) using common random numbers; a two-factor or regime-aware rate model if a long JPY curve history becomes available; a vectorised pricer reimplementation if scenario counts must exceed $\sim$10,000; a model-risk study varying a, vols and correlation.
+\end{itemize}
+\clearpage
+\clearpage
+\appendix
+\section{Glossary}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2857\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.7143\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Term}} & \textbf{\textcolor{white}{Meaning}} \\
+\endhead
+Counterparty credit risk (CCR) & Loss risk if the other side of a derivative defaults while the contract is in our favour \\
+\rowcolor{gray!9}MTM / NPV & Mark-to-market / net present value: what the trade is worth today \\
+Netting set & Trades under one legal netting agreement; combined before taking max(V,0) \\
+\rowcolor{gray!9}EE, PFE, MPE & Expected exposure (mean), potential future exposure (percentile), maximum PFE over time \\
+Median PFE & 50th percentile of exposure at a date \\
+\rowcolor{gray!9}Total return swap (TRS) & Swap exchanging an asset's total return for a funding rate \\
+Compo & Payoff in one currency on an asset quoted in another, so both asset and FX move the value \\
+\rowcolor{gray!9}SOFR / OIS & US overnight risk-free rate / overnight index swap; the discount curve \\
+TONA & Tokyo Overnight Average rate, JPY's overnight risk-free rate \\
+\rowcolor{gray!9}Hull-White & Gaussian mean-reverting short-rate model that fits today's curve exactly \\
+Mean reversion (a) & Speed at which a rate is pulled back toward its long-run path \\
+\rowcolor{gray!9}GBM & Geometric Brownian motion: lognormal price dynamics \\
+Cholesky & Factorisation C = L L' used to create correlated random draws \\
+\rowcolor{gray!9}PCA / factor model & Explain most co-movement with a few principal factors plus idiosyncratic noise \\
+Latin Hypercube / Sobol & Stratified / low-discrepancy sampling schemes that reduce Monte Carlo noise \\
+\rowcolor{gray!9}Common random numbers & Reuse identical random draws across compared runs so differences are not noise \\
+MPOR & Margin period of risk: delay between last margin call and close-out (typically 10 business days) \\
+\rowcolor{gray!9}CSA / VM / threshold & Credit support annex / variation margin / uncollateralized amount before margin is called \\
+SIMM & ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99\% 10-day loss (not implemented here) \\
+\rowcolor{gray!9}Pillar dates & Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y \\
+Risk-neutral measure & Pricing measure in which discounted assets are martingales; drift = r - q \\
+\bottomrule
+\end{longtable}}
+
+\section{Reproducing the results}
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation, arrays for figures
+python scripts/build_report.py                            # this PDF
+python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles
+python scripts/run_mpor_comparison.py                     # hypothetical collateral demo
+python -m pytest tests                                    # 58 tests
+\end{verbatim}}
+{\small Key modules: src/risk\_engine/models (rates, equity\_fx, calibration, hw\_calibration, equity\_factor\_model), simulation (engine, random\_numbers, parallel), exposure (aggregate, collateral), market (sofr, boj, mof\_jgb, bloomberg, vols, correlations).}
+
+
+\end{document}

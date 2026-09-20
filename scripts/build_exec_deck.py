@@ -143,7 +143,11 @@ def main():
     fg, c99, r99, boot, jdate = R.fig_conv(D, D["meta"])
     c_se = float(__import__("numpy").mean([b["se99"] * b["N"] ** 0.5 for b in boot[2:]]))
     S += [P("How precise, and how do we know it is right", TITLE), fig(fg, 2.4 * inch)]
-    S += bl(["Decision: Latin Hypercube sampling (best of 5 methods tested: %.1fx lower PFE99 estimator noise than pseudo-random on the real engine, %.0fx lower error on the controlled test)." % (vr["real_engine_check"]["pseudo_random"]["std"] / vr["real_engine_check"]["latin_hypercube"]["std"], vr["option_study"]["results"]["pseudo_random"]["rmse"] / vr["option_study"]["results"]["latin_hypercube"]["rmse"]),
+    rr = vr["real_engine_check"]
+    S += bl(["Decision: Latin Hypercube sampling: %.0fx lower error than pseudo-random on the controlled test, and better on both PFE99 (%.2fx) and median PFE (%.2fx) on the real engine." % (
+                 vr["option_study"]["results"]["pseudo_random"]["rmse"] / vr["option_study"]["results"]["latin_hypercube"]["rmse"],
+                 (rr["pseudo_random"]["std"] / rr["pseudo_random"]["mean"]) / (rr["latin_hypercube"]["std"] / rr["latin_hypercube"]["mean"]),
+                 (rr["pseudo_random"]["med_std"] / rr["pseudo_random"]["med_mean"]) / (rr["latin_hypercube"]["med_std"] / rr["latin_hypercube"]["med_mean"])),
              "Decision: 5,000 paths for standard PFE99 reporting (error %.1f%% at the worst-case date, 0.29%% at 1 year); 1,000 for iteration; 10,000 for limit sign-off. This deck uses 3,000." % (c_se / 5000 ** 0.5),
              "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 58 automated tests.",
              "Model risk (mean reversion, volatility proxy) outweighs sampling noise beyond about 10,000 paths."])

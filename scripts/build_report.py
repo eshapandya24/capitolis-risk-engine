@@ -26,9 +26,10 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, ROOT)
 
-from report_lib import (A, B, BODY, CAP, GOLD, GREY, TOCH, H1, H2, H3, NAVY, ORANGE, PAL, SMALL, TEAL, W,
-                        PageBreak, Report, Spacer, callout, code, make_toc, P, tbl, plt)
-from reportlab.lib.units import inch
+from report_lib import GOLD, GREY, NAVY, ORANGE, PAL, TEAL, plt
+from report_tex import (A, B, BODY, CAP, H1, H2, H3, SMALL, TOCH, PageBreak, Report, Spacer, callout,
+                        code, make_toc, P, tbl, titlepage)
+inch = 72
 
 PROC = os.path.join(ROOT, "data", "processed")
 REP = os.path.join(PROC, "report")
@@ -67,7 +68,7 @@ def exposures(D):
 
 
 def prof(a):
-    return {"EE": a.mean(1), "MED": np.quantile(a, 0.5, axis=1), "P95": np.quantile(a, 0.95, axis=1),
+    return {"EE": a.mean(1), "MED": np.quantile(a, 0.5, axis=1),
             "P99": np.quantile(a, CONF, axis=1)}
 
 
@@ -106,8 +107,8 @@ def fig_measures_illustration(D):
     x = a[j]
     fig, ax = plt.subplots(figsize=(6.6, 2.7))
     ax.hist(x / 1e6, bins=70, color=TEAL, alpha=0.8)
-    for val, lab, c in ((x.mean(), "EE (mean)", NAVY), (np.median(x), "Median", GOLD),
-                        (np.quantile(x, 0.95), "PFE95", ORANGE), (np.quantile(x, CONF), "PFE99", "#8B0000")):
+    for val, lab, c in ((x.mean(), "EE (mean)", NAVY), (np.median(x), "Median PFE", GOLD),
+                        (np.quantile(x, CONF), "PFE99", "#8B0000")):
         ax.axvline(val / 1e6, color=c, lw=1.8, label=f"{lab} = {val/1e6:,.1f}M")
     ax.set_xlabel(f"portfolio exposure at {D['rep_dates'][j]} (USD millions)")
     ax.set_ylabel("scenarios"); ax.legend()
@@ -271,12 +272,12 @@ def fig_rate_fan(D, calib):
     hw = calib["hw"]
     t = np.array(D["meta"]["times"])
     r = (D["x_rate"] + np.array([hw.alpha(tt) for tt in t])[None, :]) * 100
-    q = np.quantile(r, [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99], axis=0)
+    q = np.quantile(r, [0.01, 0.10, 0.25, 0.5, 0.75, 0.90, 0.99], axis=0)
     fig, ax = plt.subplots(figsize=(6.6, 2.9))
     for i in range(25):
         ax.plot(t, r[i], lw=0.5, alpha=0.5, color=GREY)
     ax.fill_between(t, q[0], q[6], color=TEAL, alpha=0.15, label="1-99%")
-    ax.fill_between(t, q[1], q[5], color=TEAL, alpha=0.25, label="5-95%")
+    ax.fill_between(t, q[1], q[5], color=TEAL, alpha=0.25, label="10-90%")
     ax.fill_between(t, q[2], q[4], color=TEAL, alpha=0.4, label="25-75%")
     ax.plot(t, q[3], color=NAVY, lw=2, label="median")
     ax.plot(t, [hw.forward0(tt) * 100 for tt in t], color=ORANGE, ls="--", label="today's forward curve f(0,t)")
@@ -293,7 +294,7 @@ def fig_fx_eq_fan(D, calib):
     fig, ax = plt.subplots(1, 3, figsize=(7.4, 2.5))
     for a_, arr, ttl in ((ax[0], fx, "USDJPY"), (ax[1], np.exp(D["ln_spot"][isin2]), f"equity {isin2[:8]} (vol {calib['gbm'].vols[isin2]*100:.0f}%)"),
                          (ax[2], np.exp(D["ln_spot"][isin]), f"equity {isin[:8]} (vol {calib['gbm'].vols[isin]*100:.0f}%)")):
-        q = np.quantile(arr, [0.05, 0.25, 0.5, 0.75, 0.95], axis=0)
+        q = np.quantile(arr, [0.01, 0.25, 0.5, 0.75, 0.99], axis=0)
         a_.fill_between(t, q[0], q[4], color=TEAL, alpha=0.25)
         a_.fill_between(t, q[1], q[3], color=TEAL, alpha=0.45)
         a_.plot(t, q[2], color=NAVY); a_.set_title(ttl); a_.set_xlabel("years")
@@ -313,7 +314,7 @@ def fig_ou_negative():
             hw.sigma ** 2 / (2 * hw.a) * (1 - np.exp(-2 * hw.a * (ts[k] - ts[k - 1])))) * rng.normal(size=n)
     r = (x + np.array([hw.alpha(t) for t in ts])[None, :]) * 100
     fig, ax = plt.subplots(figsize=(6.2, 2.6))
-    q = np.quantile(r, [0.05, 0.5, 0.95], axis=0)
+    q = np.quantile(r, [0.01, 0.5, 0.99], axis=0)
     ax.fill_between(ts, q[0], q[2], color=TEAL, alpha=0.3)
     ax.plot(ts, q[1], color=NAVY)
     ax.axhline(0, color="k", lw=1)
@@ -426,34 +427,48 @@ def fig_vr():
     names = list(opt)
     fig, ax = plt.subplots(1, 2, figsize=(7.2, 2.7))
     ax[0].bar(range(len(names)), [opt[k]["rmse"] for k in names], color=PAL[:len(names)])
-    ax[0].set_yscale("log"); ax[0].set_xticks(range(len(names))); ax[0].set_xticklabels([n.replace("_", "\n") for n in names], fontsize=6.5)
+    ax[0].set_yscale("log"); ax[0].set_xticks(range(len(names))); ax[0].set_xticklabels([n.replace("_", chr(10)) for n in names], fontsize=6.5)
     ax[0].set_title("European call test: RMSE vs Black-Scholes (log)")
-    ax[1].bar(range(len(names)), [real[k]["std"] for k in names], color=PAL[:len(names)])
-    ax[1].set_xticks(range(len(names))); ax[1].set_xticklabels([n.replace("_", "\n") for n in names], fontsize=6.5)
-    ax[1].set_title("Real 39-factor engine: PFE(1y) estimator std")
+    w = 0.38
+    x = np.arange(len(names))
+    ax[1].bar(x - w / 2, [real[k]["std"] / real[k]["mean"] * 100 for k in names], w, color=ORANGE, label="PFE99")
+    ax[1].bar(x + w / 2, [real[k]["med_std"] / real[k]["med_mean"] * 100 for k in names], w, color=TEAL, label="median PFE")
+    ax[1].set_xticks(x); ax[1].set_xticklabels([n.replace("_", chr(10)) for n in names], fontsize=6.5)
+    ax[1].set_ylabel("relative std of estimator (%)"); ax[1].legend()
+    ax[1].set_title("Real engine: estimator noise at equal N")
     return fig, opt, real
 
 
-def fig_conv():
-    c95 = json.load(open(os.path.join(PROC, "convergence_study.json")))
+def fig_conv(D, meta):
     c99 = json.load(open(os.path.join(PROC, "convergence_study_tail_pfe99.json")))
-    r95 = [r for r in c95["results"] if r["N"] != c95["N_pool"]]
     r99 = [r for r in c99["results"] if r["N"] != c99["N_pool"]]
+    a = D["expo"]["__portfolio__"]
+    jp = int(np.argmax(np.quantile(a, CONF, axis=1)))
+    x = a[jp]
+    M = len(x)
+    rng = np.random.default_rng(5)
+    Ns = [100, 250, 500, 1000, 1500, 2000]
+    boot = []
+    for N in Ns:
+        q99, q50 = [], []
+        for _ in range(400):
+            sub = x[rng.choice(M, N, replace=False)]
+            q99.append(np.quantile(sub, CONF)); q50.append(np.quantile(sub, 0.5))
+        fpc = np.sqrt(1 - N / M)  # sampling without replacement from a finite pool understates the SE
+        boot.append({"N": N, "se99": np.std(q99) / fpc / np.mean(q99) * 100, "se50": np.std(q50) / fpc / np.mean(q50) * 100})
     fig, ax = plt.subplots(1, 3, figsize=(7.6, 2.7))
-    n = [r["N"] for r in r95]
-    ax[0].loglog(n, [r["PFE95_relative_se_pct"] for r in r95], marker="o", ms=3, color=NAVY, label="PFE95")
-    ax[0].loglog(n, [r["EE_relative_se_pct"] for r in r95], marker="s", ms=3, color=TEAL, label="EE")
-    ref = r95[0]["PFE95_relative_se_pct"] * np.sqrt(n[0] / np.array(n))
-    ax[0].loglog(n, ref, ls="--", color=GREY, label="1/sqrt(N)")
-    ax[0].set_title("Relative SE vs N (95%)"); ax[0].set_xlabel("scenarios N"); ax[0].set_ylabel("% relative SE"); ax[0].legend()
+    ax[0].loglog(Ns, [b["se99"] for b in boot], marker="o", ms=3, color=ORANGE, label="PFE99")
+    ax[0].loglog(Ns, [b["se50"] for b in boot], marker="s", ms=3, color=TEAL, label="median PFE")
+    ax[0].loglog(Ns, boot[0]["se99"] * np.sqrt(Ns[0] / np.array(Ns)), ls="--", color=GREY, label="1/sqrt(N)")
+    ax[0].set_title("Relative SE at the peak-PFE date", fontsize=8); ax[0].set_xlabel("scenarios N"); ax[0].set_ylabel("% relative SE"); ax[0].legend()
     n2 = [r["N"] for r in r99]
     ax[1].loglog(n2, [r["relative_se_pct"] for r in r99], marker="o", ms=3, color=ORANGE)
-    ax[1].set_title("Relative SE vs N (PFE99)"); ax[1].set_xlabel("scenarios N")
+    ax[1].set_title("PFE99 at 1y, 30,000-path pool", fontsize=8); ax[1].set_xlabel("scenarios N")
     g = [r["marginal_se_improvement_pct"] for r in r99]
     ax[2].bar(range(1, len(n2)), g[1:], color=ORANGE)
-    ax[2].set_xticks(range(1, len(n2))); ax[2].set_xticklabels([f"{x//1000 if x>=1000 else x}{'k' if x>=1000 else ''}" for x in n2[1:]], fontsize=6.5)
-    ax[2].set_title("Marginal SE gain per step (PFE99)"); ax[2].set_xlabel("N reached")
-    return fig, c95, c99, r99
+    ax[2].set_xticks(range(1, len(n2))); ax[2].set_xticklabels([("%dk" % (v // 1000)) if v >= 1000 else str(v) for v in n2[1:]], fontsize=6.5)
+    ax[2].set_title("Marginal SE gain per step", fontsize=8); ax[2].set_xlabel("N reached")
+    return fig, c99, r99, boot, D["rep_dates"][jp]
 
 
 def fig_profiles(D):
@@ -464,9 +479,8 @@ def fig_profiles(D):
         x = np.array(D["rep_t"]) * 365.25
         ax.fill_between(x, p["MED"] / 1e6, p["P99"] / 1e6, color=TEAL, alpha=0.15)
         ax.plot(x, p["P99"] / 1e6, color="#8B0000", lw=1.6, label="PFE99")
-        ax.plot(x, p["P95"] / 1e6, color=ORANGE, lw=1.2, label="PFE95")
         ax.plot(x, p["EE"] / 1e6, color=NAVY, lw=1.8, label="EE")
-        ax.plot(x, p["MED"] / 1e6, color=GOLD, lw=1.8, label="Median")
+        ax.plot(x, p["MED"] / 1e6, color=GOLD, lw=1.8, label="Median PFE")
         ax.set_title("Portfolio" if c == "__portfolio__" else c); ax.set_xlabel("days"); ax.set_ylabel("USD M")
     axs[0, 0].legend()
     fig.tight_layout()
@@ -529,7 +543,7 @@ def fig_mpor(D):
     x = D["rep_t"] * 365.25
     ax[1].plot(x, cmp_["uncollateralized"]["CPTY_C"]["PFE"] / 1e6, color=NAVY, label="uncollateralized")
     ax[1].plot(x, cmp_["mpor_shifted"]["CPTY_C"]["PFE"] / 1e6, color=TEAL, label="MPOR-shifted")
-    ax[1].plot(x, cmp_["mpor_shifted"]["CPTY_C"]["MedianExposure"] / 1e6, color=GOLD, label="MPOR median")
+    ax[1].plot(x, cmp_["mpor_shifted"]["CPTY_C"]["MedianExposure"] / 1e6, color=GOLD, label="MPOR median PFE")
     ax[1].set_title("CPTY_C PFE99 profile"); ax[1].set_xlabel("days"); ax[1].legend()
     return fig, cmp_, cp, u, mp
 
@@ -575,40 +589,42 @@ def main():
     per = {c: prof(D["expo"][c]) for c in ("CPTY_A", "CPTY_B", "CPTY_C")}
 
     # ---------- cover + exec summary
-    add(Spacer(1, 0.6 * inch))
-    add(P("Monte Carlo Counterparty Credit Risk Engine", ParagraphStyleTitle()))
-    add(P("Complete report: concepts, data, models, modelling choices, validation and results", ParagraphStyleSub()))
-    add(P("Capitolis x Berkeley MFE industry project | Valuation date 2026-08-28 | Exposure measures at the 99th percentile", SMALL))
-    add(Spacer(1, 0.2 * inch))
-    add(callout(
-        f"<b>What this document is.</b> A start-to-finish explanation, assuming no prior knowledge, of how we measure the "
-        f"credit risk of Capitolis' equity-swap-financing (ESF) derivatives book: what the risk is, what the trades are, what "
-        f"market data we used, how we simulate the future, every modelling choice we made and the alternatives we rejected, how "
-        f"we checked that the engine is right, and what it says about the book. Every number is either measured from the real "
-        f"engine on real market data or is an explicitly labelled assumption."))
-    add(P("<b>Headline results</b> (3,000 Latin-Hypercube scenarios, uncollateralized book, PFE at the 99th percentile):", BODY))
+    add(titlepage("Monte Carlo Counterparty Credit Risk Engine",
+                  "Methodology, calibration and results for the ESF derivatives book",
+                  "Prepared for Capitolis | Berkeley MFE Industry Project",
+                  "Valuation date 2026-08-28 | September 2026"))
+    add("\\section*{Abstract}\n")
+    add(P("This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing "
+          "(ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution "
+          "of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), "
+          "reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median "
+          "PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the "
+          "portfolio. The report sets out the underlying concepts from first principles, the market data and calibration, each "
+          "modelling choice together with the alternatives considered, the validation performed, and the results. Every "
+          "quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption."))
+    add(make_toc())
+    add(PageBreak())
+    add("\\section*{Summary of results}\n")
+    add(P("The table reports the portfolio results for the uncollateralized book (3,000 Latin Hypercube scenarios, PFE at the 99th percentile).", BODY))
     ce0 = {c: float(per[c]["EE"][0]) for c in per}
     add(tbl([["Measure", "Value", "Meaning"],
-             ["Current exposure today (portfolio)", m(tot["EE"][0]), "What we would lose today if every counterparty defaulted now, after netting"],
-             ["Peak EE (portfolio)", f"{m(tot['EE'].max())} at {D['rep_dates'][int(tot['EE'].argmax())]}", "Highest average future exposure"],
-             ["Peak median exposure", f"{m(tot['MED'].max())} at {D['rep_dates'][int(tot['MED'].argmax())]}", "Typical (50th percentile) exposure at its worst date"],
-             ["Maximum PFE99 (MPE)", f"{m(mpe99)} at {D['rep_dates'][j_mpe]}", "Worst plausible (99%) exposure over the life of the book"],
-             ["Where the risk sits", f"{ce0['CPTY_C']/max(tot['EE'][0],1)*100:.0f}% of today's exposure is CPTY_C", "One $500M bond forward (BF_0003) dominates"],
-             ["Time profile", "Most exposure disappears by ~Dec 2026", "Trades mature; a small Bond-TRS tail runs to Jan 2028"]],
-            widths=[2.3, 2.0, 3.4]))
-    add(Spacer(1, 6))
-    add(P("<b>Choices we finally made</b> (each is justified in Section 8):", BODY))
+             ["Current exposure (portfolio)", m(tot["EE"][0]), "Loss if every counterparty defaulted today, after netting"],
+             ["Peak EE", f"{m(tot['EE'].max())} at {D['rep_dates'][int(tot['EE'].argmax())]}", "Highest average future exposure"],
+             ["Peak median PFE", f"{m(tot['MED'].max())} at {D['rep_dates'][int(tot['MED'].argmax())]}", "Typical (50th percentile) exposure at its highest date"],
+             ["Maximum PFE99 (MPE)", f"{m(mpe99)} at {D['rep_dates'][j_mpe]}", "Highest 99th-percentile exposure over the life of the book"],
+             ["Concentration", f"{ce0['CPTY_C']/max(tot['EE'][0],1)*100:.0f}% of current exposure is CPTY_C", "A single $500M bond forward (BF_0003) dominates"],
+             ["Time profile", "Most exposure has run off by December 2026", "Trades mature; a small Bond TRS tail runs to January 2028"]],
+            widths=[2.3, 2.3, 3.4]))
+    add(P("<b>Principal modelling choices</b> (each is justified in Section 8):", BODY))
     add(B([
-        "Model: Monte Carlo under the risk-neutral measure. USD short rate = one-factor Hull-White (exact fit to today's SOFR curve); equities and USDJPY = correlated geometric Brownian motion driven by the simulated rate.",
-        "Correlation: one static 39x39 matrix from 613 aligned daily returns, applied through a Cholesky factor (default); PCA factor model (5 factors) offered as an alternative.",
-        "Scenarios: 3,000 Latin-Hypercube paths for reporting (the best variance-reduction method we measured); 10,000-15,000 if PFE99 must be tight to 0.2%.",
-        "Dates: standard market pillar dates (O/N ... 10Y) plus every trade's own reset/maturity date forced onto the grid.",
-        "Mean reversion a: USD 0.0167 from the swaption cube; JPY falls back to the USD value because real JPY vol rises with tenor (two independent sources).",
-        "JPY: a real negative-rate-capable Hull-White factor exists (sigma from real TONA, correlation to USD rate calibrated at ~0), but it is not yet driving JPY equity drift.",
-        "Uncollateralized by default (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical."]))
+        "Monte Carlo under the risk-neutral measure. USD short rate: one-factor Hull-White (exact fit to today's SOFR curve). Equities and USDJPY: correlated geometric Brownian motion driven by the simulated rate.",
+        "Correlation: one static 39x39 matrix estimated from 613 aligned daily returns and applied through a Cholesky factor; a PCA factor model (5 factors) is provided as an alternative.",
+        "Sampling and size: Latin Hypercube sampling (lowest error of the five methods tested) with N = 5,000 scenarios for standard reporting (PFE99 relative standard error about 1% at the worst-case date), N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
+        "Dates: standard market pillar dates (O/N to 10Y) with every trade's own reset and maturity date forced onto the grid.",
+        "Mean reversion: a = 0.0167 for USD from the swaption cube; JPY reuses the USD value because real JPY volatility rises with tenor (two independent sources).",
+        "JPY: a negative-rate-capable Hull-White factor is built (sigma from real TONA; correlation with the USD rate calibrated at approximately zero) but does not yet drive JPY equity drift.",
+        "The book is treated as uncollateralized (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical."]))
     add(PageBreak())
-    toc = make_toc()
-    add(P("Contents", TOCH)); add(toc); add(PageBreak())
 
     # ---------- 1 concepts
     add(P("1. The problem from scratch", H1))
@@ -631,15 +647,13 @@ def main():
     add(tbl([["Measure", "Definition", "How to read it"],
              ["Exposure profile V+(t)", "max(net MTM, 0) at each future date t, in each simulated scenario", "The raw object; everything below summarises its distribution across scenarios"],
              ["EE (Expected Exposure)", "Mean of exposure across scenarios at date t", "Average loss if default happens at t; used for pricing credit charges (CVA)"],
-             ["Median exposure", "50th percentile of exposure across scenarios at date t", "The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY_C forward"],
-             ["PFE (Potential Future Exposure)", f"The {int(CONF*100)}th percentile of exposure at date t", "A worst-plausible level: in 99 of 100 scenarios exposure at t is below it. Used for limits"],
+             ["Median PFE", "50th percentile of exposure across scenarios at date t", "The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY_C forward"],
+             ["PFE99 (Potential Future Exposure)", f"The {int(CONF*100)}th percentile of exposure at date t", "In 99 of 100 scenarios exposure at t is below this level. Used to set limits"],
              ["MPE (Maximum PFE)", "Peak of the PFE curve over all dates", "One number to set a counterparty limit against"]],
             widths=[1.5, 2.6, 3.6]))
-    add(P("<b>Confidence level.</b> Throughout this report PFE means the <b>99th percentile</b> (an earlier stretch of this project "
-          "briefly used 99.9%; that was a mistake and everything was re-run at 99%). The code default is now 0.99 everywhere; "
-          "95% is quoted only where a study needs to be comparable with earlier work, and is labelled PFE95."))
+    add(P("<b>Confidence level.</b> PFE is reported at the 99th percentile throughout, together with the median PFE (the 50th percentile of the same exposure distribution), which describes the typical scenario."))
     add(doc.figure(fig_concept_exposure(), "Left: simulated values of a portfolio through time. Right: the same paths after applying max(V,0); EE is their average."))
-    add(doc.figure(fig_measures_illustration(D), "The real portfolio exposure distribution ~3 months out, with EE, median, PFE95 and PFE99 marked. The long right tail is why the mean, median and percentiles differ so much."))
+    add(doc.figure(fig_measures_illustration(D), "The real portfolio exposure distribution ~3 months out, with EE, median PFE and PFE99 marked. The long right tail is why EE, median PFE and PFE99 differ so much."))
     add(P("1.4 Why Monte Carlo", H2))
     add(P("The value of the book at a future date depends on the future levels of ~40 market variables (37 stock prices, USDJPY, "
           "interest rates) that move together. There is no closed formula for the distribution of a netted, path-dependent-schedule "
@@ -696,7 +710,7 @@ def main():
              ["Volatilities (39)", "Realised, 3 years of daily data", "Diffusion size", "No options data available; documented proxy"],
              ["Correlation matrix 39x39", "613 dates where all series exist (inner join)", "Cholesky / PCA", "Verified positive semi-definite"],
              ["SOFR level history", "FRED", "Rate vol, USD-JPY correlation", "From April 2018"],
-             ["JPY OIS curve, swaption cube, USDJPY forwards", "Bloomberg one-time export, 2026-08-31 snapshot", "JPY factor, JPY-USD differential", "Licensed: derived numbers only appear here, never the raw data"],
+             ["JPY OIS curve, swaption cube, USDJPY forwards", "Bloomberg one-time export, 2026-08-31 snapshot", "JPY factor, JPY-USD differential", "Licensed data: only derived quantities are reported"],
              ["TONA (JPY overnight rate)", "Bank of Japan public API, daily from 1998", "JPY rate vol, USD-JPY correlation", "Includes real negative-rate years"],
              ["JGB par yields 1Y-40Y", "Japan Ministry of Finance, daily from 1974", "JPY mean-reversion test", "Public"]],
             widths=[1.5, 2.2, 1.8, 2.2], font=7.3))
@@ -716,8 +730,8 @@ def main():
     add(P("3.3 Correlations", H2))
     fig_c, off = fig_corr(calib)
     add(doc.figure(fig_c, "Left: the 39x39 correlation matrix reordered so similar names sit together; a broad positive 'market' block is visible. Right: the 741 pairwise correlations centre on %.2f." % off.mean()))
-    add(P("<b>Is this matrix created every day? No.</b> It is one static matrix. We take the daily returns of all 39 factors, keep only the 613 dates on which every series has a price "
-          "(US and Tokyo trade on different calendars, so we join by calendar date, not timestamp - a bug we hit once), and compute one pairwise correlation matrix. It is assumed "
+    add(P("<b>Estimation and stationarity.</b> The matrix is static, not re-estimated per date. We take the daily returns of all 39 factors, keep only the 613 dates on which every series has a price "
+          "(US and Tokyo trade on different calendars, so series are joined by calendar date rather than timestamp), and compute one pairwise correlation matrix. It is assumed "
           "constant over the simulation horizon. The alternatives (time-varying DCC-GARCH, or stressed correlations) add parameters we cannot validate with our data; we flag this as a limitation."))
     add(PageBreak())
 
@@ -746,7 +760,7 @@ def main():
           "(so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 9 by a martingale test."))
     add(P("<b>Why GBM.</b> It matches the lognormal vol convention we measure, is the market default for equity CCR, and needs only a vol per name. <b>Alternatives:</b> local/stochastic vol "
           "(Heston, SABR) would capture skew and vol-of-vol but need option surfaces we do not have; jump models help tails but add unobservable parameters. We disclose that GBM understates fat tails."))
-    add(doc.figure(fig_fx_eq_fan(D, calib), "Simulated USDJPY and two equities (a low-vol and the highest-vol name) with 5-95 and 25-75 percent bands."))
+    add(doc.figure(fig_fx_eq_fan(D, calib), "Simulated USDJPY and two equities (a low-vol and the highest-vol name) with 1-99 and 25-75 percent bands."))
     add(P("4.3 Correlation and the Cholesky factor", H2))
     add(P("Independent random numbers give independent assets. Real assets move together, so we transform independent standard normals Z into correlated ones. Given the target "
           "correlation matrix C, the <b>Cholesky decomposition</b> finds the lower-triangular L with L L' = C. Then Y = L Z has exactly correlation C:"))
@@ -795,11 +809,11 @@ def main():
              "3. draw:        random numbers (Latin Hypercube) -> correlated shocks (Cholesky or PCA)\n"
              "4. step:        advance short rate, 37 equities, USDJPY along every path\n"
              "5. reprice:     for every (scenario, date): build MarketState, call npv() of all 16 trades\n"
-             "6. aggregate:   net by counterparty -> max(.,0) -> EE, median, PFE, MPE"))
+             "6. aggregate:   net by counterparty -> max(.,0) -> EE, median PFE, PFE99, MPE"))
     add(P("5.2 Choosing the simulation dates", H2))
     add(P("Monthly steps are simple but wasteful and blunt: they spend nodes evenly when the risk changes fastest near term, and a trade's own reset or maturity rarely falls on a month node. "
-          "Capitolis' hint was to use <b>pillar dates</b>: the standard market curve tenors already used to build the SOFR curve (O/N, T/N, 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y ...). "
-          "This is also how production CCR systems space dates: dense short-term, sparse long-term. On top, every trade's own reset/settlement/maturity date is <b>forced onto the grid</b> so "
+          "Following Capitolis' guidance, we adopt <b>pillar dates</b>: the standard market curve tenors also used to build the SOFR curve (O/N, T/N, 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y ...). "
+          "This mirrors production CCR practice: dense short-term, sparse long-term. In addition, every trade's own reset/settlement/maturity date is <b>forced onto the grid</b> so "
           "exposure jumps at cash-flow dates are not smoothed over."))
     fg, nm, npil, npe = fig_grid(D)
     add(doc.figure(fg, "For this book the pillar grid (%d dates) plus forced trade-event dates (%d in total) is more compact than a plain monthly grid (%d) and hits every real cash-flow date exactly." % (npil, npe, nm)))
@@ -813,24 +827,48 @@ def main():
     add(P("Plain pseudo-random draws waste information: by chance a sample can cluster. Five sampling schemes sit behind one interface: <b>pseudo-random</b> (baseline), <b>antithetic</b> (each draw z paired with -z), "
           "<b>moment-matched</b> (rescale so the sample mean is 0 and std 1), <b>Sobol</b> (low-discrepancy quasi-random), and <b>Latin Hypercube</b> (each dimension split into equal-probability bins, one draw per bin)."))
     fg, opt, real = fig_vr()
-    add(doc.figure(fg, "Left: on a European call with a known Black-Scholes answer, Latin Hypercube has ~%.0fx lower error than pseudo-random. Right: on the real 663-dimensional engine the ranking survives but compresses; Latin Hypercube still gives %.2fx lower PFE variability." % (opt["pseudo_random"]["rmse"] / opt["latin_hypercube"]["rmse"], real["pseudo_random"]["std"] / real["latin_hypercube"]["std"])))
-    add(P("<b>Finding that was not assumed:</b> antithetic and moment-matching, which help in one dimension, give no benefit at 663 effective dimensions (39 factors x 17 steps); Sobol's advantage shrinks (the 'curse of "
-          "dimensionality'); Latin Hypercube still wins because it stratifies each dimension's marginal independently. <b>Choice: Latin Hypercube</b>, at negligible extra cost."))
+    rel99 = {k: real[k]["std"] / real[k]["mean"] * 100 for k in real}
+    rel50 = {k: real[k]["med_std"] / real[k]["med_mean"] * 100 for k in real}
+    add(doc.figure(fg, "Left: on a European call with a known Black-Scholes value, Latin Hypercube has about %.0fx lower error than pseudo-random. Right: on the real 663-dimensional engine (300 scenarios, 8 repeats) the methods are much closer, and no method is best for both PFE99 and the median PFE." % (opt["pseudo_random"]["rmse"] / opt["latin_hypercube"]["rmse"])))
+    verdicts = {"pseudo_random": "Baseline",
+                "antithetic": "Improves both measures modestly on the real engine, but only 1.4x on the controlled test",
+                "moment_matched": "Helps the median only; no PFE99 benefit",
+                "sobol": "Best PFE99 on the real engine but no median benefit; unscrambled Sobol degrades in high dimension and is harder to replicate",
+                "latin_hypercube": "SELECTED: 50x on the controlled test and improves both PFE99 and median PFE on the real engine"}
+    rows = [["Method", "Call RMSE", "vs pseudo-random", "PFE99 rel. std (real engine)", "Median PFE rel. std (real engine)", "Verdict"]]
+    for k in opt:
+        rows.append([k.replace("_", " "), "%.4f" % opt[k]["rmse"], "%.1fx better" % (opt["pseudo_random"]["rmse"] / opt[k]["rmse"]) if k != "pseudo_random" else "-",
+                     "%.2f%% (%.2fx)" % (rel99[k], rel99["pseudo_random"] / rel99[k]), "%.2f%% (%.2fx)" % (rel50[k], rel50["pseudo_random"] / rel50[k]), verdicts[k]])
+    add(tbl(rows, widths=[1.2, 0.8, 1.0, 1.4, 1.5, 3.0]))
+    add(P("Relative standard deviation of the estimator across 8 independent repeats at 300 scenarios (portfolio, about 6 weeks out, near the PFE99 peak); the multiple in brackets is the improvement over pseudo-random. With only 8 repeats each standard deviation is itself uncertain by roughly a quarter, so real-engine differences between the better methods are indicative rather than conclusive.", SMALL))
+    add(P("<b>Finding.</b> The controlled test gives a clear ordering (Latin Hypercube, Sobol, moment matching, antithetic, pseudo-random). On the real engine, at 663 effective dimensions (39 factors x 17 time steps), the advantages compress and the ranking depends on the statistic: the tail (PFE99) and the centre (median PFE) respond to different methods. Latin Hypercube is the only method that is both best on the controlled test and better than pseudo-random on both real-engine statistics."))
+    add(callout("<b>Decision: Latin Hypercube sampling.</b> It is the best method on the controlled test and the most consistent across both reported statistics on the real engine, at negligible additional cost over plain pseudo-random draws. Sobol is the runner-up on the controlled test but is not recommended here because its benefit disappears for the median PFE and it is less robust at this dimensionality."))
     add(PageBreak())
 
-    add(P("5.5 How many scenarios? The convergence study", H2))
-    add(P("Monte Carlo error falls like 1/sqrt(N). Rather than re-run the expensive repricing at every candidate N, we simulate one large pool once and bootstrap-resample subsets to measure the standard error at each N."))
-    fg, c95, c99, r99 = fig_conv()
-    add(doc.figure(fg, "Left: for PFE95 and EE the error follows the 1/sqrt(N) law almost exactly (dashed). Middle/right: for PFE99 (a rarer tail, 30,000-path pool), error is larger at the same N and the marginal gain per extra batch peaks at N=5,000 then declines."))
-    rows = [["N", "PFE99 (USD)", "Relative SE", "Bias vs 30k pool", "Marginal SE gain", "Est. time"]]
+    add(P("5.5 Number of scenarios", H2))
+    add(P("Monte Carlo error falls as 1/sqrt(N). Rather than rerun the expensive repricing at every candidate N, we estimate the standard error by bootstrap resampling of a simulated pool. Two studies are combined: (i) resampling of the 3,000-scenario reporting run, at the date of peak PFE99, for both PFE99 and the median PFE; (ii) a dedicated 30,000-scenario pool for the 99th percentile at the one-year node, which extends the range to large N."))
+    fg, c99, r99, boot, jdate = fig_conv(D, meta)
+    add(doc.figure(fg, "Left: relative standard error of PFE99 and median PFE at the peak-PFE date (%s); the error follows the 1/sqrt(N) law. Middle and right: PFE99 tail study at one year; error is larger for the same N, and the marginal gain per additional batch peaks at N = 5,000 and then declines." % jdate))
+    rows = [["N", "Relative SE of PFE99", "Relative SE of median PFE"]]
+    for b in boot:
+        rows.append([format(b["N"], ","), "%.2f%%" % b["se99"], "%.2f%%" % b["se50"]])
+    c_se = float(np.mean([b["se99"] * np.sqrt(b["N"]) for b in boot[2:]]))  # SE(N) = c_se / sqrt(N)
+    se_at = lambda n_: c_se / np.sqrt(n_)
+    se3000 = se_at(3000)
+    add(tbl(rows, widths=[1.0, 2.0, 2.0]))
+    add(P("Relative standard errors at the peak-PFE date, bootstrapped from the reporting run (finite-pool corrected). Extrapolating with the 1/sqrt(N) law, the 3,000-scenario run used for this report has a PFE99 relative standard error of about %.2f%% at its peak." % se3000, SMALL))
+    verdicts_n = {500: "Screening only", 1000: "Iteration and what-if runs", 2000: "Acceptable for routine monitoring", 5000: "RECOMMENDED: standard reporting",
+                  10000: "Recommended for limit sign-off", 15000: "Diminishing returns", 20000: "Diminishing returns", 25000: "Diminishing returns"}
+    rows = [["N", "PFE99 at 1y (USD)", "Rel. SE at 1y", "Rel. SE at peak date (est.)", "Marginal SE gain (1y)", "Est. time", "Verdict"]]
     for r in c99["results"]:
-        rows.append([f"{r['N']:,}", f"{r['PFE_mean']:,.0f}", f"{r['relative_se_pct']:.2f}%", f"{r['bias_vs_pool_pct']:+.2f}%",
-                     "-" if r["marginal_se_improvement_pct"] is None or r["N"] == c99["N_pool"] else f"{r['marginal_se_improvement_pct']:+.1f}%", f"{r['est_time_s']:,.0f}s"])
-    add(tbl(rows, widths=[0.8, 1.5, 1.2, 1.4, 1.5, 1.0]))
-    add(Spacer(1, 4))
-    add(P("<b>Conclusions.</b> For the 95th percentile, N=1,000 gives 0.39%% relative error (73 s); N=2,000-3,000 gives 0.1-0.3%%. For PFE99 (portfolio at ~1 year, pool value $%s): "
-          "N=5,000-10,000 is the knee (0.29-0.21%% error, 8-15 min), and beyond 15,000 each doubling buys little. The 30,000-path run is the reference, not an operating point. "
-          "We report with N=3,000 because past a few thousand paths the dominant uncertainty is model risk (mean reversion, volatility proxy), not sampling noise." % f"{c99['pool_pfe_reference']:,.0f}"))
+        if r["N"] == c99["N_pool"]:
+            continue
+        rows.append([format(r["N"], ","), format(r["PFE_mean"], ",.0f"), "%.2f%%" % r["relative_se_pct"], "%.2f%%" % se_at(r["N"]),
+                     "-" if r["marginal_se_improvement_pct"] is None else "%+.1f%%" % r["marginal_se_improvement_pct"],
+                     "%ss" % format(r["est_time_s"], ",.0f"), verdicts_n[r["N"]]])
+    add(tbl(rows, widths=[0.7, 1.1, 0.9, 1.3, 1.1, 0.8, 2.1]))
+    add(P("Tail study at the one-year node (pool value $%s, 30,000 scenarios) and the corresponding estimate at the date of peak PFE99, where the exposure distribution is wider (relative SE = %.1f%% / sqrt(N/1000), fitted to the reporting-run bootstrap). Times assume 8 cores." % (format(c99["pool_pfe_reference"], ",.0f"), se_at(1000)), SMALL))
+    add(callout("<b>Decision: number of paths.</b> Use <b>N = 5,000</b> for standard PFE99 reporting: relative standard error %.1f%% at the worst-case date (0.29%% at the one-year node), about 8 minutes on 8 cores. Use <b>N = 1,000</b> for iteration and what-if runs (%.1f%% at the worst-case date, about 2 minutes) and <b>N = 10,000</b> when a limit is being signed off (%.1f%%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below %.1f%%) is an order of magnitude smaller than the model sensitivities in Section 9.4 (a 50%% increase in equity volatility moves MPE by about 9%%). The figures in this report use N = 3,000 (%.1f%% at the worst-case date)." % (se_at(5000), se_at(1000), se_at(10000), se_at(15000), se3000)))
     add(PageBreak())
 
     # ---------- 6 calibration
@@ -873,18 +911,18 @@ def main():
     add(tbl(rows, widths=[1.2, 0.7, 1.5, 1.7, 2.6]))
     add(P("The simulated EE at t=0 equals the directly computed current exposure to 0.0000% (the engine's built-in self-check): at t=0 there is no randomness so both must agree exactly."))
     add(P("7.2 Exposure profiles through time", H2))
-    add(doc.figure(fig_profiles(D), "EE, median, PFE95 and PFE99 for each counterparty and the portfolio. The shaded band runs from the median to PFE99."))
-    rows = [["Counterparty", "EE(0)", "Peak EE", "Peak median", "Peak PFE95", "MPE (peak PFE99)", "MPE date"]]
+    add(doc.figure(fig_profiles(D), "EE, median PFE and PFE99 for each counterparty and the portfolio. The shaded band runs from the median PFE to PFE99."))
+    rows = [["Counterparty", "EE(0)", "Peak EE", "Peak median PFE", "MPE (peak PFE99)", "MPE date"]]
     for c in ("CPTY_A", "CPTY_B", "CPTY_C", "__portfolio__"):
         p = prof(D["expo"][c]); jj = int(p["P99"].argmax())
-        rows.append([("Portfolio" if c == "__portfolio__" else c), m(p["EE"][0]), m(p["EE"].max()), m(p["MED"].max()), m(p["P95"].max()), m(p["P99"].max()), str(D["rep_dates"][jj])])
-    add(tbl(rows, widths=[1.2, 0.9, 0.9, 1.0, 1.0, 1.4, 1.1]))
+        rows.append([("Portfolio" if c == "__portfolio__" else c), m(p["EE"][0]), m(p["EE"].max()), m(p["MED"].max()), m(p["P99"].max()), str(D["rep_dates"][jj])])
+    add(tbl(rows, widths=[1.3, 1.0, 1.0, 1.3, 1.5, 1.2]))
     add(Spacer(1, 4))
     add(P("<b>Reading the shape.</b> Exposure peaks soon after today and then falls steeply as trades mature. By the end of December 2026 the portfolio EE has fallen by more than 90%; the "
           "remainder is the Bond TRS BTRS_0001 and the year-long EQTRS_0008. So almost all counterparty credit risk sits in the next four months and monitoring should be concentrated there."))
-    add(P("<b>EE versus median versus PFE.</b> The median is far below EE for the counterparties with more than half of scenarios at zero exposure (CPTY_B especially): EE is pulled up by the right tail, "
-          "the median describes the typical outcome, and PFE99 describes the bad tail. Reporting all three prevents any single number from misleading."))
-    add(doc.figure(fig_prob_positive(D), "Probability that a counterparty has any positive exposure at all. Where this is far below 100%, the median exposure is zero even though EE and PFE are large."))
+    add(P("<b>EE, median PFE and PFE99.</b> The median PFE is far below EE for the counterparties with more than half of scenarios at zero exposure (CPTY_B especially): EE is pulled up by the right tail, "
+          "the median PFE describes the typical outcome, and PFE99 describes the adverse tail. Reporting all three prevents any single statistic from misleading."))
+    add(doc.figure(fig_prob_positive(D), "Probability that a counterparty has any positive exposure at all. Where this is far below 100%, the median PFE is zero even though EE and PFE99 are large."))
     add(doc.figure(fig_dists(D), "Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time."))
     add(PageBreak())
 
@@ -895,17 +933,19 @@ def main():
               cC["P99"].max() / tot["P99"].max() * 100, ce0["CPTY_C"] / max(tot["EE"][0], 1) * 100)))
     add(P("7.4 What if the counterparty posts margin? (MPOR-shifted exposure)", H2))
     add(P("The real book is treated as <b>uncollateralized</b> because trade_data carries no CSA terms. For a collateralized counterparty, default does not mean instant close-out: there is a Margin Period of Risk "
-          "(standard 10 days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:"))
+          "(standard 10 business days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:"))
     add(code("C(t)        = max( V(t) - threshold, 0 )        collateral held at reporting date t\n"
              "Exposure(t) = max( V(t + MPOR) - C(t), 0 )      same simulated path, MPOR days later"))
     add(P("Implementation: an extra look-ahead node is inserted MPOR days after every reporting node on the same simulated path (no separate simulation). The demonstration below is explicitly hypothetical: "
-          "full variation margin (threshold 0), MPOR 10 days, 3,000 scenarios."))
+          "full variation margin (threshold 0), MPOR 10 business days, 3,000 scenarios."))
     fg, cmp_, cp, u, mp = fig_mpor(D)
     add(doc.figure(fg, "If a full-VM CSA existed, peak PFE99 would fall sharply, most of all for CPTY_C whose exposure is a large, already-visible MTM that margin would cover."))
     rows = [["Counterparty", "Uncollateralized MPE99", "MPOR-shifted MPE99", "Reduction"]]
     for c, a1, a2 in zip(cp, u, mp):
         rows.append([c, f"${a1:,.1f}M", f"${a2:,.1f}M", f"{(1 - a2 / a1) * 100 if a1 > 0 else 0:.0f}%"])
     add(tbl(rows, widths=[1.5, 2.0, 2.0, 1.2]))
+    add(P("<b>Relation to SIMM and Basel.</b> The 10-day figure is the convention shared by both frameworks. Under the Basel counterparty credit risk rules (SA-CCR and the internal models method) the margin period of risk for a margined bilateral OTC netting set is at least 10 business days, 5 business days for centrally cleared trades and 20 business days for large or illiquid netting sets, and it lengthens after margin disputes. The ISDA Standard Initial Margin Model (SIMM) is a different object: a sensitivity-based methodology for the <i>initial margin</i> that the uncleared margin rules require counterparties to post, calibrated to a 99% one-tailed loss over a 10-day horizon using a stress period. Initial margin is collateral posted in addition to variation margin and held against precisely the close-out window described above."))
+    add(P("Our engine does <b>not</b> implement SIMM and does not model initial margin. The calculation in this section is a variation-margin-only illustration: a threshold of zero removes any unsecured amount, but there is no initial margin buffer. If initial margin were posted it would absorb part of the 10-day move and reduce the exposure shown further; quantifying that requires computing SIMM sensitivities for each netting set, which we have not attempted. Two simplifications should also be noted: the look-ahead is exactly 10 business days (Monday to Friday, US federal holidays skipped; the SIFMA bond-market calendar differs marginally), and no minimum transfer amount is modelled."))
     add(P("Whether any trade is actually margined is the most important open question for Capitolis: it changes the answer by roughly an order of magnitude for CPTY_C."))
     add(PageBreak())
 
@@ -924,7 +964,7 @@ def main():
     add(P("8. Every modelling choice, and what we rejected", H1))
     add(tbl([["Topic", "Choice", "Alternatives considered", "Reason"],
              ["Measure", "Risk-neutral", "Real-world drifts", "No unobservable risk premia; verified martingale; horizon short"],
-             ["Confidence", "PFE99 (+ median, EE, PFE95 for context)", "99.9%, 95%", "99% intended target; 99.9% needed far more paths for little insight"],
+             ["Confidence", "PFE99 and median PFE (with EE)", "Other percentiles", "99% is the specified target; 99.9% needs far more paths for little added insight"],
              ["USD rates", "Hull-White 1F", "CIR, BK, LMM, constant", "Exact curve fit, analytic bonds, negative-rate capable, few parameters"],
              ["Equities/FX", "Correlated GBM", "Heston, SABR, jumps", "No option surfaces; matches lognormal vol convention"],
              ["Volatility", "3y realised", "Implied vols", "No single-name options data; documented proxy"],
@@ -932,7 +972,7 @@ def main():
              ["Equity factor model", "Optional PCA (k=5)", "Full rank only", "Robustness, dimension reduction; approximation disclosed"],
              ["Dates", "Pillar dates + trade event dates", "Monthly grid", "Industry convention, denser where risk moves, exact cash-flow dates"],
              ["Sampling", "Latin Hypercube", "Pseudo-random, antithetic, moment-matched, Sobol", "Best measured error on both test and real engine"],
-             ["Scenario count", "3,000 (reporting); 10-15k for tight PFE99", "30,000 pool", "Diminishing returns; model risk dominates beyond a few thousand"],
+             ["Scenario count", "5,000 (reporting); 1,000 (iteration); 10,000 (sign-off)", "30,000 pool", "Diminishing returns beyond 10-15k; model risk dominates"],
              ["Mean reversion a", "Swaption-based (USD 0.0167)", "Futures proxy (0.0458), textbook 0.03", "Industry-standard instrument"],
              ["JPY rates", "Real JPY Hull-White factor (built), not yet wired", "Constant differential only", "Negative-rate capable; real TONA sigma; correlation calibrated ~0"],
              ["Collateral", "Uncollateralized default; MPOR-shift option", "Assume full VM", "No CSA data; hypothetical shown separately"],
@@ -950,11 +990,9 @@ def main():
           "across nodes (a small, understood trapezoid-integration effect of the coarse monthly grid), and the discounted-equity 'gains process' for six names has all |z| below 1.4. This validates the drift terms "
           "in the engine itself, independent of any trade pricing."))
     add(P("9.3 Parametric (delta-normal) VaR benchmark", H2))
-    add(P("An independent standard method: portfolio dollar-deltas by bump-and-reprice with the SAME vols and correlations, giving VaR95 of $43.9M versus $40.8M from the Monte Carlo P&L distribution "
-          "(ratio 1.08, accepted range 0.2-1.5). It agrees on order of magnitude and the slight excess is consistent with a mostly-linear book at a one-month horizon."))
+    add(P("An independent standard method: portfolio dollar-deltas by bump-and-reprice with the same volatilities and correlations as the simulation, combined into a delta-normal VaR at the first simulated node (one day, the overnight pillar). The 99% delta-normal VaR is $11.4M against $11.7M from the Monte Carlo P&L distribution (ratio 0.98; accepted range 0.3-1.3). At this short horizon the book is close to linear in the risk factors, so close agreement is expected; a large discrepancy would have indicated a sign or scaling error in the deltas or the covariance."))
     add(P("9.4 Sensitivity (stress) test", H2))
-    add(P("Directional test with common random numbers: equity vol x1.5 raised MPE by 11.4%; a +100bp parallel rate shift by 39.1% (the largest single delta is to the USD rate); Hull-White sigma x1.5 by 1.8%. "
-          "All three moved exposure in the economically required direction. (These stress numbers were measured earlier at the 95th percentile; the directional conclusions do not depend on the confidence level.)"))
+    add(P("Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is $174.0M. Raising equity volatility by 50% increases it to $189.8M (+9.1%); a +100bp parallel shift of the USD curve to $230.5M (+32.5%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50% to $183.4M (+5.4%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50% matters about ten times more than the sampling error at the recommended path count."))
     add(P("9.5 Statistical and unit tests", H2))
     add(P("58 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target "
           "correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance "
@@ -970,8 +1008,8 @@ def main():
     add(PageBreak())
 
     # ---------- 10 bugs
-    add(P("10. Bugs found and fixed", H1))
-    add(P("Each was caught because something was checked against an independent source, a hand calculation or a full end-to-end run, not because the first attempt was assumed right."))
+    add(P("10. Defects identified and resolved", H1))
+    add(P("Each defect was identified by checking against an independent source, a hand calculation or a full end-to-end run."))
     add(tbl([["#", "Bug", "How it was caught / fix"],
              ["1", "BRK.B vs BRK-B ticker silently failed in two functions", "Missing prices; fixed in both current and historical fetch"],
              ["2", "SOFR curve: recently-expired serial futures wrapped a decade forward, creating a multi-year gap", "Cross-check against Treasury.gov par curve (73bp vs smooth 56bp at 10Y); fixed"],
@@ -979,10 +1017,10 @@ def main():
              ["4", "US and Tokyo equity histories joined by timestamp gave a ~70% blank table", "Join by calendar date instead"],
              ["5", "Stale cached exposure file gave false 7-15% 'discrepancies'", "Root cause: real overnight moves (one name has 76% vol); check now uses the in-memory snapshot"],
              ["6", "Residual 0.02-0.03% self-check gap", "Different curve object; both sides now use the identical exact analytic curve: 0.0000%"],
-             ["7", "PFE confidence was 99.9% by mistake in the tail study", "Corrected to 99% and fully re-run; tests updated"],
+             ["7", "Tail-convergence study initially run at 99.9% rather than the specified 99%", "Re-run at 99%; tests and documentation updated"],
              ["8", "JPY mean-reversion fit gave a negative a", "Diagnosed as a real structural property (two sources); guarded with documented fallback"]],
             widths=[0.3, 3.3, 4.2], font=7.4))
-    add(P("11. Assumptions and limitations (what a reader should not over-trust)", H1))
+    add(P("11. Assumptions and limitations", H1))
     add(B(["<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.4).",
            "<b>Volatility is a 3-year realised proxy</b>, not implied. Regime shifts and skew are not captured.",
            "<b>One static correlation matrix</b> from 613 days; correlations tend to rise in stress and are not stressed here.",
@@ -991,14 +1029,15 @@ def main():
            "<b>Risk-neutral drift</b>: not a real-world forecast; regulatory PFE may need physical drift.",
            "<b>JPY:</b> mean reversion is a fallback and the JPY rate does not yet drive JPY equity/FX drift (two trades).",
            "<b>Model risk vs sampling risk:</b> above a few thousand scenarios the uncertainty is in the models, not the random numbers.",
+           "<b>Margin modelling is partial:</b> the collateral illustration is variation-margin only, uses a 10-business-day window on a US federal holiday calendar, and has no initial margin (SIMM) or minimum transfer amount.",
            "<b>No wrong-way risk or credit dynamics of the counterparty itself</b>; this is exposure, not a loss estimate (that needs PD and LGD).",
            "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data); acceptable for shape and level, disclosed."]))
     add(P("12. Conclusions and recommendations", H1))
     add(B([f"The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 58 tests) and reproducible with a single command per stage.",
-           f"The uncollateralized book has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
+           f"The uncollateralized book has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median PFE of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
            "Risk is short-dated (about four months) and concentrated (one trade, one counterparty).",
-           "Ask Capitolis whether any trade is margined and on what terms; that single fact matters more than any modelling refinement.",
-           "Use 3,000 Latin-Hypercube scenarios for reporting; 10,000-15,000 for a tight PFE99.",
+           "We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.",
+           "Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
            "Next engineering steps: wire the JPY Hull-White factor into JPY equity/FX drift; PFE Greeks (d PFE / d spot) using common random numbers; a two-factor or regime-aware rate model if a long JPY curve history becomes available; a vectorised pricer reimplementation if scenario counts must exceed ~10,000; a model-risk study varying a, vols and correlation."]))
     add(PageBreak())
 
@@ -1008,7 +1047,7 @@ def main():
              ["MTM / NPV", "Mark-to-market / net present value: what the trade is worth today"],
              ["Netting set", "Trades under one legal netting agreement; combined before taking max(V,0)"],
              ["EE, PFE, MPE", "Expected exposure (mean), potential future exposure (percentile), maximum PFE over time"],
-             ["Median exposure", "50th percentile exposure at a date"],
+             ["Median PFE", "50th percentile of exposure at a date"],
              ["Total return swap (TRS)", "Swap exchanging an asset's total return for a funding rate"],
              ["Compo", "Payoff in one currency on an asset quoted in another, so both asset and FX move the value"],
              ["SOFR / OIS", "US overnight risk-free rate / overnight index swap; the discount curve"],
@@ -1020,8 +1059,9 @@ def main():
              ["PCA / factor model", "Explain most co-movement with a few principal factors plus idiosyncratic noise"],
              ["Latin Hypercube / Sobol", "Stratified / low-discrepancy sampling schemes that reduce Monte Carlo noise"],
              ["Common random numbers", "Reuse identical random draws across compared runs so differences are not noise"],
-             ["MPOR", "Margin period of risk: delay between last margin call and close-out (typically 10 days)"],
+             ["MPOR", "Margin period of risk: delay between last margin call and close-out (typically 10 business days)"],
              ["CSA / VM / threshold", "Credit support annex / variation margin / uncollateralized amount before margin is called"],
+             ["SIMM", "ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99% 10-day loss (not implemented here)"],
              ["Pillar dates", "Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y"],
              ["Risk-neutral measure", "Pricing measure in which discounted assets are martingales; drift = r - q"]],
             widths=[2.2, 5.5]))
