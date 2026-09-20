@@ -160,6 +160,25 @@ def main():
              "Assumed: counterparty ratings, bond-index spread proxy, no wrong-way risk, no collateral. Needs supervisory approval for regulatory use."])
     S.append(PageBreak())
 
+    rows = [["Input", "Source", "Used for"],
+            ["Trades, pricing library", "Capitolis (supplied)", "16 trades; all valuation"],
+            ["USD SOFR futures", "CME via Databento", "USD curve (our bootstrap)"],
+            ["Equities, USDJPY, sectors", "yfinance", "Spots, vols, correlation, SA-CVA buckets"],
+            ["SOFR history; credit spreads by rating", "FRED (SOFR, ICE BofA OAS)", "Rate vol; CVA credit proxy"],
+            ["TONA; JGB yields", "Bank of Japan API; Japan MoF", "JPY rate vol, correlation, mean-reversion test"],
+            ["Swaption cube, JPY OIS, FX forwards", "Bloomberg export (licensed)", "USD mean reversion, JPY factor, FX carry"],
+            ["SA-CVA rules", "BIS Basel MAR50 (2020)", "Risk weights, correlations, aggregation"]]
+    S += [P("Data sources", TITLE), table(rows, [3.0 * inch, 3.2 * inch, 3.6 * inch]), PageBreak()]
+    rows = [["Component", "Method", "Key choice"],
+            ["USD rates", "Hull-White one-factor", "a = 0.0167 (swaptions), sigma = 0.63% (SOFR)"],
+            ["Equities, FX", "Correlated GBM", "3y realised vols, static 39x39 correlation, Cholesky"],
+            ["JPY", "Second Hull-White factor, negative-rate capable", "TONA vol; mean reversion falls back to USD"],
+            ["Sampling", "Latin Hypercube", "5,000 paths reporting; 3,000 here"],
+            ["Dates", "Market pillars + trade events", "42 nodes"],
+            ["Exposure", "Net, max(V,0); EE, median PFE, PFE99, MPE", "Uncollateralized; MPOR 10 business days as hypothetical"],
+            ["CVA", "Regulatory CVA (MAR50.32)", "BBB bond-spread proxy, LGD 60%, unilateral"],
+            ["SA-CVA", "Bump sensitivities, MAR50 aggregation", "Common random numbers, 21 runs, m_CVA = 1"]]
+    S += [P("Methodology at a glance", TITLE), table(rows, [1.6 * inch, 4.0 * inch, 4.2 * inch]), PageBreak()]
     S += [P("Assumptions, limits, next steps", TITLE)]
     S += bl(["Volatility is a 3-year realised proxy (no single-name options data); one static correlation matrix; GBM understates fat tails.",
              "JPY: a real negative-rate-capable Hull-White factor is built (sigma from real Bank of Japan TONA; USD-JPY rate correlation calibrated near zero) but does not yet drive JPY equity drift; its mean reversion falls back to USD's because real JPY vol rises with tenor.",

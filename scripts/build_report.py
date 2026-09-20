@@ -1029,6 +1029,7 @@ def main():
     add(P("The expected discounted exposure DEE is the exposure profile of Section 7 with each scenario discounted along its own simulated short rate. The default probability is implied by a credit spread s through the credit-triangle relation with a loss given default LGD of 60% (40% recovery, the senior unsecured convention). Exposure and default are assumed independent, so wrong-way risk is excluded, and the book is treated as uncollateralized because no margin terms are available."))
     add(P("8.2 Credit inputs: rating proxies from bond spreads", H2))
     add(P("CDS spreads for the counterparties are not available, and the counterparties are anonymised. MAR50.32(3) permits an illiquid counterparty's spread to be proxied from liquid peers by credit quality, industry and region. We proxy by credit quality using public bond-market data: the ICE BofA US corporate option-adjusted spread indices by rating (FRED), with the maturity shape taken from the ICE BofA corporate index by maturity bucket, scaled to each rating. The rating-level spread is one number per rating, so the same maturity shape is used for all ratings (a disclosed simplification)."))
+    add(P("<b>Sources.</b> Rating spreads: FRED series BAMLC0A1CAAA (AAA), BAMLC0A2CAA (AA), BAMLC0A3CA (A), BAMLC0A4CBBB (BBB), BAMLH0A1HYBB (BB) and BAMLH0A2HYB (B), ICE BofA US option-adjusted spreads. Maturity shape: BAMLC1A0C13Y, BAMLC2A0C35Y, BAMLC3A0C57Y and BAMLC4A0C710Y relative to BAMLC0A0CM (all US corporate). Basel parameters: Bank for International Settlements, Targeted revisions to the credit valuation adjustment risk framework (July 2020), MAR50. Equity bucket attributes (sector, country, market capitalisation): yfinance."))
     add(doc.figure(fig_credit_curves(), "Proxy spread curves by rating on the valuation date. The BBB curve used for the counterparties runs from about %.0f bp at 6 months to about %.0f bp at 10 years." % (Rc["spread_curves_bp"]["CPTY_A"][0], Rc["spread_curves_bp"]["CPTY_A"][-1])))
     add(tbl([["Counterparty", "Assumed rating", "Assumed sector", "Basis"],
              ["CPTY_A", Rc["ratings"]["CPTY_A"], "Financials (SA-CVA bucket 2)", "Assumption: unrated counterparty proxied at BBB"],
@@ -1194,6 +1195,51 @@ def main():
              ["Pillar dates", "Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y"],
              ["Risk-neutral measure", "Pricing measure in which discounted assets are martingales; drift = r - q"]],
             widths=[2.2, 5.5]))
+    add(P("Appendix C. Data sources and lineage", H1))
+    add(P("Every external input, where it came from, how it was obtained and what it is used for. Raw pulls are stored under data/raw/ (excluded from version control); licensed data is never redistributed."))
+    add(tbl([["Input", "Source", "How obtained", "Used for", "Status"],
+             ["Trades (16) and underlyings", "Capitolis: trade_data/*.csv", "Supplied files", "Trade definitions, baskets, bonds", "Given"],
+             ["Pricing library", "Capitolis: capitolis_pricers", "Supplied package (standard library only)", "All trade valuation (npv), curves, day counts", "Given; independently reviewed"],
+             ["USD SOFR futures (SR3, SR1)", "CME Globex via Databento (dataset GLBX.MDP3)", "Paid API; key only in an environment variable", "USD discount curve (bootstrapped by us), Hull-White fit, futures-vol mean-reversion cross-check", "Live, validated against Treasury.gov"],
+             ["Treasury par yield curve", "U.S. Treasury (treasury.gov)", "Public download", "Independent check of the SOFR curve", "Validation only"],
+             ["Equity spots, dividends, 3y price history (37 names)", "yfinance (Yahoo Finance)", "Public API, keyed by ISIN", "GBM start values and drift, realised volatility, correlation", "Live"],
+             ["USDJPY spot and 3y history", "yfinance", "Public API", "FX start value, volatility, correlation", "Live"],
+             ["SOFR level history", "FRED (series SOFR)", "Public CSV", "Rate volatility; USD-JPY rate correlation", "From April 2018"],
+             ["TONA (JPY overnight rate), 1998 to date", "Bank of Japan Time-Series Data Search API (DB FM01, series STRDCLUCON)", "Public API", "JPY rate volatility; USD-JPY correlation; negative-rate evidence", "Public"],
+             ["JGB par yields 1Y-40Y, 1974 to date", "Japan Ministry of Finance", "Public CSV (browser-like request headers)", "Test of JPY mean reversion", "Public"],
+             ["USD swaption vol cube; JPY OIS curve and swaption vols; USDJPY forward points", "Bloomberg one-time export, snapshot 2026-08-31", "Provided by the project team", "USD mean reversion; JPY factor; JPY-USD rate differential; FX forwards", "Licensed: derived numbers only in the report"],
+             ["Credit spreads by rating and maturity shape", "FRED: ICE BofA US option-adjusted spread indices", "Public CSV", "Counterparty credit spread proxy for CVA", "Public"],
+             ["SA-CVA parameters and formulas", "BIS, Basel Framework MAR50 (July 2020 revisions)", "Public PDF", "Risk weights, correlations, aggregation", "Public"],
+             ["Equity sector, country, market cap", "yfinance", "Public API", "SA-CVA equity buckets", "Live"]],
+            widths=[1.7, 2.0, 1.6, 2.2, 1.2], font=7.0))
+    add(P("Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60%), MPOR (10 business days), the uncollateralized status of the book, the correlation structure being static, and the JPY mean-reversion fallback to the USD value."))
+    add(P("Appendix D. Methodology register", H1))
+    add(tbl([["Component", "Method", "Key parameters", "Where (code)"],
+             ["USD curve", "Bootstrap of SOFR futures: implied forward rate to chained discount factors, ACT/360", "33 live contracts, about 6.3y coverage, flat extrapolation beyond", "market/sofr.py"],
+             ["USD rates", "One-factor Hull-White, shifted Ornstein-Uhlenbeck, exact transition, analytic bond price", "sigma 0.63% (realised SOFR); a 0.0167 (swaption cube)", "models/rates.py"],
+             ["Mean reversion", "Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks", "USD 0.0167; futures 0.0458; JPY invalid, fallback to USD", "models/hw_calibration.py"],
+             ["JPY factor", "Second Hull-White factor on the real JPY OIS curve; realised TONA volatility", "sigma 0.276%; USD-JPY rate correlation -0.04 (not significant)", "models/calibration.py"],
+             ["Equities and FX", "Correlated geometric Brownian motion, exact log step, drift r-q", "3y realised vols; JPY names via r_USD minus differential (2.64%)", "models/equity_fx.py"],
+             ["Correlation", "Static 39x39 matrix (613 aligned days), Cholesky; optional PCA factor model", "5 factors explain about 46% of variance", "models/equity_factor_model.py, simulation/engine.py"],
+             ["Random numbers", "Latin Hypercube sampling", "N = 5,000 recommended; 3,000 used for the figures", "simulation/random_numbers.py"],
+             ["Dates", "Market pillar dates plus every trade event date", "42 nodes for this book", "simulation/engine.py"],
+             ["Repricing", "Full repricing of every trade in every scenario and node, 8 worker processes", "About 90 ms per scenario", "simulation/parallel.py"],
+             ["Exposure measures", "Netting by counterparty, max(V,0); EE, median PFE, PFE99, MPE", "PFE at the 99th percentile", "exposure/aggregate.py"],
+             ["Collateral (hypothetical)", "MPOR look-ahead on the same paths, full variation margin", "10 business days, US federal holidays", "exposure/collateral.py"],
+             ["CVA", "Regulatory CVA, MAR50.32; pathwise discounting; credit-triangle PD from spreads", "LGD 60%; BBB proxy; unilateral; independent", "exposure/cva.py, models/credit.py"],
+             ["SA-CVA", "CVA bump sensitivities with common random numbers, MAR50 aggregation", "1,000 scenarios; 21 simulations; m_CVA = 1", "exposure/sa_cva.py, scripts/run_sa_cva.py"],
+             ["Precision", "Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation", "Relative SE of PFE99 about 1.0% at N = 5,000 at the worst date", "scripts/convergence_study_tail.py"],
+             ["Validation", "t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests", "69 automated tests", "scripts/, tests/"]],
+            widths=[1.2, 2.8, 2.4, 1.9], font=7.0))
+    add(P("Appendix E. Code map", H1))
+    add(tbl([["Package", "Contents"],
+             ["market/", "sofr, equities, fx, vols, correlations (data pulls and inputs); boj, mof_jgb, bloomberg (JPY data); credit_spreads, equity_buckets (CVA inputs)"],
+             ["models/", "rates (Hull-White), equity_fx (GBM), calibration and hw_calibration (parameters), equity_factor_model (PCA), credit (PD from spreads)"],
+             ["simulation/", "engine (grid, paths, MPOR nodes), random_numbers (five sampling schemes), parallel (multiprocessing repricing)"],
+             ["exposure/", "aggregate (netting, EE, median PFE, PFE, MPE), collateral (MPOR-shifted), cva (regulatory CVA), sa_cva (Basel aggregation)"],
+             ["scripts/", "run_simulation, run_mpor_comparison, run_sa_cva, generate_report_data, build_report (LaTeX), build_exec_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks"],
+             ["tests/", "69 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA"]],
+            widths=[1.2, 6.6]))
     add(P("Appendix B. Reproducing the results", H1))
     add(code("python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation, arrays for figures\n"
              "python scripts/build_report.py                            # this PDF\n"
