@@ -6,3 +6,4 @@ yfinance
 databento
 pytest
 jupyter
+openpyxl

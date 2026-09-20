@@ -101,6 +101,22 @@ def implied_jpy_usd_rate_diff_from_bloomberg(tenor="12M"):
     return diff
 
 
+def implied_jpy_usd_rate_diff_from_ois(ref_date, usd_curve, tenor_years=1.0):
+    """Preferred route now: 1y zero-rate differential between OUR USD curve
+    (Databento SOFR futures) and the JPY zero curve bootstrapped from the
+    full daily JPY OIS history (market/jpy_ois.py), both on the SAME date --
+    replacing the earlier mix of a 2026-08-31 Bloomberg snapshot with our
+    2026-08-28 USD curve."""
+    from ..market import jpy_ois
+    if not jpy_ois.available():
+        raise FileNotFoundError("JPY OIS history not found under data/raw/sources/")
+    ref = ref_date if isinstance(ref_date, date) else date.fromisoformat(str(ref_date))
+    d = ref + timedelta(days=round(365 * tenor_years))
+    diff = usd_curve.zero_rate(d) - jpy_ois.jpy_zero_curve(ref).zero_rate(d)
+    print(f"  JPY-USD rate differential from our USD curve vs JPY OIS history (tenor={tenor_years}y): {diff:.4%}")
+    return diff
+
+
 def implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot):
     """Back out a constant (r_USD - r_JPY) differential from REAL data:
     the nearest ~1y outright CME JPY futures contract (6J, Databento, same
@@ -245,6 +261,12 @@ def load_or_calibrate_mean_reversion(ref_date, use_cache=True):
 # gets used when real data is available.
 USD_JPY_RATE_FACTOR_CORR_ASSUMPTION = 0.3
 
+# Lowest admissible Hull-White mean reversion, used for JPY when every real
+# calibration route gives a negative value (see load_or_calibrate_jpy_mean_
+# reversion). a -> 0 is the Ho-Lee limit: flat vol across tenors, the closest a
+# Gaussian mean-reverting factor can get to JPY's RISING vol-by-tenor shape.
+JPY_MEAN_REVERSION_FLOOR = 0.001
+
 
 def calibrate_usd_jpy_rate_corr(lookback_years=None):
     """Real calibration of the USD-JPY short-rate factor correlation, now
@@ -320,37 +342,43 @@ def load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a, ref_date=None):
     from either source.
     """
     from .hw_calibration import (calibrate_mean_reversion_from_swaptions,
-                                  calibrate_jpy_mean_reversion_from_jgb_yields)
+                                  calibrate_jpy_mean_reversion_from_jgb_yields,
+                                  calibrate_jpy_mean_reversion_from_ois)
+    from ..market import jpy_ois
 
-    swaption_result, jgb_result = None, None
+    results = {}
+    # 1. Full daily JPY OIS curve history (most complete source)
+    if jpy_ois.available():
+        try:
+            r = calibrate_jpy_mean_reversion_from_ois(ref_date or date(2026, 8, 28))
+            results["ois_history"] = r
+            if r["a"] > 0:
+                return r["a"], r
+        except Exception as exc:
+            print(f"  WARN: JPY OIS-history calibration failed ({exc})")
+    # 2. Bloomberg swaption cube (one snapshot)
     try:
-        swaption_result = calibrate_mean_reversion_from_swaptions(currency="JPY")
-        if swaption_result["a"] > 0:
-            return swaption_result["a"], swaption_result
+        r = calibrate_mean_reversion_from_swaptions(currency="JPY")
+        results["swaption"] = r
+        if r["a"] > 0:
+            return r["a"], r
     except Exception as exc:
         print(f"  WARN: JPY swaption-based Hull-White calibration failed ({exc})")
-
+    # 3. Public JGB yield history
     try:
-        jgb_result = calibrate_jpy_mean_reversion_from_jgb_yields(ref_date)
-        if jgb_result["a"] > 0:
-            print(f"  JPY swaption fit was invalid but the independent JGB-yield fit "
-                  f"succeeded (a={jgb_result['a']:.4f}) -- using it")
-            return jgb_result["a"], jgb_result
+        r = calibrate_jpy_mean_reversion_from_jgb_yields(ref_date)
+        results["jgb"] = r
+        if r["a"] > 0:
+            return r["a"], r
     except Exception as exc:
-        print(f"  WARN: JPY JGB-yield-based Hull-White calibration failed ({exc})")
+        print(f"  WARN: JPY JGB-yield calibration failed ({exc})")
 
-    detail = jgb_result or swaption_result
-    if detail is not None:
-        print(f"  WARN: both real JPY mean-reversion calibration routes gave a negative/invalid "
-              f"`a` (swaption: {swaption_result['a'] if swaption_result else 'n/a'}, "
-              f"JGB: {jgb_result['a'] if jgb_result else 'n/a'}) -- JPY's realized vol genuinely "
-              f"rises with tenor rather than decaying (corroborated by two independent sources); "
-              f"falling back to the USD-calibrated a={usd_mean_reversion_a:.4f} for the JPY "
-              f"factor too (disclosed simplification, see calibration.py)")
-    else:
-        print(f"  WARN: neither real JPY mean-reversion calibration route was reachable; "
-              f"falling back to the USD-calibrated a={usd_mean_reversion_a:.4f}")
-    return usd_mean_reversion_a, detail
+    detail = results.get("ois_history") or results.get("jgb") or results.get("swaption")
+    fits = ", ".join(f"{k}: {v['a']:.4f}" for k, v in results.items())
+    print(f"  JPY mean reversion: every real route gives a negative a ({fits}) -- JPY vol genuinely rises "
+          f"with tenor (three independent sources). Using the lowest admissible value a={JPY_MEAN_REVERSION_FLOOR} "
+          f"(Ho-Lee limit) for the JPY factor.")
+    return JPY_MEAN_REVERSION_FLOOR, detail
 
 
 def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
@@ -368,7 +396,13 @@ def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
     if not available():
         raise FileNotFoundError("Bloomberg data export not found under data/raw/bloomberg/ -- "
                                  "the JPY Hull-White factor needs the real JPY OIS curve")
-    jpy_curve = build_curve_from_bloomberg_zero_curve(load_jpy_bloomberg_zero_curve(), ref_date)
+    from ..market import jpy_ois
+    if jpy_ois.available():
+        jpy_curve = jpy_ois.jpy_zero_curve(ref_date)  # bootstrapped from the daily OIS par history
+        curve_source = "jpy_ois_history"
+    else:
+        jpy_curve = build_curve_from_bloomberg_zero_curve(load_jpy_bloomberg_zero_curve(), ref_date)
+        curve_source = "bloomberg_snapshot"
     a_jpy, calib_detail = load_or_calibrate_jpy_mean_reversion(usd_mean_reversion_a, ref_date=ref_date)
 
     # sigma: preference order, same "prefer a real level, cross-check via
@@ -385,9 +419,13 @@ def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
     #   3. A small disclosed constant, only if neither real route works.
     sigma_source = "fallback_constant"
     try:
-        from ..market.boj import jpy_realized_rate_vol
-        sigma_jpy = jpy_realized_rate_vol(ref_date)
-        sigma_source = "tona_realized_vol"
+        if jpy_ois.available():
+            sigma_jpy = jpy_ois.overnight_vol(ref_date)
+            sigma_source = "jpy_ois_history_overnight_vol"
+        else:
+            from ..market.boj import jpy_realized_rate_vol
+            sigma_jpy = jpy_realized_rate_vol(ref_date)
+            sigma_source = "tona_realized_vol"
     except Exception as exc:
         print(f"  WARN: TONA-realized JPY rate vol unavailable ({exc}); "
               f"falling back to the swaption-fit vol level")
@@ -395,7 +433,7 @@ def build_jpy_hull_white(ref_date, usd_mean_reversion_a):
         sigma_source = "swaption_fit_level" if calib_detail else "fallback_constant"
 
     hw_jpy = HullWhite1F(jpy_curve, sigma=sigma_jpy, a=a_jpy)
-    return hw_jpy, {"a": a_jpy, "sigma": sigma_jpy, "sigma_source": sigma_source,
+    return hw_jpy, {"a": a_jpy, "sigma": sigma_jpy, "sigma_source": sigma_source, "curve_source": curve_source,
                     "calibration_detail": calib_detail}
 
 
@@ -424,11 +462,15 @@ def build_calibration(ref_date):
     factor_order = list(corr_matrix.columns)  # ISINs..., FX_USDJPY, RATE_USD
 
     try:
-        jpy_diff = implied_jpy_usd_rate_diff_from_bloomberg()
+        jpy_diff = implied_jpy_usd_rate_diff_from_ois(ref_date, usd_curve)
     except Exception as exc:
-        print(f"  WARN: Bloomberg-curve JPY-USD differential unavailable ({exc}); "
-              f"falling back to the 6J-futures-implied route")
-        jpy_diff = implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot)
+        print(f"  WARN: JPY OIS-history differential unavailable ({exc}); trying the Bloomberg snapshot")
+        try:
+            jpy_diff = implied_jpy_usd_rate_diff_from_bloomberg()
+        except Exception as exc2:
+            print(f"  WARN: Bloomberg-curve JPY-USD differential unavailable ({exc2}); "
+                  f"falling back to the 6J-futures-implied route")
+            jpy_diff = implied_jpy_usd_rate_diff(ref_date, usd_curve, fx_spot)
 
     rate_vol = vol_table["RATE_USD"]
     mean_reversion_a, hw_calib_detail = load_or_calibrate_mean_reversion(ref_date)

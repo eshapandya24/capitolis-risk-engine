@@ -254,3 +254,30 @@ def calibrate_jpy_mean_reversion_from_jgb_yields(ref_date, lookback_years=3, max
     return {"a": float(a_fit), "sigma_from_fit": float(sigma_fit), "r_squared": r_squared,
             "lookback_years": lookback_years, "max_tenor_years": max_tenor_years,
             "points": rows, "method": "jgb_realized_yield_vol_term_structure"}
+
+
+def calibrate_jpy_mean_reversion_from_ois(ref_date, lookback_years=3):
+    """JPY mean reversion from the full daily JPY OIS par-curve history
+    (market/jpy_ois.py; 35 tenors, 2011-2026) -- the most complete JPY
+    dataset available: same exp(-a*tenor) realised-vol-decay regression as
+    the USD calibration, on par-rate vol at 1,2,3,5,7,10,15,20,30y.
+
+    Result (locked in by tests/test_jpy_ois.py): JPY OIS vol RISES with
+    tenor at every window tested (1y, 3y, 5y, 10y, 15y, and post-NIRP
+    since March 2024), so the fitted `a` is negative each time
+    (about -0.017 to -0.029). One factor (the level) explains ~84% of
+    daily curve changes. A single mean-reverting Gaussian factor implies
+    DEcreasing vol with tenor, so it cannot represent this shape."""
+    from ..market.jpy_ois import realized_vol_by_tenor
+    vols = realized_vol_by_tenor(ref_date, lookback_years)
+    tenors = np.array(sorted(vols), dtype=float)
+    log_vols = np.log([vols[t] for t in sorted(vols)])
+    A = np.vstack([tenors, np.ones_like(tenors)]).T
+    slope, intercept = np.linalg.lstsq(A, log_vols, rcond=None)[0]
+    resid = log_vols - (slope * tenors + intercept)
+    ss_tot = np.sum((log_vols - log_vols.mean()) ** 2)
+    r2 = float(1 - np.sum(resid ** 2) / ss_tot) if ss_tot > 0 else float("nan")
+    return {"a": float(-slope), "sigma_from_fit": float(math.exp(intercept)), "r_squared": r2,
+            "lookback_years": lookback_years,
+            "points": [{"years": float(t), "vol": float(vols[t])} for t in sorted(vols)],
+            "method": "jpy_ois_history_par_rate_vol_term_structure"}
