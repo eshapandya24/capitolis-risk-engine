@@ -69,7 +69,7 @@ def call_option_study(S0, K, r, q, sigma, T, n_scenarios=2000, n_repeats=200):
     return truth, results
 
 
-def real_engine_confirmatory_check(n_scenarios=120, n_repeats=4):
+def real_engine_confirmatory_check(n_scenarios=300, n_repeats=8):
     """Confirms the ranking pattern (roughly) carries to the real engine.
     Far fewer repeats than the option study -- each full 16-trade reprice
     is orders of magnitude more expensive than one option-payoff vector."""
@@ -98,19 +98,23 @@ def real_engine_confirmatory_check(n_scenarios=120, n_repeats=4):
     results = {}
     for method in METHODS:
         pfe_1y_estimates = []
+        med_estimates = []
         t0 = time.perf_counter()
         for trial in range(n_repeats):
             eng = SimulationEngine(calib, trades, method=method, n_scenarios=n_scenarios, seed=2000 + trial)
             paths = eng.simulate_paths()
-            trade_ids, npv = eng.reprice_all(paths)
+            from risk_engine.simulation.parallel import reprice_all_parallel
+            trade_ids, npv = reprice_all_parallel(eng, paths)
             profiles = build_profiles(trade_ids, eng.trade_counterparty, npv, eng.dates, confidence=0.99)
-            # 1-year-ish node: index for the node closest to +1y (node 12 with monthly grid)
-            node_1y = min(12, len(eng.dates) - 1)
+            # node closest to +1y (grid is no longer monthly, so look it up by time)
+            node_1y = min(range(len(eng.times)), key=lambda i: abs(eng.times[i] - 0.12))
             pfe_1y_estimates.append(profiles["__portfolio__"]["PFE"][node_1y])
+            med_estimates.append(profiles["__portfolio__"]["MedianExposure"][node_1y])
         elapsed = time.perf_counter() - t0
 
         arr = np.array(pfe_1y_estimates)
-        results[method] = {"mean": float(arr.mean()), "std": float(arr.std()),
+        med = np.array(med_estimates)
+        results[method] = {"mean": float(arr.mean()), "std": float(arr.std()), "med_mean": float(med.mean()), "med_std": float(med.std()),
                             "sec_per_trial": elapsed / n_repeats}
         print(f"{method:16s} PFE(1y) mean={arr.mean():14,.0f}  std={arr.std():12,.0f}  "
               f"({elapsed/n_repeats:.1f}s/trial)")
@@ -144,7 +148,7 @@ def main():
         n_scenarios=2000, n_repeats=200,
     )
 
-    engine_results = real_engine_confirmatory_check(n_scenarios=120, n_repeats=4)
+    engine_results = real_engine_confirmatory_check(n_scenarios=300, n_repeats=8)
 
     out = {"option_study": {"truth": truth, "results": option_results},
            "real_engine_check": engine_results}

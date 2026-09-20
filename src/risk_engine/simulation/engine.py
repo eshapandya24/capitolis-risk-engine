@@ -35,6 +35,24 @@ PILLAR_TENORS_DAYS = [1, 2, 7, 14]              # O/N, T/N, 1W, 2W
 PILLAR_TENORS_MONTHS = [1, 2, 3, 6, 9, 12, 18, 24, 36, 48, 60, 84, 120]  # 1M..10Y
 
 
+_US_HOLIDAYS = None
+
+
+def add_business_days(d, n):
+    """d + n business days (Mon-Fri, US federal holidays skipped). The MPOR
+    convention (ISDA SIMM / Basel) is 10 BUSINESS days, so look-ahead nodes
+    use this rather than calendar days. Note SIFMA's bond-market holidays
+    differ slightly from the federal list (e.g. Good Friday); immaterial here."""
+    global _US_HOLIDAYS
+    import numpy as np
+    if _US_HOLIDAYS is None:
+        from pandas.tseries.holiday import USFederalHolidayCalendar
+        h = USFederalHolidayCalendar().holidays(start="2020-01-01", end="2040-12-31")
+        _US_HOLIDAYS = np.array(h.values.astype("datetime64[D]"))
+    out = np.busday_offset(np.datetime64(to_date(d)), n, roll="forward", holidays=_US_HOLIDAYS)
+    return out.astype("datetime64[D]").astype(object)
+
+
 def _add_months(d, n):
     from capitolis_pricers.daycount import add_months
     return add_months(d, n)
@@ -109,7 +127,7 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
         production default).
 
     If `mpor_days` is given, an extra look-ahead node is inserted
-    `mpor_days` calendar days after EVERY reporting node (used for
+    `mpor_days` BUSINESS days (Mon-Fri, US federal holidays skipped) after EVERY reporting node (used for
     MPOR-shifted/collateralized exposure -- see exposure/collateral.py) --
     both node types sit on the SAME simulated path, so the look-ahead value
     is a genuine "what does this same scenario look like a bit later"
@@ -149,7 +167,7 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
     all_dates = set(reporting_dates)
     lookahead_for = {}
     for rd in reporting_dates:
-        la = rd + timedelta(days=mpor_days)
+        la = add_business_days(rd, mpor_days)
         if la <= horizon:
             all_dates.add(la)
             lookahead_for[rd] = la

@@ -41,7 +41,7 @@ the MPOR window itself).
 """
 import numpy as np
 
-DEFAULT_MPOR_DAYS = 10  # ISDA SIMM / Basel standard for most OTC derivatives
+DEFAULT_MPOR_DAYS = 10  # BUSINESS days: ISDA SIMM / Basel standard for margined bilateral OTC derivatives
 
 
 def mpor_shifted_exposure_by_counterparty(trade_ids, trade_counterparty, npv, node_map, threshold=0.0):

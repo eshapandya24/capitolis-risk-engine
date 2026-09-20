@@ -109,12 +109,12 @@ def main():
                  ("%.0f%%" % share_c, "of today's exposure is CPTY_C")]), Spacer(1, 14)]
     S += bl(["Uncollateralized book: our credit risk is short-dated. Most exposure disappears by December 2026 as trades mature.",
              "Concentrated: one $500M bond forward (BF_0003) with CPTY_C is almost all of it. A limit or margin on that trade moves the answer more than any model choice.",
-             "The three measures together matter: at peak, median %s, EE %s, PFE99 %s." % (R.m(tot["MED"].max()), R.m(tot["EE"].max()), R.m(mpe)),
+             "The three measures together matter: at peak, median PFE %s, EE %s, PFE99 %s." % (R.m(tot["MED"].max()), R.m(tot["EE"].max()), R.m(mpe)),
              "If any trade is actually margined, exposure falls sharply (collateral slide). Confirming CSA terms is the most valuable open question."])
     S.append(PageBreak())
 
     S += [P("What we measure", TITLE), fig(R.fig_measures_illustration(D), 3.3 * inch),
-          P("Exposure = max(net value, 0): only gains against us are at risk. EE is the average; the median is the typical case; PFE99 is the level exceeded in only 1 of 100 scenarios; MPE is the peak PFE over time.", TXT), PageBreak()]
+          P("Exposure = max(net value, 0): only gains against us are at risk. EE is the average; the median PFE is the typical case; PFE99 is the level exceeded in only 1 of 100 scenarios; MPE is the peak PFE over time.", TXT), PageBreak()]
 
     S += [P("The book: 16 trades, short-dated", TITLE), fig(R.fig_book_timeline(D), 3.5 * inch),
           P("8 equity total return swaps (incl. JPY compo), 4 bond forwards, 4 bond TRS across three counterparties. All priced with the supplied, independently reviewed pricer library.", TXT), PageBreak()]
@@ -122,10 +122,10 @@ def main():
     rows = [["Step", "What we do", "Choice"],
             ["1 Calibrate", "SOFR curve from CME futures; realised vols; 39x39 correlation; mean reversion from swaptions", "Real market data throughout"],
             ["2 Simulate", "USD rate: Hull-White one-factor. Equities and USDJPY: correlated GBM driven by the rate", "Exact fit to today's curve; negative-rate capable"],
-            ["3 Sample", "3,000 Latin-Hypercube scenarios; Cholesky for correlation (PCA factor model optional)", "Lowest measured error of 5 methods"],
+            ["3 Sample", "Latin-Hypercube scenarios (5,000 recommended for reporting; 3,000 used here); Cholesky for correlation (PCA factor model optional)", "Lowest measured error of 5 methods"],
             ["4 Dates", "Market pillar dates (O/N..10Y) plus every trade's own reset and maturity date", "Industry convention, exact cash-flow dates"],
             ["5 Reprice", "Every trade re-priced in every scenario and date with the standard pricers", "No new pricing logic"],
-            ["6 Aggregate", "Net by counterparty, max(.,0), then EE, median, PFE99, MPE", "Uncollateralized by default"]]
+            ["6 Aggregate", "Net by counterparty, max(.,0), then EE, median PFE, PFE99, MPE", "Uncollateralized by default"]]
     S += [P("How the engine works", TITLE), table(rows, [1.2 * inch, 5.6 * inch, 3.0 * inch]), PageBreak()]
 
     S += [P("Exposure through time", TITLE), fig(R.fig_profiles(D), 3.9 * inch),
@@ -138,11 +138,15 @@ def main():
     S += [P("What if margin were posted? (hypothetical)", TITLE), fig(fg, 3.0 * inch),
           P("Full variation margin with a 10-day margin period of risk: peak PFE99 falls " + ", ".join("%s %.0f%%" % (c, (1 - b / a) * 100) for c, a, b in zip(cp, u, mp)) + ". No CSA data exists for the real book, so this illustrates a built capability.", TXT), PageBreak()]
 
-    fg, c95, c99, r99 = R.fig_conv()
+    import json
+    vr = json.load(open(os.path.join(R.PROC, "variance_reduction_benchmark.json")))
+    fg, c99, r99, boot, jdate = R.fig_conv(D, D["meta"])
+    c_se = float(__import__("numpy").mean([b["se99"] * b["N"] ** 0.5 for b in boot[2:]]))
     S += [P("How precise, and how do we know it is right", TITLE), fig(fg, 2.4 * inch)]
-    S += bl(["Precision: PFE95 error 0.39% at 1,000 paths; PFE99 error 0.29% at 5,000 and 0.21% at 10,000 paths. Reporting run: 3,000 paths.",
+    S += bl(["Decision: Latin Hypercube sampling (best of 5 methods tested: %.1fx lower PFE99 estimator noise than pseudo-random on the real engine, %.0fx lower error on the controlled test)." % (vr["real_engine_check"]["pseudo_random"]["std"] / vr["real_engine_check"]["latin_hypercube"]["std"], vr["option_study"]["results"]["pseudo_random"]["rmse"] / vr["option_study"]["results"]["latin_hypercube"]["rmse"]),
+             "Decision: 5,000 paths for standard PFE99 reporting (error %.1f%% at the worst-case date, 0.29%% at 1 year); 1,000 for iteration; 10,000 for limit sign-off. This deck uses 3,000." % (c_se / 5000 ** 0.5),
              "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 58 automated tests.",
-             "Model risk (rate mean reversion, vol proxy) outweighs sampling noise beyond a few thousand paths."])
+             "Model risk (mean reversion, volatility proxy) outweighs sampling noise beyond about 10,000 paths."])
     S.append(PageBreak())
 
     S += [P("Assumptions, limits, next steps", TITLE)]

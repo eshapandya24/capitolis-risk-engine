@@ -39,7 +39,7 @@ notional-driven MTM. `threshold=∞` recovers "never collateralized."
 ## Implementation
 
 - `simulation/engine.py`'s `build_time_grid(mpor_days=...)` inserts an
-  extra look-ahead node exactly `mpor_days` after every monthly reporting
+  extra look-ahead node exactly `mpor_days` BUSINESS days (Mon-Fri, US federal holidays skipped) after every reporting
   node, sharing the same simulated path — no separate simulation, no
   engine changes needed beyond the time grid (the engine already handles
   arbitrary non-uniform node spacing).

@@ -38,7 +38,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenarios", type=int, default=1000)
     parser.add_argument("--mpor-days", type=int, default=10,
-                         help="ISDA SIMM / Basel standard for most OTC derivatives")
+                         help="BUSINESS days; ISDA SIMM / Basel standard for margined bilateral OTC derivatives")
     parser.add_argument("--threshold", type=float, default=0.0,
                          help="CSA threshold, USD. 0 = full variation margin (isolates the pure "
                               "MPOR effect); a real CSA's threshold would come from Capitolis's "

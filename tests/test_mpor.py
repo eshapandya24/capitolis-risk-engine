@@ -11,12 +11,17 @@ from risk_engine.simulation.engine import build_time_grid
 from risk_engine.exposure.collateral import mpor_shifted_exposure_by_counterparty
 
 
+def _hol():
+    from pandas.tseries.holiday import USFederalHolidayCalendar
+    return USFederalHolidayCalendar().holidays(start='2020-01-01', end='2040-12-31').values.astype('datetime64[D]')
+
+
 class _FakeTrade:
     def __init__(self, end_date):
         self.end_date = end_date
 
 
-def test_time_grid_inserts_lookahead_nodes_exactly_mpor_days_later():
+def test_time_grid_inserts_lookahead_nodes_exactly_mpor_business_days_later():
     ref = date(2026, 8, 28)
     trades = {"t1": _FakeTrade(date(2027, 1, 15))}
     dates, times, node_map = build_time_grid(ref, trades, mpor_days=10)
@@ -25,7 +30,7 @@ def test_time_grid_inserts_lookahead_nodes_exactly_mpor_days_later():
         report_date = dates[mapping["reporting"]]
         if mapping["lookahead"] is not None:
             look_date = dates[mapping["lookahead"]]
-            assert (look_date - report_date).days == 10
+            assert np.busday_count(report_date, look_date, holidays=_hol()) == 10
 
 
 def test_last_reporting_node_has_no_lookahead_past_horizon():
@@ -67,3 +72,11 @@ def test_mpor_shifted_exposure_never_negative():
     node_map = {0: {"reporting": 0, "lookahead": 1}}
     result = mpor_shifted_exposure_by_counterparty(trade_ids, trade_counterparty, npv, node_map, threshold=0.0)
     assert result["CPTY_X"][0, 0] == 0.0
+
+
+def test_business_day_lookahead_spans_more_than_ten_calendar_days_over_weekends():
+    from risk_engine.simulation.engine import add_business_days
+    fri = date(2026, 8, 28)  # a Friday
+    assert add_business_days(fri, 10) == date(2026, 9, 14)  # skips 2 weekends and Labor Day (Sep 7)
+    assert (add_business_days(fri, 10) - fri).days == 17
+    assert add_business_days(date(2026, 9, 1), 0) == date(2026, 9, 1)
