@@ -149,7 +149,7 @@ def main():
                  (rr["pseudo_random"]["std"] / rr["pseudo_random"]["mean"]) / (rr["latin_hypercube"]["std"] / rr["latin_hypercube"]["mean"]),
                  (rr["pseudo_random"]["med_std"] / rr["pseudo_random"]["med_mean"]) / (rr["latin_hypercube"]["med_std"] / rr["latin_hypercube"]["med_mean"])),
              "Decision: 5,000 paths for standard PFE99 reporting (error %.1f%% at the worst-case date, 0.29%% at 1 year); 1,000 for iteration; 10,000 for limit sign-off. This deck uses 3,000." % (c_se / 5000 ** 0.5),
-             "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 69 automated tests.",
+             "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 76 automated tests.",
              "Model risk (mean reversion, volatility proxy) outweighs sampling noise beyond about 10,000 paths."])
     S.append(PageBreak())
 
@@ -165,14 +165,15 @@ def main():
             ["USD SOFR futures", "CME via Databento", "USD curve (our bootstrap)"],
             ["Equities, USDJPY, sectors", "yfinance", "Spots, vols, correlation, SA-CVA buckets"],
             ["SOFR history; credit spreads by rating", "FRED (SOFR, ICE BofA OAS)", "Rate vol; CVA credit proxy"],
-            ["TONA; JGB yields", "Bank of Japan API; Japan MoF", "JPY rate vol, correlation, mean-reversion test"],
-            ["Swaption cube, JPY OIS, FX forwards", "Bloomberg export (licensed)", "USD mean reversion, JPY factor, FX carry"],
+            ["JPY OIS history (35 tenors, 2011-2026)", "Bloomberg file from the project team (data/raw/sources)", "JPY curve, vol, differential, mean-reversion test"],
+            ["TONA; JGB yields", "Bank of Japan API; Japan MoF", "JPY rate correlation; cross-checks"],
+            ["Swaption cubes, FX forwards", "Bloomberg snapshot (licensed)", "USD mean reversion, FX forwards"],
             ["SA-CVA rules", "BIS Basel MAR50 (2020)", "Risk weights, correlations, aggregation"]]
     S += [P("Data sources", TITLE), table(rows, [3.0 * inch, 3.2 * inch, 3.6 * inch]), PageBreak()]
     rows = [["Component", "Method", "Key choice"],
             ["USD rates", "Hull-White one-factor", "a = 0.0167 (swaptions), sigma = 0.63% (SOFR)"],
             ["Equities, FX", "Correlated GBM", "3y realised vols, static 39x39 correlation, Cholesky"],
-            ["JPY", "Second Hull-White factor, negative-rate capable", "TONA vol; mean reversion falls back to USD"],
+            ["JPY", "Second Hull-White factor, negative-rate capable", "Curve and vol from the daily JPY OIS history; mean reversion at lower bound 0.001"],
             ["Sampling", "Latin Hypercube", "5,000 paths reporting; 3,000 here"],
             ["Dates", "Market pillars + trade events", "42 nodes"],
             ["Exposure", "Net, max(V,0); EE, median PFE, PFE99, MPE", "Uncollateralized; MPOR 10 business days as hypothetical"],
@@ -181,7 +182,7 @@ def main():
     S += [P("Methodology at a glance", TITLE), table(rows, [1.6 * inch, 4.0 * inch, 4.2 * inch]), PageBreak()]
     S += [P("Assumptions, limits, next steps", TITLE)]
     S += bl(["Volatility is a 3-year realised proxy (no single-name options data); one static correlation matrix; GBM understates fat tails.",
-             "JPY: a real negative-rate-capable Hull-White factor is built (sigma from real Bank of Japan TONA; USD-JPY rate correlation calibrated near zero) but does not yet drive JPY equity drift; its mean reversion falls back to USD's because real JPY vol rises with tenor.",
+             "JPY: a real negative-rate-capable Hull-White factor is built (curve and volatility from the daily JPY OIS history; USD-JPY rate correlation calibrated near zero) but does not yet drive JPY equity drift; mean reversion is at its lower bound because JPY vol rises with tenor in three independent datasets.",
              "No counterparty default probability or wrong-way risk: this is exposure, not expected loss.",
              "Ask: are any trades margined, and under what CSA terms?",
              "Next: wire JPY factor into the drift, PFE Greeks, two-factor rate model, model-risk study on mean reversion, vols and correlation."])

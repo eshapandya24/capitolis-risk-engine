@@ -66,7 +66,7 @@ Peak median PFE & \$121.3M at 2026-10-16 & Typical (50th percentile) exposure at
 \rowcolor{gray!9}Maximum PFE99 (MPE) & \$174.7M at 2026-10-09 & Highest 99th-percentile exposure over the life of the book \\
 Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
 \rowcolor{gray!9}Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
-CVA (BBB proxy) & \$210,396 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
+CVA (BBB proxy) & \$210,394 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
 \rowcolor{gray!9}SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
 \bottomrule
 \end{longtable}}
@@ -78,7 +78,7 @@ CVA (BBB proxy) & \$210,396 & Price of counterparty default risk, unilateral, un
 \item Correlation: one static 39x39 matrix estimated from 613 aligned daily returns and applied through a Cholesky factor; a PCA factor model (5 factors) is provided as an alternative.
 \item Sampling and size: Latin Hypercube sampling (lowest error of the five methods tested) with N = 5,000 scenarios for standard reporting (PFE99 relative standard error about 1\% at the worst-case date), N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
 \item Dates: standard market pillar dates (O/N to 10Y) with every trade's own reset and maturity date forced onto the grid.
-\item Mean reversion: a = 0.0167 for USD from the swaption cube; JPY reuses the USD value because real JPY volatility rises with tenor (two independent sources).
+\item Mean reversion: a = 0.0167 for USD from the swaption cube; for JPY the lower bound a = 0.001, because real JPY volatility rises with tenor (three independent sources, including the full daily OIS history).
 \item JPY: a negative-rate-capable Hull-White factor is built (sigma from real TONA; correlation with the USD rate calibrated at approximately zero) but does not yet drive JPY equity drift.
 \item The book is treated as uncollateralized (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical.
 \item CVA: unilateral regulatory CVA (MAR50.32) with counterparty spreads proxied from ICE BofA bond indices by an assumed BBB rating and 60\% LGD; SA-CVA capital from common-random-number bump sensitivities (Section 8).
@@ -205,9 +205,10 @@ USDJPY spot & yfinance & FX start value &  \\
 \rowcolor{gray!9}Volatilities (39) & Realised, 3 years of daily data & Diffusion size & No options data available; documented proxy \\
 Correlation matrix 39x39 & 613 dates where all series exist (inner join) & Cholesky / PCA & Verified positive semi-definite \\
 \rowcolor{gray!9}SOFR level history & FRED & Rate vol, USD-JPY correlation & From April 2018 \\
-JPY OIS curve, swaption cube, USDJPY forwards & Bloomberg one-time export, 2026-08-31 snapshot & JPY factor, JPY-USD differential & Licensed data: only derived quantities are reported \\
-\rowcolor{gray!9}TONA (JPY overnight rate) & Bank of Japan public API, daily from 1998 & JPY rate vol, USD-JPY correlation & Includes real negative-rate years \\
-JGB par yields 1Y-40Y & Japan Ministry of Finance, daily from 1974 & JPY mean-reversion test & Public \\
+JPY OIS par-rate history, 35 tenors, 2011-2026 & Bloomberg export provided by the project team (data/raw/sources/JPY.xlsx) & JPY curve, JPY factor volatility, JPY-USD differential, mean-reversion test & Licensed data: only derived quantities are reported \\
+\rowcolor{gray!9}USD and JPY swaption cubes, USDJPY forwards & Bloomberg one-time export, 2026-08-31 snapshot & USD mean reversion, cross-checks, FX forwards & Licensed data: only derived quantities are reported \\
+TONA (JPY overnight rate) & Bank of Japan public API, daily from 1998 & JPY rate vol, USD-JPY correlation & Includes real negative-rate years \\
+\rowcolor{gray!9}JGB par yields 1Y-40Y & Japan Ministry of Finance, daily from 1974 & JPY mean-reversion test & Public \\
 \bottomrule
 \end{longtable}}
 
@@ -317,6 +318,8 @@ Until recently JPY drift used r\_USD minus a constant differential. That cannot 
 \includegraphics[width=\linewidth]{figures/fig14.pdf}
 \caption{Real TONA history from the Bank of Japan: rates were at or below zero for most of 25 years, with 1995 negative daily fixings (2003 and 2016-2024). A model that floors at zero could not represent this.}
 \end{figure}
+The daily JPY OIS history provided by the project team (35 tenors, 3903 business days from October 2011) shows the same for the whole short end of the curve: the overnight call rate was negative on 2109 days, and OIS par rates out to five years were negative on 2340 days, with a minimum of -0.37\%.
+
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{figures/fig15.pdf}
@@ -327,11 +330,11 @@ Until recently JPY drift used r\_USD minus a constant differential. That cannot 
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{JPY factor parameter}} & \textbf{\textcolor{white}{Value}} & \textbf{\textcolor{white}{Source / status}} \\
 \endhead
-Curve & Real JPY OIS zero curve & Bloomberg snapshot 2026-08-31 \\
-\rowcolor{gray!9}sigma & 0.276\%/yr & REALISED TONA vol, 3y window: real Bank of Japan data (replaces an earlier swaption-implied 0.400\%) \\
-a (mean reversion) & 0.0167 & Fallback to the USD value: both real JPY calibrations gave a negative a (Section 6.2) \\
+Curve & JPY OIS zero curve, 2026-08-28 & Bootstrapped from the daily JPY OIS par history (project-team Bloomberg file); matches Bloomberg's own zero curve to within 1bp at all tenors \\
+\rowcolor{gray!9}sigma & 0.267\%/yr & Realised vol of the overnight call rate, 3y window, from the same OIS file (Bank of Japan TONA gives 0.276\%, consistent) \\
+a (mean reversion) & 0.0010 & Lower bound: all three real JPY calibrations gave a negative a (Section 6.2) \\
 \rowcolor{gray!9}USD-JPY rate-factor correlation & -0.040 & Calibrated from real SOFR vs TONA daily changes (n=1983, p=0.07): statistically zero \\
-Wired into simulate\_paths()? & NO (disclosed) & JPY equity/FX drift still uses r\_USD minus the constant differential (2.64\%, from real Bloomberg curves) \\
+Wired into simulate\_paths()? & NO (disclosed) & JPY equity/FX drift still uses r\_USD minus the constant differential (2.59\%, our USD curve minus the JPY OIS zero curve at one year) \\
 \bottomrule
 \end{longtable}}
 
@@ -374,7 +377,7 @@ Combined, 2,000 scenarios x 16 trades &  & $\sim$12 min projected & 93 s (7.7x) 
 \bottomrule
 \end{longtable}}
 
-Current measured cost for the 3,000-scenario reporting run: 2 s simulation of paths, 1239 s repricing (413 ms/scenario, including the extra MPOR look-ahead nodes).
+Current measured cost for the 3,000-scenario reporting run: 1 s simulation of paths, 682 s repricing (227 ms/scenario, including the extra MPOR look-ahead nodes).
 
 \subsection{Random numbers and variance reduction}
 Plain pseudo-random draws waste information: by chance a sample can cluster. Five sampling schemes sit behind one interface: \textbf{pseudo-random} (baseline), \textbf{antithetic} (each draw z paired with -z), \textbf{moment-matched} (rescale so the sample mean is 0 and std 1), \textbf{Sobol} (low-discrepancy quasi-random), and \textbf{Latin Hypercube} (each dimension split into equal-probability bins, one draw per bin).
@@ -459,7 +462,7 @@ So measuring vol at several tenors and regressing ln(vol) on tenor gives a. We t
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{figures/fig20.pdf}
-\caption{Left: USD SOFR-futures fit. Right: fitted a for each route. USD routes give sensible positive values; both JPY routes give a NEGATIVE a.}
+\caption{Left: USD SOFR-futures fit. Right: fitted a for each route. USD routes give sensible positive values; all three JPY routes give a NEGATIVE a.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2500\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3250\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.0750\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2500\linewidth-2\tabcolsep\relax}}
@@ -470,6 +473,7 @@ Swaption cube, USD (preferred) & Bloomberg ATM normal vol, 1M expiry, tenors 1Y-
 \rowcolor{gray!9}SOFR-futures vol decay, USD & 8 contracts, $\sim$2y Databento history & 0.0458 & 0.82 & cross-check (different instrument, higher a) \\
 Swaption cube, JPY & Bloomberg JPY OIS ATM vols (one snapshot) & -0.0374 & 0.84 & invalid (vol rises with tenor) \\
 \rowcolor{gray!9}JGB yield vol, JPY & MOF daily 1Y-30Y yields, 3y window & -0.0203 & 0.49 & invalid (vol rises with tenor) \\
+JPY OIS history, JPY (most complete) & Daily OIS par rates, 35 tenors, 2011-2026, 1Y-30Y vols, 3y window & -0.0261 & 0.62 & invalid (vol rises with tenor); lower bound a = 0.001 used \\
 \bottomrule
 \end{longtable}}
 
@@ -480,9 +484,11 @@ Swaption cube, JPY & Bloomberg JPY OIS ATM vols (one snapshot) & -0.0374 & 0.84 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{figures/fig21.pdf}
-\caption{Real realised JGB yield vol by tenor. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes.}
+\caption{Realised volatility of JPY rates by tenor from two independent real datasets. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes.}
 \end{figure}
-This is not bad data; it is a structural finding confirmed by two independent real sources (a 2026 swaption cube and 52 years of JGB yields). The plausible reason: for two decades the Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control) so short-tenor vol was suppressed while longer tenors moved more freely. A single-factor model with positive mean reversion cannot represent that shape, and a negative a would make the short rate diverge. \textbf{Choice:} reuse the USD value a = 0.0167 for the JPY factor and label it as a fallback. What would truly fix it is a two-factor or regime-dependent model, or a long history of the full JPY swap curve; this is listed under future work.
+This is not bad data; it is a structural finding confirmed by three independent real sources: the daily JPY OIS curve history (35 tenors, 2011 to 2026, provided by the project team and the most complete of the three), 52 years of JGB yields, and a 2026 swaption cube. The fitted a is negative for the OIS history in every window tested (1, 3, 5, 10 and 15 years, and since the end of negative rates in March 2024). One factor, the level, explains about 84\% of daily changes in the curve, and long rates move more than short rates. The plausible reason is that for two decades the Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control), so short-tenor volatility was suppressed while longer tenors moved more freely. A single mean-reverting Gaussian factor implies volatility that DEcreases with tenor, so it cannot represent this shape, and a negative a would make the short rate diverge.
+
+\textbf{Choice:} use the lowest admissible mean reversion, a = 0.0010, the Ho-Lee limit in which volatility is flat across tenors. This is the closest a Gaussian factor can get to the data, and it replaces our earlier use of the USD value. A two-factor or regime-dependent model would be needed to match the shape, and is listed under future work.
 
 \textbf{Practical impact:} small. JPY affects two trades, the JPY factor is not yet wired into the drift, and the USD parameters are the ones used for discounting the whole book.
 
@@ -646,9 +652,9 @@ The counterparty identities and ratings were not provided, so these are explicit
 \rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{CVA (USD)}} & \textbf{\textcolor{white}{Share of total}} \\
 \endhead
 CPTY\_A & 5,403 & 3\% \\
-\rowcolor{gray!9}CPTY\_B & 3,702 & 2\% \\
+\rowcolor{gray!9}CPTY\_B & 3,701 & 2\% \\
 CPTY\_C & 201,291 & 96\% \\
-\rowcolor{gray!9}Portfolio & 210,396 & 100\% \\
+\rowcolor{gray!9}Portfolio & 210,394 & 100\% \\
 \bottomrule
 \end{longtable}}
 
@@ -657,12 +663,12 @@ CPTY\_C & 201,291 & 96\% \\
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Rating}} & \textbf{\textcolor{white}{Portfolio CVA (USD)}} & \textbf{\textcolor{white}{Multiple of BBB}} \\
 \endhead
-AAA & 89,023 & 0.42x \\
-\rowcolor{gray!9}AA & 125,895 & 0.60x \\
-A & 143,238 & 0.68x \\
-\rowcolor{gray!9}BBB & 210,396 & 1.00x \\
-BB & 325,034 & 1.54x \\
-\rowcolor{gray!9}B & 588,063 & 2.80x \\
+AAA & 89,022 & 0.42x \\
+\rowcolor{gray!9}AA & 125,894 & 0.60x \\
+A & 143,237 & 0.68x \\
+\rowcolor{gray!9}BBB & 210,394 & 1.00x \\
+BB & 325,032 & 1.54x \\
+\rowcolor{gray!9}B & 588,058 & 2.80x \\
 \bottomrule
 \end{longtable}}
 
@@ -707,16 +713,16 @@ Equity names are assigned to Basel buckets by size (market capitalisation of at 
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Risk class}} & \textbf{\textcolor{white}{Capital K (USD)}} \\
 \endhead
-ir delta & 82,624 \\
+ir delta & 82,625 \\
 \rowcolor{gray!9}ir vega & 89 \\
 fx delta & 2,479 \\
 \rowcolor{gray!9}fx vega & 0 \\
-ccs delta & 1,729,848 \\
-\rowcolor{gray!9}eq delta & 105,515 \\
+ccs delta & 1,729,841 \\
+\rowcolor{gray!9}eq delta & 105,510 \\
 eq vega & 6,637 \\
-\rowcolor{gray!9}Total SA-CVA capital requirement (m\_CVA = 1) & 1,927,192 \\
-Risk-weighted assets (12.5 x capital) & 24,089,897 \\
-\rowcolor{gray!9}Total if the pre-2023 multiplier m\_CVA = 1.25 applied & 2,408,990 \\
+\rowcolor{gray!9}Total SA-CVA capital requirement (m\_CVA = 1) & 1,927,180 \\
+Risk-weighted assets (12.5 x capital) & 24,089,749 \\
+\rowcolor{gray!9}Total if the pre-2023 multiplier m\_CVA = 1.25 applied & 2,408,975 \\
 \bottomrule
 \end{longtable}}
 
@@ -773,7 +779,7 @@ An independent standard method: portfolio dollar-deltas by bump-and-reprice with
 Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is \$174.0M. Raising equity volatility by 50\% increases it to \$189.8M (+9.1\%); a +100bp parallel shift of the USD curve to \$230.5M (+32.5\%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50\% to \$183.4M (+5.4\%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50\% matters about ten times more than the sampling error at the recommended path count.
 
 \subsection{Statistical and unit tests}
-69 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, and the credit-spread proxy curves.
+76 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, and the credit-spread proxy curves.
 
 \subsection{Greeks (sensitivities)}
 Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
@@ -807,7 +813,7 @@ Each defect was identified by checking against an independent source, a hand cal
 5 & Stale cached exposure file gave false 7-15\% `discrepancies' & Root cause: real overnight moves (one name has 76\% vol); check now uses the in-memory snapshot \\
 \rowcolor{gray!9}6 & Residual 0.02-0.03\% self-check gap & Different curve object; both sides now use the identical exact analytic curve: 0.0000\% \\
 7 & Tail-convergence study initially run at 99.9\% rather than the specified 99\% & Re-run at 99\%; tests and documentation updated \\
-\rowcolor{gray!9}8 & JPY mean-reversion fit gave a negative a & Diagnosed as a real structural property (two sources); guarded with documented fallback \\
+\rowcolor{gray!9}8 & JPY mean-reversion fit gave a negative a & Diagnosed as a real structural property (three sources); lower bound a = 0.001 used \\
 \bottomrule
 \end{longtable}}
 
@@ -819,7 +825,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \item \textbf{GBM underestimates fat tails}, most relevant for PFE99 on high-vol names.
 \item \textbf{Single-factor USD rates}: no curve twists independent of the level.
 \item \textbf{Risk-neutral drift}: not a real-world forecast; regulatory PFE may need physical drift.
-\item \textbf{JPY:} mean reversion is a fallback and the JPY rate does not yet drive JPY equity/FX drift (two trades).
+\item \textbf{JPY:} mean reversion is at its lower bound (the data give a negative value) and the JPY rate does not yet drive JPY equity/FX drift (two trades).
 \item \textbf{Model risk vs sampling risk:} above a few thousand scenarios the uncertainty is in the models, not the random numbers.
 \item \textbf{Margin modelling is partial:} the collateral illustration is variation-margin only, uses a 10-business-day window on a US federal holiday calendar, and has no initial margin (SIMM) or minimum transfer amount.
 \item \textbf{No wrong-way risk or credit dynamics of the counterparty itself}; this is exposure, not a loss estimate (that needs PD and LGD).
@@ -827,7 +833,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \section{Conclusions and recommendations}
 \begin{itemize}
-\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 69 tests) and reproducible with a single command per stage.
+\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 76 tests) and reproducible with a single command per stage.
 \item The uncollateralized book has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
 \item Risk is short-dated (about four months) and concentrated (one trade, one counterparty).
 \item CVA on the uncollateralized book is about \$210k at a BBB proxy (\$126k at AA to \$325k at BB); the SA-CVA requirement is \$1.93M (RWA \$24.1M), dominated by counterparty credit spread risk.
@@ -888,14 +894,15 @@ Equity spots, dividends, 3y price history (37 names) & yfinance (Yahoo Finance) 
 SOFR level history & FRED (series SOFR) & Public CSV & Rate volatility; USD-JPY rate correlation & From April 2018 \\
 \rowcolor{gray!9}TONA (JPY overnight rate), 1998 to date & Bank of Japan Time-Series Data Search API (DB FM01, series STRDCLUCON) & Public API & JPY rate volatility; USD-JPY correlation; negative-rate evidence & Public \\
 JGB par yields 1Y-40Y, 1974 to date & Japan Ministry of Finance & Public CSV (browser-like request headers) & Test of JPY mean reversion & Public \\
-\rowcolor{gray!9}USD swaption vol cube; JPY OIS curve and swaption vols; USDJPY forward points & Bloomberg one-time export, snapshot 2026-08-31 & Provided by the project team & USD mean reversion; JPY factor; JPY-USD rate differential; FX forwards & Licensed: derived numbers only in the report \\
-Credit spreads by rating and maturity shape & FRED: ICE BofA US option-adjusted spread indices & Public CSV & Counterparty credit spread proxy for CVA & Public \\
-\rowcolor{gray!9}SA-CVA parameters and formulas & BIS, Basel Framework MAR50 (July 2020 revisions) & Public PDF & Risk weights, correlations, aggregation & Public \\
-Equity sector, country, market cap & yfinance & Public API & SA-CVA equity buckets & Live \\
+\rowcolor{gray!9}JPY OIS par-rate history (MUTKCALM overnight plus 35 OIS tenors, 5 Oct 2011 to 18 Sep 2026) & Bloomberg (tickers JYSO*, MUTKCALM Index) & Provided by the project team, saved as data/raw/sources/JPY.xlsx (parsed copy jpy\_ois\_history.csv) & JPY zero curve (bootstrapped), JPY volatility, JPY-USD differential, mean-reversion test & Licensed: derived numbers only in the report \\
+USD and JPY swaption cubes; USDJPY forward points & Bloomberg one-time export, snapshot 2026-08-31 & Provided by the project team & USD mean reversion; JPY cross-check; FX forwards & Licensed: derived numbers only in the report \\
+\rowcolor{gray!9}Credit spreads by rating and maturity shape & FRED: ICE BofA US option-adjusted spread indices & Public CSV & Counterparty credit spread proxy for CVA & Public \\
+SA-CVA parameters and formulas & BIS, Basel Framework MAR50 (July 2020 revisions) & Public PDF & Risk weights, correlations, aggregation & Public \\
+\rowcolor{gray!9}Equity sector, country, market cap & yfinance & Public API & SA-CVA equity buckets & Live \\
 \bottomrule
 \end{longtable}}
 
-Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60\%), MPOR (10 business days), the uncollateralized status of the book, the correlation structure being static, and the JPY mean-reversion fallback to the USD value.
+Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60\%), MPOR (10 business days), the uncollateralized status of the book, the correlation structure being static, and the JPY mean reversion being set at its lower bound (a = 0.001) because every calibration route gives a negative value.
 
 \section{Methodology register}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -905,9 +912,9 @@ Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60\
 \endhead
 USD curve & Bootstrap of SOFR futures: implied forward rate to chained discount factors, ACT/360 & 33 live contracts, about 6.3y coverage, flat extrapolation beyond & market/sofr.py \\
 \rowcolor{gray!9}USD rates & One-factor Hull-White, shifted Ornstein-Uhlenbeck, exact transition, analytic bond price & sigma 0.63\% (realised SOFR); a 0.0167 (swaption cube) & models/rates.py \\
-Mean reversion & Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks & USD 0.0167; futures 0.0458; JPY invalid, fallback to USD & models/hw\_calibration.py \\
-\rowcolor{gray!9}JPY factor & Second Hull-White factor on the real JPY OIS curve; realised TONA volatility & sigma 0.276\%; USD-JPY rate correlation -0.04 (not significant) & models/calibration.py \\
-Equities and FX & Correlated geometric Brownian motion, exact log step, drift r-q & 3y realised vols; JPY names via r\_USD minus differential (2.64\%) & models/equity\_fx.py \\
+Mean reversion & Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks & USD 0.0167; futures 0.0458; JPY: all routes negative, lower bound 0.001 used & models/hw\_calibration.py \\
+\rowcolor{gray!9}JPY factor & Second Hull-White factor; curve bootstrapped from the JPY OIS par history; overnight volatility from the same file & sigma 0.267\%; a = 0.001; USD-JPY rate correlation -0.04 (not significant) & models/calibration.py, market/jpy\_ois.py \\
+Equities and FX & Correlated geometric Brownian motion, exact log step, drift r-q & 3y realised vols; JPY names via r\_USD minus differential (about 2.6\%) & models/equity\_fx.py \\
 \rowcolor{gray!9}Correlation & Static 39x39 matrix (613 aligned days), Cholesky; optional PCA factor model & 5 factors explain about 46\% of variance & models/equity\_factor\_model.py, simulation/engine.py \\
 Random numbers & Latin Hypercube sampling & N = 5,000 recommended; 3,000 used for the figures & simulation/random\_numbers.py \\
 \rowcolor{gray!9}Dates & Market pillar dates plus every trade event date & 42 nodes for this book & simulation/engine.py \\
@@ -917,7 +924,7 @@ Collateral (hypothetical) & MPOR look-ahead on the same paths, full variation ma
 \rowcolor{gray!9}CVA & Regulatory CVA, MAR50.32; pathwise discounting; credit-triangle PD from spreads & LGD 60\%; BBB proxy; unilateral; independent & exposure/cva.py, models/credit.py \\
 SA-CVA & CVA bump sensitivities with common random numbers, MAR50 aggregation & 1,000 scenarios; 21 simulations; m\_CVA = 1 & exposure/sa\_cva.py, scripts/run\_sa\_cva.py \\
 \rowcolor{gray!9}Precision & Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation & Relative SE of PFE99 about 1.0\% at N = 5,000 at the worst date & scripts/convergence\_study\_tail.py \\
-Validation & t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests & 69 automated tests & scripts/, tests/ \\
+Validation & t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests & 76 automated tests & scripts/, tests/ \\
 \bottomrule
 \end{longtable}}
 
@@ -932,7 +939,7 @@ market/ & sofr, equities, fx, vols, correlations (data pulls and inputs); boj, m
 simulation/ & engine (grid, paths, MPOR nodes), random\_numbers (five sampling schemes), parallel (multiprocessing repricing) \\
 \rowcolor{gray!9}exposure/ & aggregate (netting, EE, median PFE, PFE, MPE), collateral (MPOR-shifted), cva (regulatory CVA), sa\_cva (Basel aggregation) \\
 scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_report\_data, build\_report (LaTeX), build\_exec\_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks \\
-\rowcolor{gray!9}tests/ & 69 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA \\
+\rowcolor{gray!9}tests/ & 76 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA \\
 \bottomrule
 \end{longtable}}
 
@@ -944,7 +951,7 @@ python scripts/build_report.py                            # this PDF
 python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles
 python scripts/run_mpor_comparison.py                     # hypothetical collateral demo
 python scripts/run_sa_cva.py --scenarios 1000             # CVA and SA-CVA capital (21 runs)
-python -m pytest tests                                    # 69 tests
+python -m pytest tests                                    # 76 tests
 \end{verbatim}}
 {\small Key modules: src/risk\_engine/models (rates, equity\_fx, calibration, hw\_calibration, equity\_factor\_model), simulation (engine, random\_numbers, parallel), exposure (aggregate, collateral), market (sofr, boj, mof\_jgb, bloomberg, vols, correlations).}
 

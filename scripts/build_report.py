@@ -356,10 +356,11 @@ def fig_usd_jpy_rates():
 
 def fig_jgb_vol():
     from risk_engine.market.mof_jgb import fetch_jgb_yield_history, TENOR_COLUMNS
+    from risk_engine.market import jpy_ois
     y = fetch_jgb_yield_history()
     ten = {"1Y": 1, "2Y": 2, "3Y": 3, "4Y": 4, "5Y": 5, "6Y": 6, "7Y": 7, "8Y": 8, "9Y": 9, "10Y": 10,
            "15Y": 15, "20Y": 20, "25Y": 25, "30Y": 30, "40Y": 40}
-    fig, ax = plt.subplots(figsize=(6.0, 2.7))
+    fig, ax = plt.subplots(1, 2, figsize=(7.4, 2.7), sharey=True)
     end = y.index.max()
     for yrs, c in ((1, ORANGE), (3, NAVY), (10, TEAL)):
         w = y[(y.index > end - pd.DateOffset(years=yrs)) & (y.index <= end)]
@@ -368,9 +369,13 @@ def fig_jgb_vol():
             d = w[col].dropna().diff().dropna()
             if len(d) > 30:
                 xs.append(ten[col]); vs.append(d.std() * np.sqrt(252) * 1e4)
-        ax.plot(xs, vs, marker="o", ms=3, color=c, label=f"{yrs}y window")
-    ax.set_xlabel("JGB tenor (years)"); ax.set_ylabel("realised normal vol (bp/yr)"); ax.legend()
-    ax.set_title("Real JGB yield vol RISES with tenor -- the opposite of USD's decay")
+        ax[0].plot(xs, vs, marker="o", ms=3, color=c, label="%dy window" % yrs)
+        v = jpy_ois.realized_vol_by_tenor(date(2026, 8, 28), yrs)
+        ax[1].plot(list(v), [x * 1e4 for x in v.values()], marker="o", ms=3, color=c, label="%dy window" % yrs)
+    ax[0].set_title("JGB par yields (Ministry of Finance)"); ax[1].set_title("JPY OIS par rates (daily history)")
+    for a_ in ax:
+        a_.set_xlabel("tenor (years)")
+    ax[0].set_ylabel("realised normal vol (bp/yr)"); ax[0].legend()
     return fig
 
 
@@ -386,19 +391,21 @@ def fig_hw_fit(calib):
     ax[0].set_xlabel("average tenor (years)"); ax[0].set_ylabel("vol (bp/yr)"); ax[0].legend()
     ax[0].set_title("Futures-vol-decay calibration (USD, real history)")
     sw = json.load(open(os.path.join(PROC, "hull_white_calibration_swaption.json")))
-    labs = ["futures proxy\n(USD)", "swaption cube\n(USD)", "swaption cube\n(JPY)", "JGB yields\n(JPY)"]
+    labs = ["futures\nUSD", "swaption\nUSD", "swaption\nJPY", "JGB\nJPY", "OIS hist.\nJPY"]
     from risk_engine.models.hw_calibration import calibrate_jpy_mean_reversion_from_jgb_yields
     jg = calibrate_jpy_mean_reversion_from_jgb_yields(date(2026, 8, 28))
     from risk_engine.models.hw_calibration import calibrate_mean_reversion_from_swaptions
     sj = calibrate_mean_reversion_from_swaptions(currency="JPY")
-    vals = [h["a"], sw["a"], sj["a"], jg["a"]]
-    ax[1].bar(range(4), vals, color=[NAVY, TEAL, ORANGE, ORANGE])
+    from risk_engine.models.hw_calibration import calibrate_jpy_mean_reversion_from_ois
+    oi = calibrate_jpy_mean_reversion_from_ois(date(2026, 8, 28))
+    vals = [h["a"], sw["a"], sj["a"], jg["a"], oi["a"]]
+    ax[1].bar(range(5), vals, color=[NAVY, TEAL, ORANGE, ORANGE, ORANGE])
     ax[1].axhline(0, color="k", lw=1)
-    ax[1].set_xticks(range(4)); ax[1].set_xticklabels(labs, fontsize=6.5)
+    ax[1].set_xticks(range(5)); ax[1].set_xticklabels(labs, fontsize=6.5)
     ax[1].set_title("Fitted mean reversion a: USD sane, JPY negative")
     for i, v in enumerate(vals):
         ax[1].text(i, 0.003 if v < 0 else v + 0.002, f"{v:.3f}", ha="center", fontsize=7)
-    return fig, h, sw, sj, jg
+    return fig, h, sw, sj, jg, oi
 
 
 def fig_grid(D):
@@ -674,7 +681,7 @@ def main():
         "Correlation: one static 39x39 matrix estimated from 613 aligned daily returns and applied through a Cholesky factor; a PCA factor model (5 factors) is provided as an alternative.",
         "Sampling and size: Latin Hypercube sampling (lowest error of the five methods tested) with N = 5,000 scenarios for standard reporting (PFE99 relative standard error about 1% at the worst-case date), N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
         "Dates: standard market pillar dates (O/N to 10Y) with every trade's own reset and maturity date forced onto the grid.",
-        "Mean reversion: a = 0.0167 for USD from the swaption cube; JPY reuses the USD value because real JPY volatility rises with tenor (two independent sources).",
+        "Mean reversion: a = 0.0167 for USD from the swaption cube; for JPY the lower bound a = 0.001, because real JPY volatility rises with tenor (three independent sources, including the full daily OIS history).",
         "JPY: a negative-rate-capable Hull-White factor is built (sigma from real TONA; correlation with the USD rate calibrated at approximately zero) but does not yet drive JPY equity drift.",
         "The book is treated as uncollateralized (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical.",
         "CVA: unilateral regulatory CVA (MAR50.32) with counterparty spreads proxied from ICE BofA bond indices by an assumed BBB rating and 60% LGD; SA-CVA capital from common-random-number bump sensitivities (Section 8)."]))
@@ -764,7 +771,8 @@ def main():
              ["Volatilities (39)", "Realised, 3 years of daily data", "Diffusion size", "No options data available; documented proxy"],
              ["Correlation matrix 39x39", "613 dates where all series exist (inner join)", "Cholesky / PCA", "Verified positive semi-definite"],
              ["SOFR level history", "FRED", "Rate vol, USD-JPY correlation", "From April 2018"],
-             ["JPY OIS curve, swaption cube, USDJPY forwards", "Bloomberg one-time export, 2026-08-31 snapshot", "JPY factor, JPY-USD differential", "Licensed data: only derived quantities are reported"],
+             ["JPY OIS par-rate history, 35 tenors, 2011-2026", "Bloomberg export provided by the project team (data/raw/sources/JPY.xlsx)", "JPY curve, JPY factor volatility, JPY-USD differential, mean-reversion test", "Licensed data: only derived quantities are reported"],
+             ["USD and JPY swaption cubes, USDJPY forwards", "Bloomberg one-time export, 2026-08-31 snapshot", "USD mean reversion, cross-checks, FX forwards", "Licensed data: only derived quantities are reported"],
              ["TONA (JPY overnight rate)", "Bank of Japan public API, daily from 1998", "JPY rate vol, USD-JPY correlation", "Includes real negative-rate years"],
              ["JGB par yields 1Y-40Y", "Japan Ministry of Finance, daily from 1974", "JPY mean-reversion test", "Public"]],
             widths=[1.5, 2.2, 1.8, 2.2], font=7.3))
@@ -838,15 +846,19 @@ def main():
           "(<font face='Courier'>build_jpy_hull_white</font>): it starts from the real JPY OIS curve and, being Gaussian, has <b>no floor at zero</b>."))
     fig_t, tona = fig_tona()
     add(doc.figure(fig_t, "Real TONA history from the Bank of Japan: rates were at or below zero for most of 25 years, with %d negative daily fixings (2003 and 2016-2024). A model that floors at zero could not represent this." % int((tona < 0).sum())))
+    from risk_engine.market import jpy_ois
+    _h = jpy_ois.load_jpy_ois_history()
+    _cols = [c for c in _h.columns if c.startswith("JYSO") and jpy_ois.tenor_years(c) <= 5.0]
+    add(P("The daily JPY OIS history provided by the project team (35 tenors, %d business days from October 2011) shows the same for the whole short end of the curve: the overnight call rate was negative on %d days, and OIS par rates out to five years were negative on %d days, with a minimum of %.2f%%." % (len(_h), int((_h["MUTKCALM"] < 0).sum()), int((_h[_cols] < 0).any(axis=1).sum()), _h.min().min())))
     fg, frac = fig_ou_negative()
     add(doc.figure(fg, "Demonstration of the capability: Hull-White started from a synthetic -0.10%% flat curve. %.0f%% of simulated points are negative and nothing is clipped. (Our only real JPY curve snapshot, Aug 2026, is positive after BOJ hikes, so the negative case is shown synthetically.)" % (frac * 100)))
     hj = meta["hw_jpy"]
     add(tbl([["JPY factor parameter", "Value", "Source / status"],
-             ["Curve", "Real JPY OIS zero curve", "Bloomberg snapshot 2026-08-31"],
-             ["sigma", "%.3f%%/yr" % (hj["sigma"] * 100), "REALISED TONA vol, 3y window: real Bank of Japan data (replaces an earlier swaption-implied 0.400%)"],
-             ["a (mean reversion)", "%.4f" % hj["a"], "Fallback to the USD value: both real JPY calibrations gave a negative a (Section 6.2)"],
+             ["Curve", "JPY OIS zero curve, 2026-08-28", "Bootstrapped from the daily JPY OIS par history (project-team Bloomberg file); matches Bloomberg's own zero curve to within 1bp at all tenors"],
+             ["sigma", "%.3f%%/yr" % (hj["sigma"] * 100), "Realised vol of the overnight call rate, 3y window, from the same OIS file (Bank of Japan TONA gives 0.276%, consistent)"],
+             ["a (mean reversion)", "%.4f" % hj["a"], "Lower bound: all three real JPY calibrations gave a negative a (Section 6.2)"],
              ["USD-JPY rate-factor correlation", "%+.3f" % meta["usd_jpy_corr"], "Calibrated from real SOFR vs TONA daily changes (n=%d, p=%.2f): statistically zero" % (meta["usd_jpy_corr_detail"]["n_obs"], meta["usd_jpy_corr_detail"]["p_value"])],
-             ["Wired into simulate_paths()?", "NO (disclosed)", "JPY equity/FX drift still uses r_USD minus the constant differential (%.2f%%, from real Bloomberg curves)" % (meta["jpy_usd_rate_diff"] * 100)]],
+             ["Wired into simulate_paths()?", "NO (disclosed)", "JPY equity/FX drift still uses r_USD minus the constant differential (%.2f%%, our USD curve minus the JPY OIS zero curve at one year)" % (meta["jpy_usd_rate_diff"] * 100)]],
             widths=[1.8, 1.4, 4.5]))
     add(Spacer(1, 4))
     fg2, df_, d_ = fig_usd_jpy_rates()
@@ -931,13 +943,14 @@ def main():
           "volatilities. Hull-White predicts that the volatility of a forward rate at maturity T decays with time to maturity:"))
     add(code("sigma_f(t, T) = sigma * exp( -a (T - t) )      =>   ln(vol) = ln(sigma) - a * tenor   (line, slope = -a)"))
     add(P("So measuring vol at several tenors and regressing ln(vol) on tenor gives a. We tried three real data routes, in order of preference:"))
-    fg, h, sw, sj, jg = fig_hw_fit(calib)
-    add(doc.figure(fg, "Left: USD SOFR-futures fit. Right: fitted a for each route. USD routes give sensible positive values; both JPY routes give a NEGATIVE a."))
+    fg, h, sw, sj, jg, oi = fig_hw_fit(calib)
+    add(doc.figure(fg, "Left: USD SOFR-futures fit. Right: fitted a for each route. USD routes give sensible positive values; all three JPY routes give a NEGATIVE a."))
     add(tbl([["Route", "Data", "a", "R2", "Verdict"],
              ["Swaption cube, USD (preferred)", "Bloomberg ATM normal vol, 1M expiry, tenors 1Y-15Y", "%.4f" % sw["a"], "%.2f" % sw["r_squared"], "USED for USD"],
              ["SOFR-futures vol decay, USD", "8 contracts, ~2y Databento history", "%.4f" % h["a"], "%.2f" % h["r_squared"], "cross-check (different instrument, higher a)"],
              ["Swaption cube, JPY", "Bloomberg JPY OIS ATM vols (one snapshot)", "%.4f" % sj["a"], "%.2f" % sj["r_squared"], "invalid (vol rises with tenor)"],
-             ["JGB yield vol, JPY", "MOF daily 1Y-30Y yields, 3y window", "%.4f" % jg["a"], "%.2f" % jg["r_squared"], "invalid (vol rises with tenor)"]],
+             ["JGB yield vol, JPY", "MOF daily 1Y-30Y yields, 3y window", "%.4f" % jg["a"], "%.2f" % jg["r_squared"], "invalid (vol rises with tenor)"],
+             ["JPY OIS history, JPY (most complete)", "Daily OIS par rates, 35 tenors, 2011-2026, 1Y-30Y vols, 3y window", "%.4f" % oi["a"], "%.2f" % oi["r_squared"], "invalid (vol rises with tenor); lower bound a = 0.001 used"]],
             widths=[2.0, 2.6, 0.8, 0.6, 2.0]))
     add(Spacer(1, 5))
     add(P("6.1 Why the two USD numbers differ", H2))
@@ -945,11 +958,9 @@ def main():
           "The swaption route is the industry standard and is used; the gap is itself a measure of model uncertainty and motivates the sensitivity test."))
     add(P("6.2 Why JPY does not fit, and what we did", H2))
     fj = fig_jgb_vol()
-    add(doc.figure(fj, "Real realised JGB yield vol by tenor. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes."))
-    add(P("This is not bad data; it is a structural finding confirmed by two independent real sources (a 2026 swaption cube and 52 years of JGB yields). The plausible reason: for two decades the "
-          "Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control) so short-tenor vol was suppressed while longer tenors moved more freely. A single-factor model with "
-          "positive mean reversion cannot represent that shape, and a negative a would make the short rate diverge. <b>Choice:</b> reuse the USD value a = %.4f for the JPY factor and label it as a "
-          "fallback. What would truly fix it is a two-factor or regime-dependent model, or a long history of the full JPY swap curve; this is listed under future work." % meta["hw_a"]))
+    add(doc.figure(fj, "Realised volatility of JPY rates by tenor from two independent real datasets. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes."))
+    add(P("This is not bad data; it is a structural finding confirmed by three independent real sources: the daily JPY OIS curve history (35 tenors, 2011 to 2026, provided by the project team and the most complete of the three), 52 years of JGB yields, and a 2026 swaption cube. The fitted a is negative for the OIS history in every window tested (1, 3, 5, 10 and 15 years, and since the end of negative rates in March 2024). One factor, the level, explains about 84% of daily changes in the curve, and long rates move more than short rates. The plausible reason is that for two decades the Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control), so short-tenor volatility was suppressed while longer tenors moved more freely. A single mean-reverting Gaussian factor implies volatility that DEcreases with tenor, so it cannot represent this shape, and a negative a would make the short rate diverge."))
+    add(P("<b>Choice:</b> use the lowest admissible mean reversion, a = %.4f, the Ho-Lee limit in which volatility is flat across tenors. This is the closest a Gaussian factor can get to the data, and it replaces our earlier use of the USD value. A two-factor or regime-dependent model would be needed to match the shape, and is listed under future work." % meta["hw_jpy"]["a"]))
     add(P("<b>Practical impact:</b> small. JPY affects two trades, the JPY factor is not yet wired into the drift, and the USD parameters are the ones used for discounting the whole book."))
     add(PageBreak())
 
@@ -1120,7 +1131,7 @@ def main():
     add(P("10.4 Sensitivity (stress) test", H2))
     add(P("Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is $174.0M. Raising equity volatility by 50% increases it to $189.8M (+9.1%); a +100bp parallel shift of the USD curve to $230.5M (+32.5%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50% to $183.4M (+5.4%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50% matters about ten times more than the sampling error at the recommended path count."))
     add(P("10.5 Statistical and unit tests", H2))
-    add(P("69 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target "
+    add(P("76 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target "
           "correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance "
           "preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, and the credit-spread proxy curves."))
     add(P("10.6 Greeks (sensitivities)", H2))
@@ -1144,7 +1155,7 @@ def main():
              ["5", "Stale cached exposure file gave false 7-15% 'discrepancies'", "Root cause: real overnight moves (one name has 76% vol); check now uses the in-memory snapshot"],
              ["6", "Residual 0.02-0.03% self-check gap", "Different curve object; both sides now use the identical exact analytic curve: 0.0000%"],
              ["7", "Tail-convergence study initially run at 99.9% rather than the specified 99%", "Re-run at 99%; tests and documentation updated"],
-             ["8", "JPY mean-reversion fit gave a negative a", "Diagnosed as a real structural property (two sources); guarded with documented fallback"]],
+             ["8", "JPY mean-reversion fit gave a negative a", "Diagnosed as a real structural property (three sources); lower bound a = 0.001 used"]],
             widths=[0.3, 3.3, 4.2], font=7.4))
     add(P("12. Assumptions and limitations", H1))
     add(B(["<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.4).",
@@ -1153,13 +1164,13 @@ def main():
            "<b>GBM underestimates fat tails</b>, most relevant for PFE99 on high-vol names.",
            "<b>Single-factor USD rates</b>: no curve twists independent of the level.",
            "<b>Risk-neutral drift</b>: not a real-world forecast; regulatory PFE may need physical drift.",
-           "<b>JPY:</b> mean reversion is a fallback and the JPY rate does not yet drive JPY equity/FX drift (two trades).",
+           "<b>JPY:</b> mean reversion is at its lower bound (the data give a negative value) and the JPY rate does not yet drive JPY equity/FX drift (two trades).",
            "<b>Model risk vs sampling risk:</b> above a few thousand scenarios the uncertainty is in the models, not the random numbers.",
            "<b>Margin modelling is partial:</b> the collateral illustration is variation-margin only, uses a 10-business-day window on a US federal holiday calendar, and has no initial margin (SIMM) or minimum transfer amount.",
            "<b>No wrong-way risk or credit dynamics of the counterparty itself</b>; this is exposure, not a loss estimate (that needs PD and LGD).",
            "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data); acceptable for shape and level, disclosed."]))
     add(P("13. Conclusions and recommendations", H1))
-    add(B([f"The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 69 tests) and reproducible with a single command per stage.",
+    add(B([f"The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 76 tests) and reproducible with a single command per stage.",
            f"The uncollateralized book has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median PFE of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
            "Risk is short-dated (about four months) and concentrated (one trade, one counterparty).",
            f"CVA on the uncollateralized book is about ${Rc0['cva_total']/1e3:,.0f}k at a BBB proxy (${Rc0['cva_vs_rating']['AA']/1e3:,.0f}k at AA to ${Rc0['cva_vs_rating']['BB']/1e3:,.0f}k at BB); the SA-CVA requirement is ${Rc0['K_sa_cva']/1e6:.2f}M (RWA ${Rc0['RWA']/1e6:.1f}M), dominated by counterparty credit spread risk.",
@@ -1207,19 +1218,20 @@ def main():
              ["SOFR level history", "FRED (series SOFR)", "Public CSV", "Rate volatility; USD-JPY rate correlation", "From April 2018"],
              ["TONA (JPY overnight rate), 1998 to date", "Bank of Japan Time-Series Data Search API (DB FM01, series STRDCLUCON)", "Public API", "JPY rate volatility; USD-JPY correlation; negative-rate evidence", "Public"],
              ["JGB par yields 1Y-40Y, 1974 to date", "Japan Ministry of Finance", "Public CSV (browser-like request headers)", "Test of JPY mean reversion", "Public"],
-             ["USD swaption vol cube; JPY OIS curve and swaption vols; USDJPY forward points", "Bloomberg one-time export, snapshot 2026-08-31", "Provided by the project team", "USD mean reversion; JPY factor; JPY-USD rate differential; FX forwards", "Licensed: derived numbers only in the report"],
+             ["JPY OIS par-rate history (MUTKCALM overnight plus 35 OIS tenors, 5 Oct 2011 to 18 Sep 2026)", "Bloomberg (tickers JYSO*, MUTKCALM Index)", "Provided by the project team, saved as data/raw/sources/JPY.xlsx (parsed copy jpy_ois_history.csv)", "JPY zero curve (bootstrapped), JPY volatility, JPY-USD differential, mean-reversion test", "Licensed: derived numbers only in the report"],
+             ["USD and JPY swaption cubes; USDJPY forward points", "Bloomberg one-time export, snapshot 2026-08-31", "Provided by the project team", "USD mean reversion; JPY cross-check; FX forwards", "Licensed: derived numbers only in the report"],
              ["Credit spreads by rating and maturity shape", "FRED: ICE BofA US option-adjusted spread indices", "Public CSV", "Counterparty credit spread proxy for CVA", "Public"],
              ["SA-CVA parameters and formulas", "BIS, Basel Framework MAR50 (July 2020 revisions)", "Public PDF", "Risk weights, correlations, aggregation", "Public"],
              ["Equity sector, country, market cap", "yfinance", "Public API", "SA-CVA equity buckets", "Live"]],
             widths=[1.7, 2.0, 1.6, 2.2, 1.2], font=7.0))
-    add(P("Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60%), MPOR (10 business days), the uncollateralized status of the book, the correlation structure being static, and the JPY mean-reversion fallback to the USD value."))
+    add(P("Assumptions that are not sourced from data: counterparty ratings (BBB), LGD (60%), MPOR (10 business days), the uncollateralized status of the book, the correlation structure being static, and the JPY mean reversion being set at its lower bound (a = 0.001) because every calibration route gives a negative value."))
     add(P("Appendix D. Methodology register", H1))
     add(tbl([["Component", "Method", "Key parameters", "Where (code)"],
              ["USD curve", "Bootstrap of SOFR futures: implied forward rate to chained discount factors, ACT/360", "33 live contracts, about 6.3y coverage, flat extrapolation beyond", "market/sofr.py"],
              ["USD rates", "One-factor Hull-White, shifted Ornstein-Uhlenbeck, exact transition, analytic bond price", "sigma 0.63% (realised SOFR); a 0.0167 (swaption cube)", "models/rates.py"],
-             ["Mean reversion", "Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks", "USD 0.0167; futures 0.0458; JPY invalid, fallback to USD", "models/hw_calibration.py"],
-             ["JPY factor", "Second Hull-White factor on the real JPY OIS curve; realised TONA volatility", "sigma 0.276%; USD-JPY rate correlation -0.04 (not significant)", "models/calibration.py"],
-             ["Equities and FX", "Correlated geometric Brownian motion, exact log step, drift r-q", "3y realised vols; JPY names via r_USD minus differential (2.64%)", "models/equity_fx.py"],
+             ["Mean reversion", "Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks", "USD 0.0167; futures 0.0458; JPY: all routes negative, lower bound 0.001 used", "models/hw_calibration.py"],
+             ["JPY factor", "Second Hull-White factor; curve bootstrapped from the JPY OIS par history; overnight volatility from the same file", "sigma 0.267%; a = 0.001; USD-JPY rate correlation -0.04 (not significant)", "models/calibration.py, market/jpy_ois.py"],
+             ["Equities and FX", "Correlated geometric Brownian motion, exact log step, drift r-q", "3y realised vols; JPY names via r_USD minus differential (about 2.6%)", "models/equity_fx.py"],
              ["Correlation", "Static 39x39 matrix (613 aligned days), Cholesky; optional PCA factor model", "5 factors explain about 46% of variance", "models/equity_factor_model.py, simulation/engine.py"],
              ["Random numbers", "Latin Hypercube sampling", "N = 5,000 recommended; 3,000 used for the figures", "simulation/random_numbers.py"],
              ["Dates", "Market pillar dates plus every trade event date", "42 nodes for this book", "simulation/engine.py"],
@@ -1229,7 +1241,7 @@ def main():
              ["CVA", "Regulatory CVA, MAR50.32; pathwise discounting; credit-triangle PD from spreads", "LGD 60%; BBB proxy; unilateral; independent", "exposure/cva.py, models/credit.py"],
              ["SA-CVA", "CVA bump sensitivities with common random numbers, MAR50 aggregation", "1,000 scenarios; 21 simulations; m_CVA = 1", "exposure/sa_cva.py, scripts/run_sa_cva.py"],
              ["Precision", "Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation", "Relative SE of PFE99 about 1.0% at N = 5,000 at the worst date", "scripts/convergence_study_tail.py"],
-             ["Validation", "t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests", "69 automated tests", "scripts/, tests/"]],
+             ["Validation", "t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests", "76 automated tests", "scripts/, tests/"]],
             widths=[1.2, 2.8, 2.4, 1.9], font=7.0))
     add(P("Appendix E. Code map", H1))
     add(tbl([["Package", "Contents"],
@@ -1238,7 +1250,7 @@ def main():
              ["simulation/", "engine (grid, paths, MPOR nodes), random_numbers (five sampling schemes), parallel (multiprocessing repricing)"],
              ["exposure/", "aggregate (netting, EE, median PFE, PFE, MPE), collateral (MPOR-shifted), cva (regulatory CVA), sa_cva (Basel aggregation)"],
              ["scripts/", "run_simulation, run_mpor_comparison, run_sa_cva, generate_report_data, build_report (LaTeX), build_exec_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks"],
-             ["tests/", "69 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA"]],
+             ["tests/", "76 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA"]],
             widths=[1.2, 6.6]))
     add(P("Appendix B. Reproducing the results", H1))
     add(code("python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation, arrays for figures\n"
@@ -1246,7 +1258,7 @@ def main():
              "python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles\n"
              "python scripts/run_mpor_comparison.py                     # hypothetical collateral demo\n"
              "python scripts/run_sa_cva.py --scenarios 1000             # CVA and SA-CVA capital (21 runs)\n"
-             "python -m pytest tests                                    # 69 tests"))
+             "python -m pytest tests                                    # 76 tests"))
     add(P("Key modules: src/risk_engine/models (rates, equity_fx, calibration, hw_calibration, equity_factor_model), simulation (engine, random_numbers, parallel), "
           "exposure (aggregate, collateral), market (sofr, boj, mof_jgb, bloomberg, vols, correlations).", SMALL))
 
