@@ -48,7 +48,7 @@
 {\normalsize Valuation date 2026-08-28 \textbar{} September 2026\par}
 \end{titlepage}
 \section*{Abstract}
-This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
+This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio, prices counterparty credit risk (CVA) with bond-implied credit spreads, and computes the Basel SA-CVA capital requirement. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
 
 \tableofcontents
 \clearpage
@@ -66,10 +66,12 @@ Peak median PFE & \$121.3M at 2026-10-16 & Typical (50th percentile) exposure at
 \rowcolor{gray!9}Maximum PFE99 (MPE) & \$174.7M at 2026-10-09 & Highest 99th-percentile exposure over the life of the book \\
 Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
 \rowcolor{gray!9}Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
+CVA (BBB proxy) & \$210,396 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
+\rowcolor{gray!9}SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
 \bottomrule
 \end{longtable}}
 
-\textbf{Principal modelling choices} (each is justified in Section 8):
+\textbf{Principal modelling choices} (each is justified in Section 9):
 
 \begin{itemize}
 \item Monte Carlo under the risk-neutral measure. USD short rate: one-factor Hull-White (exact fit to today's SOFR curve). Equities and USDJPY: correlated geometric Brownian motion driven by the simulated rate.
@@ -79,6 +81,7 @@ Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forwa
 \item Mean reversion: a = 0.0167 for USD from the swaption cube; JPY reuses the USD value because real JPY volatility rises with tenor (two independent sources).
 \item JPY: a negative-rate-capable Hull-White factor is built (sigma from real TONA; correlation with the USD rate calibrated at approximately zero) but does not yet drive JPY equity drift.
 \item The book is treated as uncollateralized (no CSA data); an MPOR-shifted collateralized calculation is built and demonstrated as a hypothetical.
+\item CVA: unilateral regulatory CVA (MAR50.32) with counterparty spreads proxied from ICE BofA bond indices by an assumed BBB rating and 60\% LGD; SA-CVA capital from common-random-number bump sensitivities (Section 8).
 \end{itemize}
 \clearpage
 \section{The problem from scratch}
@@ -129,7 +132,7 @@ MPE (Maximum PFE) & Peak of the PFE curve over all dates & One number to set a c
 The value of the book at a future date depends on the future levels of $\sim$40 market variables (37 stock prices, USDJPY, interest rates) that move together. There is no closed formula for the distribution of a netted, path-dependent-schedule book. Monte Carlo solves this by: (1) simulating thousands of joint futures for all the variables; (2) fully re-pricing every trade in every simulated future at every date; (3) netting; (4) reading off the distribution. The cost is that the answer has sampling noise, which we measure and control (Sections 5.4 and 5.5).
 
 \subsection{Real-world versus risk-neutral simulation}
-Simulating under the \emph{risk-neutral} measure (drift = short rate minus dividends) is the pricing-consistent choice used for CVA and for exposure numbers that must be consistent with today's market prices. The alternative, real-world (physical) drift, is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra unobservable inputs and is verified by a martingale test (Section 9). Because the horizon is short (under two years) and most positions are financed at the same rates, the difference between the two drifts is small relative to volatility.
+Simulating under the \emph{risk-neutral} measure (drift = short rate minus dividends) is the pricing-consistent choice used for CVA and for exposure numbers that must be consistent with today's market prices. The alternative, real-world (physical) drift, is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra unobservable inputs and is verified by a martingale test (Section 10). Because the horizon is short (under two years) and most positions are financed at the same rates, the difference between the two drifts is small relative to volatility.
 
 \clearpage
 \section{The trade book}
@@ -209,7 +212,7 @@ JGB par yields 1Y-40Y & Japan Ministry of Finance, daily from 1974 & JPY mean-re
 \end{longtable}}
 
 \subsection{The USD curve}
-Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. Beyond the last live contract (about 6.3 years out) the curve is extrapolated flat. Two real bugs were found here by cross-checking with the Treasury curve (Section 10). The curve is the starting point of the Hull-White model and the discount curve at t=0.
+Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. Beyond the last live contract (about 6.3 years out) the curve is extrapolated flat. Two real bugs were found here by cross-checking with the Treasury curve (Section 11). The curve is the starting point of the Hull-White model and the discount curve at t=0.
 
 \begin{figure}[H]
 \centering
@@ -224,7 +227,7 @@ Volatility is the annualised standard deviation of daily changes over the last t
 \includegraphics[width=\linewidth]{figures/fig07.pdf}
 \caption{Realised volatility spans an order of magnitude across the 37 names. A few names carry 50-76\% vol, which dominates tail exposure of the trades that reference them.}
 \end{figure}
-\textbf{Choice and alternative.} Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption). A 3-year realised window is a documented, reproducible proxy. Its limitation is that it is backward-looking and cannot see regime changes; the sensitivity test (Section 9) shows how much the results move if vols are 50\% higher.
+\textbf{Choice and alternative.} Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption). A 3-year realised window is a documented, reproducible proxy. Its limitation is that it is backward-looking and cannot see regime changes; the sensitivity test (Section 10) shows how much the results move if vols are 50\% higher.
 
 \subsection{Correlations}
 \begin{figure}[H]
@@ -267,7 +270,7 @@ dS_i / S_i = ( r(t) - q_i ) dt + sigma_i dW_i        USD-quoted names
 dS_i / S_i = ( r_JPY(t) - q_i ) dt + sigma_i dW_i     JPY-quoted names
 dFX / FX   = ( r_USD - r_JPY ) dt + sigma_FX dW_FX    USDJPY (JPY per USD)
 \end{verbatim}}
-Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (r - q - sigma\textasciicircum{}2/2) dt + sigma sqrt(dt) Z, with r the simulated USD short rate at the start of the step (so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 9 by a martingale test.
+Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (r - q - sigma\textasciicircum{}2/2) dt + sigma sqrt(dt) Z, with r the simulated USD short rate at the start of the step (so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 10 by a martingale test.
 
 \textbf{Why GBM.} It matches the lognormal vol convention we measure, is the market default for equity CCR, and needs only a vol per name. \textbf{Alternatives:} local/stochastic vol (Heston, SABR) would capture skew and vol-of-vol but need option surfaces we do not have; jump models help tails but add unobservable parameters. We disclose that GBM understates fat tails.
 
@@ -442,7 +445,7 @@ Monte Carlo error falls as 1/sqrt(N). Rather than rerun the expensive repricing 
 
 {\small Tail study at the one-year node (pool value \$149,482, 30,000 scenarios) and the corresponding estimate at the date of peak PFE99, where the exposure distribution is wider (relative SE = 2.1\% / sqrt(N/1000), fitted to the reporting-run bootstrap). Times assume 8 cores.}
 
-\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: number of paths.} Use \textbf{N = 5,000} for standard PFE99 reporting: relative standard error 1.0\% at the worst-case date (0.29\% at the one-year node), about 8 minutes on 8 cores. Use \textbf{N = 1,000} for iteration and what-if runs (2.1\% at the worst-case date, about 2 minutes) and \textbf{N = 10,000} when a limit is being signed off (0.7\%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below 0.6\%) is an order of magnitude smaller than the model sensitivities in Section 9.4 (a 50\% increase in equity volatility moves MPE by about 9\%). The figures in this report use N = 3,000 (1.2\% at the worst-case date).\vspace{2pt}}}\end{center}
+\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: number of paths.} Use \textbf{N = 5,000} for standard PFE99 reporting: relative standard error 1.0\% at the worst-case date (0.29\% at the one-year node), about 8 minutes on 8 cores. Use \textbf{N = 1,000} for iteration and what-if runs (2.1\% at the worst-case date, about 2 minutes) and \textbf{N = 10,000} when a limit is being signed off (0.7\%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below 0.6\%) is an order of magnitude smaller than the model sensitivities in Section 10.4 (a 50\% increase in equity volatility moves MPE by about 9\%). The figures in this report use N = 3,000 (1.2\% at the worst-case date).\vspace{2pt}}}\end{center}
 \clearpage
 \section{Calibrating Hull-White mean reversion}
 Mean reversion a controls how fast rate shocks decay; the convergence study flagged it as the largest unquantified model uncertainty. The textbook method is to fit swaption volatilities. Hull-White predicts that the volatility of a forward rate at maturity T decays with time to maturity:
@@ -594,6 +597,140 @@ k=5 & \$122.0M & \$175.9M & -0.1\% \\
 
 This is a like-for-like comparison at one scenario count, so differences include sampling noise of a few tenths of a percent as well as the approximation itself. The factor model with about 5 factors reproduces the book's exposure closely, which supports it as a lower-dimensional, more robust alternative, but the full-rank default is kept because it is exact with respect to the estimated matrix. That five factors (only about half of the correlation matrix's total variance) suffice here is because this book's exposure is driven by the rate, a few large positions and FX, not by the fine correlation structure among all 37 names.
 
+\section{Credit valuation adjustment and SA-CVA capital}
+Sections 1 to 7 measure how much a counterparty could owe us. This section prices the risk that they fail to pay it (credit valuation adjustment, CVA) and computes the Basel regulatory capital held against the volatility of that CVA under the Standardised Approach (SA-CVA). Both reuse the exposure engine unchanged.
+
+\subsection{Definition}
+CVA is the expected loss from counterparty default, assuming the bank itself cannot default (unilateral CVA). Following Basel MAR50.32:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+CVA = LGD * sum_i  0.5 * [ DEE(t_{i-1}) + DEE(t_i) ] * PD(t_{i-1}, t_i)
+DEE(t) = E[ D(t) * max(V(t), 0) ]            D = pathwise risk-free discount factor
+PD(t_{i-1}, t_i) = exp(-s_{i-1} t_{i-1}/LGD) - exp(-s_i t_i/LGD)      (market-implied, from spreads)
+\end{verbatim}}
+The expected discounted exposure DEE is the exposure profile of Section 7 with each scenario discounted along its own simulated short rate. The default probability is implied by a credit spread s through the credit-triangle relation with a loss given default LGD of 60\% (40\% recovery, the senior unsecured convention). Exposure and default are assumed independent, so wrong-way risk is excluded, and the book is treated as uncollateralized because no margin terms are available.
+
+\subsection{Credit inputs: rating proxies from bond spreads}
+CDS spreads for the counterparties are not available, and the counterparties are anonymised. MAR50.32(3) permits an illiquid counterparty's spread to be proxied from liquid peers by credit quality, industry and region. We proxy by credit quality using public bond-market data: the ICE BofA US corporate option-adjusted spread indices by rating (FRED), with the maturity shape taken from the ICE BofA corporate index by maturity bucket, scaled to each rating. The rating-level spread is one number per rating, so the same maturity shape is used for all ratings (a disclosed simplification).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig28.pdf}
+\caption{Proxy spread curves by rating on the valuation date. The BBB curve used for the counterparties runs from about 59 bp at 6 months to about 118 bp at 10 years.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1579\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1579\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2895\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3947\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{Assumed rating}} & \textbf{\textcolor{white}{Assumed sector}} & \textbf{\textcolor{white}{Basis}} \\
+\endhead
+CPTY\_A & BBB & Financials (SA-CVA bucket 2) & Assumption: unrated counterparty proxied at BBB \\
+\rowcolor{gray!9}CPTY\_B & BBB & Financials (SA-CVA bucket 2) & Assumption \\
+CPTY\_C & BBB & Financials (SA-CVA bucket 2) & Assumption \\
+\bottomrule
+\end{longtable}}
+
+The counterparty identities and ratings were not provided, so these are explicit assumptions. Because they matter more than any modelling choice, Section 8.3 reports CVA across the whole rating range so the reader can substitute the correct rating.
+
+\subsection{Results: CVA}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig29.pdf}
+\caption{Left: expected discounted exposure by counterparty. Middle: CVA by counterparty at the BBB proxy. Right: portfolio CVA if all counterparties had the rating shown.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.3636\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3636\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2727\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{CVA (USD)}} & \textbf{\textcolor{white}{Share of total}} \\
+\endhead
+CPTY\_A & 5,403 & 3\% \\
+\rowcolor{gray!9}CPTY\_B & 3,702 & 2\% \\
+CPTY\_C & 201,291 & 96\% \\
+\rowcolor{gray!9}Portfolio & 210,396 & 100\% \\
+\bottomrule
+\end{longtable}}
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2449\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4490\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3061\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Rating}} & \textbf{\textcolor{white}{Portfolio CVA (USD)}} & \textbf{\textcolor{white}{Multiple of BBB}} \\
+\endhead
+AAA & 89,023 & 0.42x \\
+\rowcolor{gray!9}AA & 125,895 & 0.60x \\
+A & 143,238 & 0.68x \\
+\rowcolor{gray!9}BBB & 210,396 & 1.00x \\
+BB & 325,034 & 1.54x \\
+\rowcolor{gray!9}B & 588,063 & 2.80x \\
+\bottomrule
+\end{longtable}}
+
+CVA is concentrated where the exposure is: CPTY\_C carries 96\% of it, as it carries almost all of the exposure. CVA scales approximately linearly with the credit spread, so the rating assumption moves the result by a factor of about 2.6 between AA and BB. These figures use 1,000 scenarios (Latin Hypercube) with common random numbers across the sensitivity runs of Section 8.4.
+
+\subsection{Basel SA-CVA capital}
+SA-CVA (MAR50.27 to 50.77) sets capital from the sensitivity of regulatory CVA to market risk factors. It is an adaptation of the market-risk standardised approach and needs supervisory approval, a CVA desk and monthly sensitivity calculation (MAR50.30); the figures here are therefore indicative of the requirement, not a filed number. For each risk factor k the CVA sensitivity s\_k is computed by bump-and-reprice with common random numbers, converted to a weighted sensitivity WS\_k = RW\_k x s\_k, and aggregated by bucket and risk class:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+K_b = sqrt( sum_k WS_k^2 + sum_{k!=l} rho_kl WS_k WS_l )        S_b = clip( sum_k WS_k, -K_b, +K_b )
+K   = m_CVA * sqrt( sum_b K_b^2 + sum_{b!=c} gamma_bc S_b S_c )
+Capital = sum over classes of ( K_delta + K_vega );   RWA = 12.5 * Capital
+\end{verbatim}}
+Risk classes present in the book, the shift used for each sensitivity and the Basel parameters applied:
+
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2025\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3797\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2152\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2025\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Risk class}} & \textbf{\textcolor{white}{Risk factors and shift}} & \textbf{\textcolor{white}{Risk weight}} & \textbf{\textcolor{white}{Correlation}} \\
+\endhead
+Interest rate delta (USD) & USD risk-free yield at 1, 2, 5, 10, 30y; +1bp with triangular weights & 1.11\%, 0.93\%, 0.74\%, 0.74\%, 0.74\% & Tenor matrix 31-91\% (Table 4) \\
+\rowcolor{gray!9}Interest rate vega (USD) & All USD rate volatilities, +1\% relative & 100\% & Single factor \\
+FX delta (USDJPY) & USDJPY spot, +1\% relative & 11\% & Single factor; cross-bucket 0.6 \\
+\rowcolor{gray!9}FX vega & USDJPY volatility, +1\% relative & 100\% & Single factor \\
+Counterparty credit spread & Each counterparty at 0.5, 1, 3, 5, 10y; +1bp & 5\% (financials, investment grade) & Tenor 0.9 x name 0.5 (unrelated) \\
+\rowcolor{gray!9}Equity delta & All names in an equity bucket, +1\% relative spot & 30-55\% by bucket & Cross-bucket 0.15 \\
+Equity vega & All volatilities in a bucket, +1\% relative & 78\% large cap, 100\% small cap & Cross-bucket 0.15 \\
+\rowcolor{gray!9}Reference credit, commodity & None: no such drivers of exposure & - & - \\
+\bottomrule
+\end{longtable}}
+
+Equity names are assigned to Basel buckets by size (market capitalisation of at least USD 2 billion), region (advanced versus emerging economy) and sector, using yfinance data: bucket 1: 1 names, bucket 4: 2 names, bucket 5: 13 names, bucket 6: 6 names, bucket 7: 2 names, bucket 8: 13 names.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig30.pdf}
+\caption{Left: CVA sensitivity to a 1bp rise in USD yields at each SA-CVA tenor. Middle: sensitivity of CVA to the counterparty credit spreads (three counterparties by five tenors). Right: SA-CVA capital by risk class.}
+\end{figure}
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.6667\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3333\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Risk class}} & \textbf{\textcolor{white}{Capital K (USD)}} \\
+\endhead
+ir delta & 82,624 \\
+\rowcolor{gray!9}ir vega & 89 \\
+fx delta & 2,479 \\
+\rowcolor{gray!9}fx vega & 0 \\
+ccs delta & 1,729,848 \\
+\rowcolor{gray!9}eq delta & 105,515 \\
+eq vega & 6,637 \\
+\rowcolor{gray!9}Total SA-CVA capital requirement (m\_CVA = 1) & 1,927,192 \\
+Risk-weighted assets (12.5 x capital) & 24,089,897 \\
+\rowcolor{gray!9}Total if the pre-2023 multiplier m\_CVA = 1.25 applied & 2,408,990 \\
+\bottomrule
+\end{longtable}}
+
+The requirement is dominated by ccs delta (90\% of the total), as is typical: a 5\% risk weight on credit spreads is large relative to a 100 bp spread level, so the capital charge is a multiple of the CVA itself. Interest rate, FX and equity classes are comparatively small. The multiplier m\_CVA is 1 in the framework in force from 2023 (it was 1.25 in the original 2017 text); both are shown.
+
+\subsection{Assumptions and limitations of the CVA work}
+\begin{itemize}
+\item \textbf{Counterparty ratings are assumed} (BBB financials). CVA and the credit-spread capital scale with this assumption; Section 8.3 shows the range.
+\item \textbf{Spreads are bond-index proxies}, not CDS: the maturity shape is common to all ratings, and the indices are US corporate spreads regardless of counterparty region or sector.
+\item \textbf{Unilateral, independent, uncollateralized.} No DVA, no wrong-way risk (exposure and default dependence) and no margin, which MAR50.32 allows to be recognised only where terms are known.
+\item \textbf{Interest rate risk is USD only:} the JPY rate is not simulated, so JPY rate sensitivity is captured through the USD curve; inflation risk factors are omitted (no inflation exposure).
+\item \textbf{Sensitivities are one-sided bumps} from 1,000 Latin Hypercube scenarios with common random numbers, not adjoint sensitivities; vega shifts apply to the volatilities driving the simulated paths (the trades contain no options, so there are no option-pricing volatilities).
+\item \textbf{Parameters} are transcribed from the BIS text (July 2020 revisions); the vega risk weights follow the 100\% and 78\% values in that text. Regulatory use requires supervisory approval and validation of the sensitivity calculation.
+\item The Basel Basic Approach (BA-CVA) is not computed; it needs only counterparty exposure and maturity and is the natural fallback if SA-CVA approval is not held.
+\end{itemize}
+\clearpage
 \section{Every modelling choice, and what we rejected}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1538\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3333\linewidth-2\tabcolsep\relax}}
@@ -634,7 +771,7 @@ An independent standard method: portfolio dollar-deltas by bump-and-reprice with
 Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is \$174.0M. Raising equity volatility by 50\% increases it to \$189.8M (+9.1\%); a +100bp parallel shift of the USD curve to \$230.5M (+32.5\%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50\% to \$183.4M (+5.4\%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50\% matters about ten times more than the sampling error at the recommended path count.
 
 \subsection{Statistical and unit tests}
-58 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median exposure.
+69 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, and the credit-spread proxy curves.
 
 \subsection{Greeks (sensitivities)}
 Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
@@ -688,9 +825,10 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \section{Conclusions and recommendations}
 \begin{itemize}
-\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 58 tests) and reproducible with a single command per stage.
+\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 69 tests) and reproducible with a single command per stage.
 \item The uncollateralized book has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
 \item Risk is short-dated (about four months) and concentrated (one trade, one counterparty).
+\item CVA on the uncollateralized book is about \$210k at a BBB proxy (\$126k at AA to \$325k at BB); the SA-CVA requirement is \$1.93M (RWA \$24.1M), dominated by counterparty credit spread risk.
 \item We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.
 \item Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
 \item Next engineering steps: wire the JPY Hull-White factor into JPY equity/FX drift; PFE Greeks (d PFE / d spot) using common random numbers; a two-factor or regime-aware rate model if a long JPY curve history becomes available; a vectorised pricer reimplementation if scenario counts must exceed $\sim$10,000; a model-risk study varying a, vols and correlation.
@@ -722,9 +860,12 @@ Latin Hypercube / Sobol & Stratified / low-discrepancy sampling schemes that red
 \rowcolor{gray!9}Common random numbers & Reuse identical random draws across compared runs so differences are not noise \\
 MPOR & Margin period of risk: delay between last margin call and close-out (typically 10 business days) \\
 \rowcolor{gray!9}CSA / VM / threshold & Credit support annex / variation margin / uncollateralized amount before margin is called \\
-SIMM & ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99\% 10-day loss (not implemented here) \\
-\rowcolor{gray!9}Pillar dates & Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y \\
-Risk-neutral measure & Pricing measure in which discounted assets are martingales; drift = r - q \\
+CVA & Credit valuation adjustment: the market price of counterparty default risk on a derivatives portfolio \\
+\rowcolor{gray!9}SA-CVA & Basel standardised approach for CVA capital: risk-weighted CVA sensitivities aggregated by bucket and risk class (MAR50) \\
+Wrong-way risk & Positive dependence between exposure and the counterparty default probability (not modelled here) \\
+\rowcolor{gray!9}SIMM & ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99\% 10-day loss (not implemented here) \\
+Pillar dates & Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y \\
+\rowcolor{gray!9}Risk-neutral measure & Pricing measure in which discounted assets are martingales; drift = r - q \\
 \bottomrule
 \end{longtable}}
 
@@ -735,7 +876,8 @@ python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation,
 python scripts/build_report.py                            # this PDF
 python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles
 python scripts/run_mpor_comparison.py                     # hypothetical collateral demo
-python -m pytest tests                                    # 58 tests
+python scripts/run_sa_cva.py --scenarios 1000             # CVA and SA-CVA capital (21 runs)
+python -m pytest tests                                    # 69 tests
 \end{verbatim}}
 {\small Key modules: src/risk\_engine/models (rates, equity\_fx, calibration, hw\_calibration, equity\_factor\_model), simulation (engine, random\_numbers, parallel), exposure (aggregate, collateral), market (sofr, boj, mof\_jgb, bloomberg, vols, correlations).}
 

@@ -149,8 +149,15 @@ def main():
                  (rr["pseudo_random"]["std"] / rr["pseudo_random"]["mean"]) / (rr["latin_hypercube"]["std"] / rr["latin_hypercube"]["mean"]),
                  (rr["pseudo_random"]["med_std"] / rr["pseudo_random"]["med_mean"]) / (rr["latin_hypercube"]["med_std"] / rr["latin_hypercube"]["med_mean"])),
              "Decision: 5,000 paths for standard PFE99 reporting (error %.1f%% at the worst-case date, 0.29%% at 1 year); 1,000 for iteration; 10,000 for limit sign-off. This deck uses 3,000." % (c_se / 5000 ** 0.5),
-             "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 58 automated tests.",
+             "Checks passed: t=0 self-consistency 0.0000%, martingale test (max 0.73 bp), parametric VaR ratio 1.08, stress-test directions, 69 automated tests.",
              "Model risk (mean reversion, volatility proxy) outweighs sampling noise beyond about 10,000 paths."])
+    S.append(PageBreak())
+
+    Rc = R.load_sa_cva()
+    S += [P("Credit valuation adjustment and Basel SA-CVA capital", TITLE), fig(R.fig_cva_results(Rc), 2.4 * inch)]
+    S += bl(["CVA (unilateral, uncollateralized, 60%% LGD, BBB bond-spread proxy): $%s in total, %.0f%% from CPTY_C; it ranges from $%sk (AA) to $%sk (BB) so the rating assumption matters." % (format(Rc["cva_total"], ",.0f"), Rc["cva_by_cpty"]["CPTY_C"] / Rc["cva_total"] * 100, format(Rc["cva_vs_rating"]["AA"] / 1e3, ",.0f"), format(Rc["cva_vs_rating"]["BB"] / 1e3, ",.0f")),
+             "SA-CVA capital $%.2fM (RWA $%.1fM), %.0f%% of it counterparty credit spread risk; interest rate, FX and equity classes are small. Sensitivities by common-random-number bumps, Basel MAR50 parameters." % (Rc["K_sa_cva"] / 1e6, Rc["RWA"] / 1e6, Rc["capital_by_class"]["ccs_delta"] / Rc["K_sa_cva"] * 100),
+             "Assumed: counterparty ratings, bond-index spread proxy, no wrong-way risk, no collateral. Needs supervisory approval for regulatory use."])
     S.append(PageBreak())
 
     S += [P("Assumptions, limits, next steps", TITLE)]
