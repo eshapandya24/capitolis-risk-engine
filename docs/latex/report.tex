@@ -922,7 +922,7 @@ The equity and FX Greeks, which are 37 names plus FX, each with an up and a down
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Check}} & \textbf{\textcolor{white}{Result}} \\
 \endhead
-t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.2e-03 \\
+t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.4e-03 \\
 \rowcolor{gray!9}Bump-size stability of the all-equity EE delta at the peak date: 0.5\%, 1\%, 2\% bumps (USD k per +1\%) & -2,870, -2,869, -2,869 (spread 0.03\%) \\
 Additivity: sum of the 37 single-name EE deltas against the all-equity delta (maximum over all dates after t = 0) & 1.34\% of the peak all-equity delta \\
 \rowcolor{gray!9}The same at t = 0 itself & 25\%: at t = 0 the exposure max(V, 0) is deterministic and has a kink, and a 1\% bump of one name can cross it (CPTY\_A, CPTY\_B), so single-name and joint finite differences need not add there \\
@@ -1025,7 +1025,7 @@ Each defect was identified by checking against an independent source, a hand cal
 
 \section{Assumptions and limitations}
 \begin{itemize}
-\item \textbf{Exposure definition and USD curve.} CVA, SA-CVA and the Greeks are on the uncollateralized level exposure, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.
+\item \textbf{USD curve beyond seven years.} The USD curve is flat beyond about seven years (Section 15.2); this is scheduled for correction in Section 15.3, together with the re-run of CVA, SA-CVA and the Greeks, which are still on the uncollateralized level exposure.
 \item \textbf{Uncollateralized and no CSA data.} If margin exists, results change by up to an order of magnitude (Section 7.5).
 \item \textbf{Volatility is a 3-year realised proxy}, not implied. Regime shifts and skew are not captured.
 \item \textbf{One static correlation matrix} from 613 days; correlations tend to rise in stress and are not stressed here.

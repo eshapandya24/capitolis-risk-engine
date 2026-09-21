@@ -1254,7 +1254,7 @@ def main():
              ["8", "JPY mean-reversion fit gave a negative a", "Diagnosed as a real structural property (three sources); lower bound a = 0.001 used"]],
             widths=[0.3, 3.3, 4.2], font=7.4))
     add(P("13. Assumptions and limitations", H1))
-    add(B(["<b>Exposure definition and USD curve.</b> CVA, SA-CVA and the Greeks are on the uncollateralized level exposure, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.",
+    add(B(["<b>USD curve beyond seven years.</b> The USD curve is flat beyond about seven years (Section 15.2); this is scheduled for correction in Section 15.3, together with the re-run of CVA, SA-CVA and the Greeks, which are still on the uncollateralized level exposure.",
            "<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.5).",
            "<b>Volatility is a 3-year realised proxy</b>, not implied. Regime shifts and skew are not captured.",
            "<b>One static correlation matrix</b> from 613 days; correlations tend to rise in stress and are not stressed here.",
