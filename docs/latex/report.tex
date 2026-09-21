@@ -922,7 +922,7 @@ The equity and FX Greeks, which are 37 names plus FX, each with an up and a down
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Check}} & \textbf{\textcolor{white}{Result}} \\
 \endhead
-t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.3e-03 \\
+t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.2e-03 \\
 \rowcolor{gray!9}Bump-size stability of the all-equity EE delta at the peak date: 0.5\%, 1\%, 2\% bumps (USD k per +1\%) & -2,870, -2,869, -2,869 (spread 0.03\%) \\
 Additivity: sum of the 37 single-name EE deltas against the all-equity delta (maximum over all dates after t = 0) & 1.34\% of the peak all-equity delta \\
 \rowcolor{gray!9}The same at t = 0 itself & 25\%: at t = 0 the exposure max(V, 0) is deterministic and has a kink, and a 1\% bump of one name can cross it (CPTY\_A, CPTY\_B), so single-name and joint finite differences need not add there \\
@@ -1052,7 +1052,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \clearpage
 \section{Improvement plan for the next week}
-A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The CVA, SA-CVA and Greeks results in Sections 8 and 9 were computed on the uncollateralized level exposure and should be read with the known issues below in mind until item 4 is complete.
+A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The CVA, SA-CVA and Greeks results in Sections 8 and 9 were computed on the uncollateralized level exposure and should be read with the known issues below in mind until item 3 is complete.
 
 \subsection{Requirements traceability}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -1065,12 +1065,12 @@ Stochastic models for rates, equity and FX, defended & Done & - \\
 Provided pricers called on simulated market states & Done & - \\
 \rowcolor{gray!9}Netting-set exposure profiles & Done & - \\
 Evidence of convergence in the number of simulations (slide 9) & Done (Section 5.5) & - \\
-\rowcolor{gray!9}Greeks, bumped or pathwise, efficient across scenarios & Done (Section 9) on the level exposure & Re-run on the close-out definition (item 4) \\
+\rowcolor{gray!9}Greeks, bumped or pathwise, efficient across scenarios & Done (Section 9) on the level exposure & Re-run on the close-out definition (item 3) \\
 Speed and performance benchmarks; analytical accuracy benchmarks & Done (Sections 5 and 11) & - \\
-\rowcolor{gray!9}Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6) & Partial: the USD long end is flat and the JPY rate is not simulated & Items 2 and 3 \\
-Repository, technical report, presentation to the Risk department & Done; presentation to be refreshed & Item 8 \\
-\rowcolor{gray!9}Extra credit: xVA outputs & Partial: CVA and SA-CVA capital; no DVA or FVA & Item 5 \\
-Extra credit: risky bonds and CDS data for new sample trades & Not done & Item 9 \\
+\rowcolor{gray!9}Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6) & Partial: the USD long end is flat and the JPY rate is not simulated & Items 1 and 2 \\
+Repository, technical report, presentation to the Risk department & Done; presentation to be refreshed & Item 7 \\
+\rowcolor{gray!9}Extra credit: xVA outputs & Partial: CVA and SA-CVA capital; no DVA or FVA & Item 4 \\
+Extra credit: risky bonds and CDS data for new sample trades & Not done & Item 8 \\
 \bottomrule
 \end{longtable}}
 
@@ -1087,9 +1087,9 @@ Extra credit: risky bonds and CDS data for new sample trades & Not done & Item 9
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Item}} & \textbf{\textcolor{white}{Work}} & \textbf{\textcolor{white}{Deliverable and check}} \\
 \endhead
-2 & Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract) & Curve validated against Treasury and against the Bloomberg curve; BF\_0003 NPV reconciled; all trades repriced \\
-\rowcolor{gray!9}3 & Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it & Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported \\
-4 & Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count & Refreshed data files; regression tests; comparison before and after \\
+1 & Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract) & Curve validated against Treasury and against the Bloomberg curve; BF\_0003 NPV reconciled; all trades repriced \\
+\rowcolor{gray!9}2 & Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it & Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported \\
+3 & Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count & Refreshed data files; regression tests; comparison before and after \\
 \bottomrule
 \end{longtable}}
 
@@ -1100,11 +1100,11 @@ Extra credit: risky bonds and CDS data for new sample trades & Not done & Item 9
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Item}} & \textbf{\textcolor{white}{Work}} & \textbf{\textcolor{white}{Deliverable and check}} \\
 \endhead
-5 & Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty & DVA and FVA with formula tests; net xVA table \\
-\rowcolor{gray!9}6 & Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book & Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement \\
-7 & Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing & Per-counterparty EAD; hand-calculated tests \\
-\rowcolor{gray!9}8 & Refresh the report and executive deck for the Risk department presentation; rehearse & Updated PDF, LaTeX source and deck; slide on the changes and their effect on results \\
-9 & Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve & Gap statement or new sample trade \\
+4 & Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty & DVA and FVA with formula tests; net xVA table \\
+\rowcolor{gray!9}5 & Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book & Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement \\
+6 & Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing & Per-counterparty EAD; hand-calculated tests \\
+\rowcolor{gray!9}7 & Refresh the report and executive deck for the Risk department presentation; rehearse & Updated PDF, LaTeX source and deck; slide on the changes and their effect on results \\
+8 & Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve & Gap statement or new sample trade \\
 \bottomrule
 \end{longtable}}
 

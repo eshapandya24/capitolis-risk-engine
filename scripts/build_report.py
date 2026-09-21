@@ -1279,7 +1279,7 @@ def main():
     add(PageBreak())
 
     add(P("15. Improvement plan for the next week", H1))
-    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The CVA, SA-CVA and Greeks results in Sections 8 and 9 were computed on the uncollateralized level exposure and should be read with the known issues below in mind until item 4 is complete."))
+    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The CVA, SA-CVA and Greeks results in Sections 8 and 9 were computed on the uncollateralized level exposure and should be read with the known issues below in mind until item 3 is complete."))
     add(P("15.1 Requirements traceability", H2))
     add(tbl([["Kickoff requirement", "Status", "Action"],
              ["Stochastic models for rates, equity and FX, defended", "Done", "-"],
@@ -1287,12 +1287,12 @@ def main():
              ["Provided pricers called on simulated market states", "Done", "-"],
              ["Netting-set exposure profiles", "Done", "-"],
              ["Evidence of convergence in the number of simulations (slide 9)", "Done (Section 5.5)", "-"],
-             ["Greeks, bumped or pathwise, efficient across scenarios", "Done (Section 9) on the level exposure", "Re-run on the close-out definition (item 4)"],
+             ["Greeks, bumped or pathwise, efficient across scenarios", "Done (Section 9) on the level exposure", "Re-run on the close-out definition (item 3)"],
              ["Speed and performance benchmarks; analytical accuracy benchmarks", "Done (Sections 5 and 11)", "-"],
-             ["Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6)", "Partial: the USD long end is flat and the JPY rate is not simulated", "Items 2 and 3"],
-             ["Repository, technical report, presentation to the Risk department", "Done; presentation to be refreshed", "Item 8"],
-             ["Extra credit: xVA outputs", "Partial: CVA and SA-CVA capital; no DVA or FVA", "Item 5"],
-             ["Extra credit: risky bonds and CDS data for new sample trades", "Not done", "Item 9"]],
+             ["Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6)", "Partial: the USD long end is flat and the JPY rate is not simulated", "Items 1 and 2"],
+             ["Repository, technical report, presentation to the Risk department", "Done; presentation to be refreshed", "Item 7"],
+             ["Extra credit: xVA outputs", "Partial: CVA and SA-CVA capital; no DVA or FVA", "Item 4"],
+             ["Extra credit: risky bonds and CDS data for new sample trades", "Not done", "Item 8"]],
             widths=[3.6, 2.8, 1.0], font=7.2))
     add(P("15.2 Known issues in the current results", H2))
     add(B([           "<b>USD curve beyond seven years.</b> The SOFR-futures curve covers about 6.3 years and is extrapolated flat, so the 2049 Treasury underlying BF_0003 is discounted at 4.27% instead of about 4.64% at 20 years. Repricing with Bloomberg's zero curve gives an NPV of $120.9M for BF_0003 against $101.4M on our curve, about 16 percent higher. CPTY_C exposure, CVA and SA-CVA are therefore understated.",
@@ -1300,17 +1300,17 @@ def main():
     add(P("15.3 Work plan", H2))
     add(P("<b>Priority 1: needed to meet the brief in full</b>", BODY))
     add(tbl([["Item", "Work", "Deliverable and check"],
-             ["2", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced"],
-             ["3", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported"],
-             ["4", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after"]],
+             ["1", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced"],
+             ["2", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported"],
+             ["3", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after"]],
             widths=[0.5, 3.6, 3.4], font=7.2))
     add(P("<b>Priority 2: completes extra credit and validation</b>", BODY))
     add(tbl([["Item", "Work", "Deliverable and check"],
-             ["5", "Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty", "DVA and FVA with formula tests; net xVA table"],
-             ["6", "Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book", "Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement"],
-             ["7", "Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing", "Per-counterparty EAD; hand-calculated tests"],
-             ["8", "Refresh the report and executive deck for the Risk department presentation; rehearse", "Updated PDF, LaTeX source and deck; slide on the changes and their effect on results"],
-             ["9", "Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve", "Gap statement or new sample trade"]],
+             ["4", "Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty", "DVA and FVA with formula tests; net xVA table"],
+             ["5", "Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book", "Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement"],
+             ["6", "Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing", "Per-counterparty EAD; hand-calculated tests"],
+             ["7", "Refresh the report and executive deck for the Risk department presentation; rehearse", "Updated PDF, LaTeX source and deck; slide on the changes and their effect on results"],
+             ["8", "Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve", "Gap statement or new sample trade"]],
             widths=[0.5, 3.6, 3.4], font=7.2))
     add(P("15.4 Further model refinements (after the above)", H2))
     add(B(["Two-factor rate model and stochastic volatility, if Capitolis wants richer dynamics; the vol-of-vol correlation must be applied in the paths if it is fit.",
