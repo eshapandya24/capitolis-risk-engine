@@ -52,3 +52,42 @@ def reprice_all_parallel(engine, paths, n_workers=None, chunks_per_worker=4):
     trade_ids = list(engine.trades.keys())
     npv = np.concatenate(results, axis=2)
     return trade_ids, npv
+
+
+def _price_chunk_bump(task):
+    """One (bump, scenario-chunk) unit: reprice ONLY the bump's trade subset."""
+    import numpy as np
+    bump, idx = task
+    engine = _WORKER["engine"]
+    paths = _WORKER["paths"]
+    rows = [i for i, tid in enumerate(engine.trades) if tid in bump["trades"]]
+    out = np.zeros((len(rows), len(engine.dates), len(idx)), dtype=np.float64)
+    engine.bump = bump
+    try:
+        for k, s in enumerate(idx):
+            out[:, :, k] = engine.price_one_scenario(paths, s)[rows, :]
+    finally:
+        engine.bump = None
+    return rows, out
+
+
+def reprice_bumps_parallel(engine, paths, bumps, n_workers=None, chunks_per_worker=4):
+    """Many Greeks bumps in ONE process pool (one spawn cost, not one per
+    bump). Each bump is {"eq": {isin: mult}, "fx": mult, "trades": set}; only
+    that subset is repriced. Returns, per bump, (rows, array[rows, nodes, N])."""
+    import numpy as np
+
+    n_workers = n_workers or os.cpu_count() or 4
+    n_scen = engine.n_scenarios
+    chunk_size = max(1, n_scen // (n_workers * chunks_per_worker))
+    chunks = [list(range(i, min(i + chunk_size, n_scen))) for i in range(0, n_scen, chunk_size)]
+    tasks = [(b, c) for b in bumps for c in chunks]
+    ctx = get_context("spawn")
+    with ctx.Pool(processes=n_workers, initializer=_init_worker, initargs=(engine, paths)) as pool:
+        results = pool.map(_price_chunk_bump, tasks, chunksize=1)
+    out = []
+    per = len(chunks)
+    for bi in range(len(bumps)):
+        part = results[bi * per:(bi + 1) * per]
+        out.append((part[0][0], np.concatenate([p[1] for p in part], axis=2)))
+    return out

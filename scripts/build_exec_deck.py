@@ -180,12 +180,23 @@ def main():
             ["CVA", "Regulatory CVA (MAR50.32)", "BBB bond-spread proxy, LGD 60%, unilateral"],
             ["SA-CVA", "Bump sensitivities, MAR50 aggregation", "Common random numbers, 21 runs, m_CVA = 1"]]
     S += [P("Methodology at a glance", TITLE), table(rows, [1.6 * inch, 4.0 * inch, 4.2 * inch]), PageBreak()]
+    import report_greeks as RG
+    g_ = RG.load()
+    jpk = RG.peak_node(g_)
+    S += [P("Greeks: book and exposure sensitivities", TITLE), fig(RG.fig_profiles(g_), 2.4 * inch)]
+    S += bl(["Complete set, by netting set: t=0 delta, gamma, DV01 (parallel and 8 buckets), FX; and the sensitivities of EE, median PFE and PFE99 to all 37 equities, USDJPY, USD rates and volatilities.",
+             "At peak PFE99 (%s): +1%% on all equities moves PFE99 by $%sk and EE by $%sk (pay-equity swaps: falling shares raise our claim); +1bp on USD rates moves PFE99 by +$%sk." % (
+                 g_["dates"][jpk], format(g_["equity_all"]["delta"]["__portfolio__"]["PFE"][jpk] / 1e3, ",.0f"), format(g_["equity_all"]["delta"]["__portfolio__"]["EE"][jpk] / 1e3, ",.0f"), format(g_["rate_parallel"]["delta"]["__portfolio__"]["PFE"][jpk] / 1e3, ",.0f")),
+             "Method: bump-and-reprice with common random numbers; equity and FX bumps reuse the simulated paths (exact GBM rescaling, only affected trades repriced), so 82 bumps cost a fraction of re-simulation.",
+             "Validated against analytic t=0 deltas, bump-size stability, additivity of single-name deltas, and common random numbers versus independent draws."])
+    S.append(PageBreak())
+
     S += [P("Assumptions, limits, next steps", TITLE)]
     S += bl(["Volatility is a 3-year realised proxy (no single-name options data); one static correlation matrix; GBM understates fat tails.",
              "JPY: a real negative-rate-capable Hull-White factor is built (curve and volatility from the daily JPY OIS history; USD-JPY rate correlation calibrated near zero) but does not yet drive JPY equity drift; mean reversion is at its lower bound because JPY vol rises with tenor in three independent datasets.",
              "No counterparty default probability or wrong-way risk: this is exposure, not expected loss.",
              "Ask: are any trades margined, and under what CSA terms?",
-             "Next: wire JPY factor into the drift, PFE Greeks, two-factor rate model, model-risk study on mean reversion, vols and correlation."])
+             "Next: wire JPY factor into the drift, two-factor rate model, model-risk study on mean reversion, vols and correlation."])
     doc.build(S)
     print("wrote", out)
 

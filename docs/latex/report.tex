@@ -48,7 +48,7 @@
 {\normalsize Valuation date 2026-08-28 \textbar{} September 2026\par}
 \end{titlepage}
 \section*{Abstract}
-This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio, prices counterparty credit risk (CVA) with bond-implied credit spreads, and computes the Basel SA-CVA capital requirement. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
+This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio, prices counterparty credit risk (CVA) with bond-implied credit spreads, computes the Basel SA-CVA capital requirement, and provides the full set of sensitivities (Greeks) of the book and of the exposure measures. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
 
 \tableofcontents
 \clearpage
@@ -66,12 +66,13 @@ Peak median PFE & \$121.3M at 2026-10-16 & Typical (50th percentile) exposure at
 \rowcolor{gray!9}Maximum PFE99 (MPE) & \$174.7M at 2026-10-09 & Highest 99th-percentile exposure over the life of the book \\
 Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
 \rowcolor{gray!9}Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
-CVA (BBB proxy) & \$210,394 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
-\rowcolor{gray!9}SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
+Greeks & t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities & Complete, by netting set (Section 9) \\
+\rowcolor{gray!9}CVA (BBB proxy) & \$210,394 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
+SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
 \bottomrule
 \end{longtable}}
 
-\textbf{Principal modelling choices} (each is justified in Section 9):
+\textbf{Principal modelling choices} (each is justified in Section 10):
 
 \begin{itemize}
 \item Monte Carlo under the risk-neutral measure. USD short rate: one-factor Hull-White (exact fit to today's SOFR curve). Equities and USDJPY: correlated geometric Brownian motion driven by the simulated rate.
@@ -132,7 +133,7 @@ MPE (Maximum PFE) & Peak of the PFE curve over all dates & One number to set a c
 The value of the book at a future date depends on the future levels of $\sim$40 market variables (37 stock prices, USDJPY, interest rates) that move together. There is no closed formula for the distribution of a netted, path-dependent-schedule book. Monte Carlo solves this by: (1) simulating thousands of joint futures for all the variables; (2) fully re-pricing every trade in every simulated future at every date; (3) netting; (4) reading off the distribution. The cost is that the answer has sampling noise, which we measure and control (Sections 5.4 and 5.5).
 
 \subsection{Real-world versus risk-neutral simulation}
-Simulating under the \emph{risk-neutral} measure (drift = short rate minus dividends) is the pricing-consistent choice used for CVA and for exposure numbers that must be consistent with today's market prices. The alternative, real-world (physical) drift, is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra unobservable inputs and is verified by a martingale test (Section 10). Because the horizon is short (under two years) and most positions are financed at the same rates, the difference between the two drifts is small relative to volatility.
+Simulating under the \emph{risk-neutral} measure (drift = short rate minus dividends) is the pricing-consistent choice used for CVA and for exposure numbers that must be consistent with today's market prices. The alternative, real-world (physical) drift, is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra unobservable inputs and is verified by a martingale test (Section 11). Because the horizon is short (under two years) and most positions are financed at the same rates, the difference between the two drifts is small relative to volatility.
 
 \clearpage
 \section{The trade book}
@@ -213,7 +214,7 @@ TONA (JPY overnight rate) & Bank of Japan public API, daily from 1998 & JPY rate
 \end{longtable}}
 
 \subsection{The USD curve}
-Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. Beyond the last live contract (about 6.3 years out) the curve is extrapolated flat. Two real bugs were found here by cross-checking with the Treasury curve (Section 11). The curve is the starting point of the Hull-White model and the discount curve at t=0.
+Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. Beyond the last live contract (about 6.3 years out) the curve is extrapolated flat. Two real bugs were found here by cross-checking with the Treasury curve (Section 12). The curve is the starting point of the Hull-White model and the discount curve at t=0.
 
 \begin{figure}[H]
 \centering
@@ -228,7 +229,7 @@ Volatility is the annualised standard deviation of daily changes over the last t
 \includegraphics[width=\linewidth]{figures/fig07.pdf}
 \caption{Realised volatility spans an order of magnitude across the 37 names. A few names carry 50-76\% vol, which dominates tail exposure of the trades that reference them.}
 \end{figure}
-\textbf{Choice and alternative.} Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption). A 3-year realised window is a documented, reproducible proxy. Its limitation is that it is backward-looking and cannot see regime changes; the sensitivity test (Section 10) shows how much the results move if vols are 50\% higher.
+\textbf{Choice and alternative.} Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption). A 3-year realised window is a documented, reproducible proxy. Its limitation is that it is backward-looking and cannot see regime changes; the sensitivity test (Section 11) shows how much the results move if vols are 50\% higher.
 
 \subsection{Correlations}
 \begin{figure}[H]
@@ -271,7 +272,7 @@ dS_i / S_i = ( r(t) - q_i ) dt + sigma_i dW_i        USD-quoted names
 dS_i / S_i = ( r_JPY(t) - q_i ) dt + sigma_i dW_i     JPY-quoted names
 dFX / FX   = ( r_USD - r_JPY ) dt + sigma_FX dW_FX    USDJPY (JPY per USD)
 \end{verbatim}}
-Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (r - q - sigma\textasciicircum{}2/2) dt + sigma sqrt(dt) Z, with r the simulated USD short rate at the start of the step (so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 10 by a martingale test.
+Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (r - q - sigma\textasciicircum{}2/2) dt + sigma sqrt(dt) Z, with r the simulated USD short rate at the start of the step (so equities and rates are linked). Under the risk-neutral measure the expected growth is r - q, verified in Section 11 by a martingale test.
 
 \textbf{Why GBM.} It matches the lognormal vol convention we measure, is the market default for equity CCR, and needs only a vol per name. \textbf{Alternatives:} local/stochastic vol (Heston, SABR) would capture skew and vol-of-vol but need option surfaces we do not have; jump models help tails but add unobservable parameters. We disclose that GBM understates fat tails.
 
@@ -448,7 +449,7 @@ Monte Carlo error falls as 1/sqrt(N). Rather than rerun the expensive repricing 
 
 {\small Tail study at the one-year node (pool value \$149,482, 30,000 scenarios) and the corresponding estimate at the date of peak PFE99, where the exposure distribution is wider (relative SE = 2.1\% / sqrt(N/1000), fitted to the reporting-run bootstrap). Times assume 8 cores.}
 
-\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: number of paths.} Use \textbf{N = 5,000} for standard PFE99 reporting: relative standard error 1.0\% at the worst-case date (0.29\% at the one-year node), about 8 minutes on 8 cores. Use \textbf{N = 1,000} for iteration and what-if runs (2.1\% at the worst-case date, about 2 minutes) and \textbf{N = 10,000} when a limit is being signed off (0.7\%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below 0.6\%) is an order of magnitude smaller than the model sensitivities in Section 10.4 (a 50\% increase in equity volatility moves MPE by about 9\%). The figures in this report use N = 3,000 (1.2\% at the worst-case date).\vspace{2pt}}}\end{center}
+\begin{center}\fcolorbox{teal}{teal!7}{\parbox{0.94\linewidth}{\vspace{2pt}\textbf{Decision: number of paths.} Use \textbf{N = 5,000} for standard PFE99 reporting: relative standard error 1.0\% at the worst-case date (0.29\% at the one-year node), about 8 minutes on 8 cores. Use \textbf{N = 1,000} for iteration and what-if runs (2.1\% at the worst-case date, about 2 minutes) and \textbf{N = 10,000} when a limit is being signed off (0.7\%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below 0.6\%) is an order of magnitude smaller than the model sensitivities in Section 11.4 (a 50\% increase in equity volatility moves MPE by about 9\%). The figures in this report use N = 3,000 (1.2\% at the worst-case date).\vspace{2pt}}}\end{center}
 \clearpage
 \section{Calibrating Hull-White mean reversion}
 Mean reversion a controls how fast rate shocks decay; the convergence study flagged it as the largest unquantified model uncertainty. The textbook method is to fit swaption volatilities. Hull-White predicts that the volatility of a forward rate at maturity T decays with time to maturity:
@@ -739,6 +740,148 @@ The requirement is dominated by ccs delta (90\% of the total), as is typical: a 
 \item The Basel Basic Approach (BA-CVA) is not computed; it needs only counterparty exposure and maturity and is the natural fallback if SA-CVA approval is not held.
 \end{itemize}
 \clearpage
+\section{Sensitivities (Greeks)}
+Capitolis asked for exposure profiles together with efficient Greeks across scenarios, aggregated by netting set. This section delivers both levels: (i) the Greeks of the book's value today, by trade and netting set, and (ii) the sensitivities of the exposure measures themselves, EE, median PFE and PFE99, at every simulation date. Every number comes from the same pricers and simulated paths as Section 7.
+
+\subsection{Definitions and method}
+\begin{itemize}
+\item \textbf{Delta} to an equity or to USDJPY: change per +1\% relative move of the spot. \textbf{Gamma}: change in that delta, [M(+1\%) - 2 M + M(-1\%)]. \textbf{DV01}: change per +1bp in USD zero rates, parallel and bucketed at 0.25, 0.5, 1, 2, 3, 5, 10 and 30 years (triangular weights that sum exactly to the parallel shift). \textbf{Vega}: change per +1\% relative shift of the volatility of the USD rate, of USDJPY and of all equities.
+\item \textbf{Bump-and-reprice with common random numbers} (the same Latin Hypercube draws in base and bumped runs): the difference is then sensitivity, not Monte Carlo noise. It works on the pricers as a black box, and it applies equally to quantile measures such as PFE99, which have no simple pathwise derivative. Its accuracy compared with the pathwise estimator is shown in Section 11.6.
+\item \textbf{Efficiency.} A bump of an equity or of USDJPY rescales every simulated path exactly (the GBM drift does not depend on the spot level), so no re-simulation is needed: the existing paths are reused with the spot multiplied and only the trades holding that factor are repriced, all bumps in one process pool. Rate and volatility bumps change the paths themselves, so they are re-simulated with the same random numbers.
+\item Exposure Greeks are computed at N = 2,000 scenarios (Latin Hypercube), for the uncollateralized book, on the pillar date grid.
+\end{itemize}
+Sign convention: Capitolis is strictly the seller on these trades, and the equity swaps are of type pay-equity (we pay the equity return and receive funding), so equity deltas are negative: our value rises when the shares fall.
+
+\subsection{Book Greeks today}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1348\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1573\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1685\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1236\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1461\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1461\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1236\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Netting set}} & \textbf{\textcolor{white}{NPV}} & \textbf{\textcolor{white}{Equity delta (per +1\%)}} & \textbf{\textcolor{white}{Equity gamma}} & \textbf{\textcolor{white}{FX delta (per +1\%)}} & \textbf{\textcolor{white}{DV01 (per +1bp)}} & \textbf{\textcolor{white}{Rate gamma}} \\
+\endhead
+CPTY\_A & 897,526 & -2,280,302 & 0 & 0 & 31,258 & -16 \\
+\rowcolor{gray!9}CPTY\_B & 586,826 & -966,846 & 0 & 420,465 & -3,752 & 6 \\
+CPTY\_C & 106,202,202 & -1,231,141 & 0 & 0 & 637,630 & -1,300 \\
+\rowcolor{gray!9}Portfolio & 107,686,554 & -4,478,289 & 0 & 420,465 & 665,137 & -1,310 \\
+\bottomrule
+\end{longtable}}
+
+All values in USD. The equity and bond trades are linear in the equity spot, so equity and FX gamma are zero to rounding; rate gamma is small. The DV01 is dominated by the CPTY\_C bond forward. The largest deltas and the bucketed DV01s:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig31.pdf}
+\caption{Left: DV01 by netting set and tenor. Right: the twelve largest equity deltas at t = 0.}
+\end{figure}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1111\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Netting set}} & \textbf{\textcolor{white}{0.25y}} & \textbf{\textcolor{white}{0.5y}} & \textbf{\textcolor{white}{1y}} & \textbf{\textcolor{white}{2y}} & \textbf{\textcolor{white}{3y}} & \textbf{\textcolor{white}{5y}} & \textbf{\textcolor{white}{10y}} & \textbf{\textcolor{white}{30y}} \\
+\endhead
+CPTY\_A & -565 & 83 & 3,715 & 13,865 & 399 & 9,692 & 4,069 & 0 \\
+\rowcolor{gray!9}CPTY\_B & -2,649 & -905 & -72 & -1 & -1 & -86 & -38 & 0 \\
+CPTY\_C & -3,776 & -102 & 4,667 & 6,291 & 6,240 & 433,804 & 190,506 & 0 \\
+\bottomrule
+\end{longtable}}
+
+{\small Bucketed DV01 (USD per +1bp), summing to the parallel DV01 above. A check that the equity delta is right: for EQTRS\_0003 the delta to its largest name equals minus the share count times the spot, i.e. exactly -212,269 USD per \$1, as it must for a linear payoff (Section 9.5).}
+
+\subsection{Sensitivities of the exposure measures}
+These are the Greeks that matter for counterparty credit risk: how EE, median PFE and PFE99 change when a market factor moves. The figure shows the portfolio profiles for the three main factors, and the table gives the sensitivities at the date of peak PFE99 (2026-10-09), by netting set.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig32.pdf}
+\caption{Change in portfolio EE, median PFE and PFE99 through time for +1\% on all equities, +1\% on USDJPY and +1bp on USD rates.}
+\end{figure}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2568\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1351\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1486\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1486\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1486\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1622\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Factor shift}} & \textbf{\textcolor{white}{Measure}} & \textbf{\textcolor{white}{CPTY\_A}} & \textbf{\textcolor{white}{CPTY\_B}} & \textbf{\textcolor{white}{CPTY\_C}} & \textbf{\textcolor{white}{Portfolio}} \\
+\endhead
+All equities +1\% & EE & -1,095,935 & -539,348 & -1,233,470 & -2,868,753 \\
+\rowcolor{gray!9} & Median PFE & -1,363,675 & -964,461 & -1,244,428 & -2,759,673 \\
+ & PFE99 & -1,894,675 & -829,702 & -1,044,390 & -3,907,784 \\
+\rowcolor{gray!9}USDJPY +1\% & EE & 0 & 226,832 & 0 & 226,832 \\
+ & Median PFE & 0 & 412,132 & 0 & 192,426 \\
+\rowcolor{gray!9} & PFE99 & 0 & 314,078 & 0 & 345,892 \\
+USD rates +1bp & EE & 14,839 & -1,951 & 635,801 & 648,689 \\
+\rowcolor{gray!9} & Median PFE & 29,137 & -3,393 & 627,855 & 624,517 \\
+ & PFE99 & 28,938 & -3,311 & 610,815 & 637,953 \\
+\rowcolor{gray!9}Rate volatility +1\% & EE & 157 & 18 & -119 & 55 \\
+ & Median PFE & -3,667 & 176 & 1,745 & 26,048 \\
+\rowcolor{gray!9} & PFE99 & 8,845 & 744 & 126,540 & 125,471 \\
+FX volatility +1\% & EE & 0 & 0 & 0 & 0 \\
+\rowcolor{gray!9} & Median PFE & 0 & 0 & 0 & 0 \\
+ & PFE99 & 0 & 0 & 0 & 0 \\
+\rowcolor{gray!9}Equity volatility +1\% & EE & 73,227 & 25,802 & -541 & 98,487 \\
+ & Median PFE & 23,427 & 5,040 & -27,261 & 40,892 \\
+\rowcolor{gray!9} & PFE99 & 362,225 & 118,917 & 171,905 & 535,707 \\
+All-equity gamma (+1\%) & EE & 119,200 & 55,173 & 0 & 174,373 \\
+\rowcolor{gray!9} & PFE99 & -0 & -0 & 0 & -0 \\
+USDJPY gamma (+1\%) & EE & 0 & 6,154 & 0 & 6,154 \\
+\rowcolor{gray!9} & PFE99 & 0 & -6,399 & 0 & -6,918 \\
+Rate gamma (+1bp) & EE & 21 & 5 & -1,276 & -1,250 \\
+\rowcolor{gray!9} & PFE99 & -14 & 5 & -1,223 & -1,236 \\
+\bottomrule
+\end{longtable}}
+
+{\small Change in the measure, in USD, at 2026-10-09. Delta and vega are one-sided shifts read as change per unit shift; gamma is the second difference.}
+
+\textbf{Reading the table.} The equity delta of exposure is negative (EE falls by about \$2,869k per +1\% on all equities and PFE99 by \$3,908k): the swaps are pay-equity, so our claim on the counterparty shrinks when shares rise, and the adverse scenarios for credit exposure are equity falls. The USD rate DV01 of PFE99 is positive (\$638k per +1bp), reflecting the funding legs and bond forwards. The equity and rate gammas of the exposure are positive, as expected for max(V, 0) (a call on the netted value), and small relative to the deltas at a +1\% shift.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig33.pdf}
+\caption{Left: the twelve largest single-name deltas of portfolio PFE99 at the peak date. Right: bucketed USD rate DV01 of PFE99 at the same date.}
+\end{figure}
+Single-name deltas of PFE99 show which positions drive the tail; because a quantile is not additive across names, the single-name deltas sum only approximately to the all-equity delta (Section 9.5).
+
+\subsection{Efficiency}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2857\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1169\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.5974\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Step (timed at N = 300)}} & \textbf{\textcolor{white}{Cost}} & \textbf{\textcolor{white}{Comment}} \\
+\endhead
+t = 0 book Greeks & 2.2 s & Central differences on the pricers: every trade, 37 equities, FX, DV01 parallel and 8 buckets \\
+\rowcolor{gray!9}Base run (paths and full repricing) & 115 s & 16 trades, all dates, 8 worker processes (includes process start-up) \\
+78 equity and FX bumps & 110 s & No re-simulation; only the trades holding the factor are repriced; one process pool. Re-simulating each would cost about 10,317 s (94x more) \\
+\rowcolor{gray!9}One rate or volatility re-simulation & 132 s & 12 are needed: parallel up and down, 8 buckets, three vega bumps \\
+\bottomrule
+\end{longtable}}
+
+Timings were measured separately at N = 300 because the wall-clock of the N = 2,000 production run was distorted by the machine sleeping during the overnight job; costs scale about linearly with N once process start-up is amortised.
+
+The equity and FX Greeks, which are 37 names plus FX, each with an up and a down bump, cost a small fraction of what naive bump-and-resimulate would. This is the main efficiency gain: it exploits the structure of the model (exact rescaling of GBM paths) rather than approximating anything.
+
+\subsection{Validation of the Greeks}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.6053\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3947\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Check}} & \textbf{\textcolor{white}{Result}} \\
+\endhead
+t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 5.5e-04 \\
+\rowcolor{gray!9}Bump-size stability of the all-equity EE delta at the peak date: 0.5\%, 1\%, 2\% bumps (USD k per +1\%) & -2,870, -2,869, -2,869 (spread 0.03\%) \\
+Additivity: sum of the 37 single-name EE deltas against the all-equity delta (maximum over all dates after t = 0) & 1.34\% of the peak all-equity delta \\
+\rowcolor{gray!9}The same at t = 0 itself & 25\%: at t = 0 the exposure max(V, 0) is deterministic and has a kink, and a 1\% bump of one name can cross it (CPTY\_A, CPTY\_B), so single-name and joint finite differences need not add there \\
+Sum of single-name PFE99 deltas against the all-equity PFE99 delta at the peak date (quantiles are not additive) & -3,908 against -3,908 USD k \\
+\rowcolor{gray!9}Common random numbers against independent draws: standard deviation of the EE delta estimate over 4 repeats at N = 300 & 33 USD k against 472 USD k (14x lower) \\
+\bottomrule
+\end{longtable}}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig34.pdf}
+\caption{Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws.}
+\end{figure}
+\subsection{Limitations}
+\begin{itemize}
+\item Sensitivities are finite differences with a 1\% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.
+\item Quantile Greeks (PFE99) carry more estimation noise than EE even with common random numbers; the reported figures use 2,000 scenarios.
+\item Interest rate Greeks are for the USD curve only: the JPY rate is not simulated, so JPY rate risk enters through the USD curve. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).
+\item Volatility bumps are parallel across each factor class (all equity vols together); there is no vol-surface or per-name vega. No cross-gamma is computed, and theta is represented by the exposure profile itself.
+\item Exposure Greeks are for the uncollateralized book at 99\%; a collateralized book would have different (much smaller) sensitivities.
+\end{itemize}
+\clearpage
 \section{Every modelling choice, and what we rejected}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1538\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2564\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3333\linewidth-2\tabcolsep\relax}}
@@ -779,7 +922,7 @@ An independent standard method: portfolio dollar-deltas by bump-and-reprice with
 Directional test with common random numbers (800 scenarios, same seed in base and bumped runs). Base MPE (PFE99) is \$174.0M. Raising equity volatility by 50\% increases it to \$189.8M (+9.1\%); a +100bp parallel shift of the USD curve to \$230.5M (+32.5\%), consistent with the USD rate being the largest single delta; and raising Hull-White sigma by 50\% to \$183.4M (+5.4\%). All three moved exposure in the economically required direction. The magnitudes also show the scale of model risk: an equity volatility error of 50\% matters about ten times more than the sampling error at the recommended path count.
 
 \subsection{Statistical and unit tests}
-76 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, and the credit-spread proxy curves.
+82 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; and median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures).
 
 \subsection{Greeks (sensitivities)}
 Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
@@ -833,13 +976,14 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \section{Conclusions and recommendations}
 \begin{itemize}
-\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 76 tests) and reproducible with a single command per stage.
+\item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 82 tests) and reproducible with a single command per stage.
 \item The uncollateralized book has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
 \item Risk is short-dated (about four months) and concentrated (one trade, one counterparty).
 \item CVA on the uncollateralized book is about \$210k at a BBB proxy (\$126k at AA to \$325k at BB); the SA-CVA requirement is \$1.93M (RWA \$24.1M), dominated by counterparty credit spread risk.
+\item Greeks are complete for the book and for the exposure measures (Section 9): PFE99 at its peak date falls by about \$3,908k per +1\% on all equities and rises by about \$638k per +1bp on USD rates.
 \item We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.
 \item Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
-\item Next engineering steps: wire the JPY Hull-White factor into JPY equity/FX drift; PFE Greeks (d PFE / d spot) using common random numbers; a two-factor or regime-aware rate model if a long JPY curve history becomes available; a vectorised pricer reimplementation if scenario counts must exceed $\sim$10,000; a model-risk study varying a, vols and correlation.
+\item Next engineering steps: wire the JPY Hull-White factor into JPY equity/FX drift; a two-factor or regime-aware rate model if a long JPY curve history becomes available; a vectorised pricer reimplementation if scenario counts must exceed $\sim$10,000; a model-risk study varying a, vols and correlation.
 \end{itemize}
 \clearpage
 \clearpage
@@ -868,12 +1012,15 @@ Latin Hypercube / Sobol & Stratified / low-discrepancy sampling schemes that red
 \rowcolor{gray!9}Common random numbers & Reuse identical random draws across compared runs so differences are not noise \\
 MPOR & Margin period of risk: delay between last margin call and close-out (typically 10 business days) \\
 \rowcolor{gray!9}CSA / VM / threshold & Credit support annex / variation margin / uncollateralized amount before margin is called \\
-CVA & Credit valuation adjustment: the market price of counterparty default risk on a derivatives portfolio \\
-\rowcolor{gray!9}SA-CVA & Basel standardised approach for CVA capital: risk-weighted CVA sensitivities aggregated by bucket and risk class (MAR50) \\
-Wrong-way risk & Positive dependence between exposure and the counterparty default probability (not modelled here) \\
-\rowcolor{gray!9}SIMM & ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99\% 10-day loss (not implemented here) \\
-Pillar dates & Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y \\
-\rowcolor{gray!9}Risk-neutral measure & Pricing measure in which discounted assets are martingales; drift = r - q \\
+Delta, gamma & First and second sensitivity of a value or exposure measure to a market factor (here per +1\% spot, per +1bp rate) \\
+\rowcolor{gray!9}DV01 & Change in value for a +1bp move of the interest rate curve, parallel or by tenor bucket \\
+Vega & Sensitivity to volatility (here per +1\% relative shift) \\
+\rowcolor{gray!9}CVA & Credit valuation adjustment: the market price of counterparty default risk on a derivatives portfolio \\
+SA-CVA & Basel standardised approach for CVA capital: risk-weighted CVA sensitivities aggregated by bucket and risk class (MAR50) \\
+\rowcolor{gray!9}Wrong-way risk & Positive dependence between exposure and the counterparty default probability (not modelled here) \\
+SIMM & ISDA Standard Initial Margin Model: sensitivity-based initial margin for uncleared derivatives, calibrated to a 99\% 10-day loss (not implemented here) \\
+\rowcolor{gray!9}Pillar dates & Standard curve tenor points: O/N, T/N, 1W, 2W, 1M ... 10Y \\
+Risk-neutral measure & Pricing measure in which discounted assets are martingales; drift = r - q \\
 \bottomrule
 \end{longtable}}
 
@@ -923,8 +1070,9 @@ Repricing & Full repricing of every trade in every scenario and node, 8 worker p
 Collateral (hypothetical) & MPOR look-ahead on the same paths, full variation margin & 10 business days, US federal holidays & exposure/collateral.py \\
 \rowcolor{gray!9}CVA & Regulatory CVA, MAR50.32; pathwise discounting; credit-triangle PD from spreads & LGD 60\%; BBB proxy; unilateral; independent & exposure/cva.py, models/credit.py \\
 SA-CVA & CVA bump sensitivities with common random numbers, MAR50 aggregation & 1,000 scenarios; 21 simulations; m\_CVA = 1 & exposure/sa\_cva.py, scripts/run\_sa\_cva.py \\
-\rowcolor{gray!9}Precision & Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation & Relative SE of PFE99 about 1.0\% at N = 5,000 at the worst date & scripts/convergence\_study\_tail.py \\
-Validation & t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests & 76 automated tests & scripts/, tests/ \\
+\rowcolor{gray!9}Greeks & Bump-and-reprice with common random numbers; equity and FX bumps reuse paths (exact GBM rescaling, subset repricing); rate and vol bumps re-simulate & +1\% spot, +1bp rates (parallel and 8 buckets), +1\% vol; N = 2,000 & greeks/book.py, greeks/exposure.py, scripts/run\_greeks.py \\
+Precision & Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation & Relative SE of PFE99 about 1.0\% at N = 5,000 at the worst date & scripts/convergence\_study\_tail.py \\
+\rowcolor{gray!9}Validation & t=0 self-check, martingale test, delta-normal VaR, stress test, unit tests & 82 automated tests & scripts/, tests/ \\
 \bottomrule
 \end{longtable}}
 
@@ -937,9 +1085,10 @@ Validation & t=0 self-check, martingale test, delta-normal VaR, stress test, uni
 market/ & sofr, equities, fx, vols, correlations (data pulls and inputs); boj, mof\_jgb, bloomberg (JPY data); credit\_spreads, equity\_buckets (CVA inputs) \\
 \rowcolor{gray!9}models/ & rates (Hull-White), equity\_fx (GBM), calibration and hw\_calibration (parameters), equity\_factor\_model (PCA), credit (PD from spreads) \\
 simulation/ & engine (grid, paths, MPOR nodes), random\_numbers (five sampling schemes), parallel (multiprocessing repricing) \\
-\rowcolor{gray!9}exposure/ & aggregate (netting, EE, median PFE, PFE, MPE), collateral (MPOR-shifted), cva (regulatory CVA), sa\_cva (Basel aggregation) \\
-scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_report\_data, build\_report (LaTeX), build\_exec\_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks \\
-\rowcolor{gray!9}tests/ & 76 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA \\
+\rowcolor{gray!9}greeks/ & book (t=0 Greeks by trade and netting set), exposure (sensitivities of EE, median PFE, PFE99), bumps (curve and parameter bump helpers) \\
+exposure/ & aggregate (netting, EE, median PFE, PFE, MPE), collateral (MPOR-shifted), cva (regulatory CVA), sa\_cva (Basel aggregation) \\
+\rowcolor{gray!9}scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_report\_data, build\_report (LaTeX), build\_exec\_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks \\
+tests/ & 82 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA \\
 \bottomrule
 \end{longtable}}
 
@@ -951,7 +1100,8 @@ python scripts/build_report.py                            # this PDF
 python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles
 python scripts/run_mpor_comparison.py                     # hypothetical collateral demo
 python scripts/run_sa_cva.py --scenarios 1000             # CVA and SA-CVA capital (21 runs)
-python -m pytest tests                                    # 76 tests
+python scripts/run_greeks.py --scenarios 2000             # book and exposure Greeks (about 75 min)
+python -m pytest tests                                    # 82 tests
 \end{verbatim}}
 {\small Key modules: src/risk\_engine/models (rates, equity\_fx, calibration, hw\_calibration, equity\_factor\_model), simulation (engine, random\_numbers, parallel), exposure (aggregate, collateral), market (sofr, boj, mof\_jgb, bloomberg, vols, correlations).}
 

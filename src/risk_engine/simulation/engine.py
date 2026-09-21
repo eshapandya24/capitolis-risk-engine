@@ -299,14 +299,19 @@ class SimulationEngine:
         trade_ids = list(self.trades.keys())
         node_indices = range(len(self.dates)) if node_indices is None else node_indices
         out = np.zeros((len(trade_ids), len(node_indices)), dtype=np.float64)
+        # Optional Greeks bump (set by greeks/exposure.py): multiplies simulated
+        # equity/FX spots (exact for GBM: shifting S0 rescales every path) and/or
+        # restricts repricing to the trades that can change.
+        bump = getattr(self, "bump", None) or {}
+        eq_mult, fx_mult, subset = bump.get("eq", {}), bump.get("fx", 1.0), bump.get("trades")
 
         for oi, node_idx in enumerate(node_indices):
             node_date, t = self.dates[node_idx], self.times[node_idx]
             r_t = self.hw.short_rate(paths["x_rate"][s, node_idx], t)
             usd_curve = self.hw.fast_node_curve(node_date, t, r_t)
-            equity_spots = {f: float(np.exp(paths["ln_spot"][f][s, node_idx]))
+            equity_spots = {f: float(np.exp(paths["ln_spot"][f][s, node_idx])) * eq_mult.get(f, 1.0)
                              for f in self.equity_idx}
-            fx_spot = float(np.exp(paths["ln_fx"][s, node_idx]))
+            fx_spot = float(np.exp(paths["ln_fx"][s, node_idx])) * fx_mult
             fx_curve = FxCurve("USD", "JPY", fx_spot, usd_curve)
             market = MarketState(
                 ref_date=node_date, reporting_ccy="USD",
@@ -317,6 +322,8 @@ class SimulationEngine:
             )
             for ti, tid in enumerate(trade_ids):
                 if node_date > self.trade_expiries[tid]:
+                    continue
+                if subset is not None and tid not in subset:
                     continue
                 try:
                     out[ti, oi] = self.trades[tid].npv(market, reporting=True)
