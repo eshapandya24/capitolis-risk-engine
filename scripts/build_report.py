@@ -1254,7 +1254,7 @@ def main():
              ["8", "JPY mean-reversion fit gave a negative a", "Diagnosed as a real structural property (three sources); lower bound a = 0.001 used"]],
             widths=[0.3, 3.3, 4.2], font=7.4))
     add(P("13. Assumptions and limitations", H1))
-    add(B(["<b>Exposure definition and USD curve.</b> The headline exposure is uncollateralized rather than the brief's 10-day movement from the prior-day NPV, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.",
+    add(B(["<b>Exposure definition and USD curve.</b> CVA, SA-CVA and the Greeks are on the uncollateralized level exposure, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.",
            "<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.5).",
            "<b>Volatility is a 3-year realised proxy</b>, not implied. Regime shifts and skew are not captured.",
            "<b>One static correlation matrix</b> from 613 days; correlations tend to rise in stress and are not stressed here.",
@@ -1279,15 +1279,12 @@ def main():
     add(PageBreak())
 
     add(P("15. Improvement plan for the next week", H1))
-    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. Item 1 is done (Section 7.1); the CVA, SA-CVA and Greeks results in Sections 8 and 9 should be read with the remaining known issues in mind until Priority 1 is complete."))
+    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The CVA, SA-CVA and Greeks results in Sections 8 and 9 were computed on the uncollateralized level exposure and should be read with the known issues below in mind until item 4 is complete."))
     add(P("15.1 Requirements traceability", H2))
     add(tbl([["Kickoff requirement", "Status", "Action"],
              ["Stochastic models for rates, equity and FX, defended", "Done", "-"],
              ["Correlated joint simulation; correlation from history", "Done", "-"],
              ["Provided pricers called on simulated market states", "Done", "-"],
-             ["Exposure = movement from the prior-day NPV over a 10-day close-out; no initial margin; variation margin equals the prior-day NPV (slide 9)", "Done (Section 7.1): three-node grid, signed prior-day variation margin, netting before the positive part, settlement excluded", "Item 1 done"],
-             ["PFE at the 99th percentile of the 10-day windows, MPE as its peak, EE, over a one-year horizon (slide 8)", "Done (Section 7.1): PFE99, MPE, EE and median PFE within the first year", "Item 1 done"],
-             ["Exposures per trade and aggregated to the counterparty (slide 8)", "Done (Section 7.1): 16 trades and 3 counterparties", "Item 1 done"],
              ["Netting-set exposure profiles", "Done", "-"],
              ["Evidence of convergence in the number of simulations (slide 9)", "Done (Section 5.5)", "-"],
              ["Greeks, bumped or pathwise, efficient across scenarios", "Done (Section 9) on the level exposure", "Re-run on the close-out definition (item 4)"],
@@ -1298,13 +1295,11 @@ def main():
              ["Extra credit: risky bonds and CDS data for new sample trades", "Not done", "Item 9"]],
             widths=[3.6, 2.8, 1.0], font=7.2))
     add(P("15.2 Known issues in the current results", H2))
-    add(B(["<b>Exposure definition (resolved for the exposure measures).</b> The headline exposure now follows the brief (Section 7.1). CVA, SA-CVA and the Greeks in Sections 8 and 9 were computed earlier on the uncollateralized level exposure and are scheduled to be re-run on the close-out definition (item 4); until then they are conservative for a margined counterparty and, for CVA, are not yet on the brief's definition.",
            "<b>USD curve beyond seven years.</b> The SOFR-futures curve covers about 6.3 years and is extrapolated flat, so the 2049 Treasury underlying BF_0003 is discounted at 4.27% instead of about 4.64% at 20 years. Repricing with Bloomberg's zero curve gives an NPV of $120.9M for BF_0003 against $101.4M on our curve, about 16 percent higher. CPTY_C exposure, CVA and SA-CVA are therefore understated.",
            "<b>JPY rate not simulated.</b> The JPY Hull-White factor is built and calibrated but JPY equity and USDJPY drift still use a constant differential (Section 4.5)."]))
     add(P("15.3 Work plan", H2))
     add(P("<b>Priority 1: needed to meet the brief in full</b>", BODY))
     add(tbl([["Item", "Work", "Deliverable and check"],
-             ["1", "Done (Section 7.1). Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view", "New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.5 numbers"],
              ["2", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced"],
              ["3", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported"],
              ["4", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after"]],
