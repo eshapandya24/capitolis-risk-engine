@@ -1224,20 +1224,20 @@ def main():
            "<b>JPY rate not simulated.</b> The JPY Hull-White factor is built and calibrated but JPY equity and USDJPY drift still use a constant differential (Section 4.5)."]))
     add(P("15.3 Work plan", H2))
     add(P("<b>Priority 1: needed to meet the brief in full</b>", BODY))
-    add(tbl([["Item", "Work", "Deliverable and check", "Day"],
-             ["1", "Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view", "New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.4 numbers", "1"],
-             ["2", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced", "2"],
-             ["3", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported", "2"],
-             ["4", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after", "3 to 4"]],
-            widths=[0.5, 3.2, 3.0, 0.6], font=7.2))
+    add(tbl([["Item", "Work", "Deliverable and check"],
+             ["1", "Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view", "New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.4 numbers"],
+             ["2", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced"],
+             ["3", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported"],
+             ["4", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after"]],
+            widths=[0.5, 3.6, 3.4], font=7.2))
     add(P("<b>Priority 2: completes extra credit and validation</b>", BODY))
-    add(tbl([["Item", "Work", "Deliverable and check", "Day"],
-             ["5", "Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty", "DVA and FVA with formula tests; net xVA table", "4"],
-             ["6", "Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book", "Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement", "5"],
-             ["7", "Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing", "Per-counterparty EAD; hand-calculated tests", "5"],
-             ["8", "Refresh the report and executive deck for the Risk department presentation; rehearse", "Updated PDF, LaTeX source and deck; slide on the changes and their effect on results", "5"],
-             ["9", "Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve", "Gap statement or new sample trade", "if time"]],
-            widths=[0.5, 3.2, 3.0, 0.6], font=7.2))
+    add(tbl([["Item", "Work", "Deliverable and check"],
+             ["5", "Complete xVA: DVA from the negative exposure profile and a Capitolis credit curve, and FVA from a funding spread; net xVA by counterparty", "DVA and FVA with formula tests; net xVA table"],
+             ["6", "Backtest simulated PFE against realised outcomes with a Kupiec proportion-of-failures test, at 95 and 99 percent, on the equity names and where possible the book", "Backtest module with truncation of history at each as-of date (no look-ahead); pass or fail statement"],
+             ["7", "Optional: SA-CCR exposure-at-default chain (replacement cost, PFE add-on, multiplier) per counterparty for regulatory framing", "Per-counterparty EAD; hand-calculated tests"],
+             ["8", "Refresh the report and executive deck for the Risk department presentation; rehearse", "Updated PDF, LaTeX source and deck; slide on the changes and their effect on results"],
+             ["9", "Extra credit, risky bonds and CDS data: document the gap and, if a source becomes available, add a risky bond to a sample trade with a credit curve", "Gap statement or new sample trade"]],
+            widths=[0.5, 3.6, 3.4], font=7.2))
     add(P("15.4 Further model refinements (after the above)", H2))
     add(B(["Two-factor rate model and stochastic volatility, if Capitolis wants richer dynamics; the vol-of-vol correlation must be applied in the paths if it is fit.",
            "Brownian-bridge interpolation with conditional variance where exposure is read at off-grid dates.",
