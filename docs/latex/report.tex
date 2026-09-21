@@ -48,27 +48,28 @@
 {\normalsize Valuation date 2026-08-28 \textbar{} September 2026\par}
 \end{titlepage}
 \section*{Abstract}
-This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the portfolio, prices counterparty credit risk (CVA) with bond-implied credit spreads, computes the Basel SA-CVA capital requirement, and provides the full set of sensitivities (Greeks) of the book and of the exposure measures. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
+This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing (ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by trade, by counterparty and for the portfolio on the 10-day close-out definition specified in the project brief, prices counterparty credit risk (CVA) with bond-implied credit spreads, computes the Basel SA-CVA capital requirement, and provides the full set of sensitivities (Greeks) of the book and of the exposure measures. The report sets out the underlying concepts from first principles, the market data and calibration, each modelling choice together with the alternatives considered, the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption.
 
 \tableofcontents
 \clearpage
 \section*{Summary of results}
-The table reports the portfolio results for the uncollateralized book (3,000 Latin Hypercube scenarios, PFE at the 99th percentile).
+The table reports portfolio results. Exposure follows the definition in the project brief (kickoff slides 8 and 9): the movement of the netted value from its prior-day level over a 10-business-day close-out, with variation margin equal to the prior-day value and no initial margin (5,000 Latin Hypercube scenarios, PFE at the 99th percentile, one-year horizon). The uncollateralized level exposure is kept as a secondary view (3,000 scenarios).
 
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2875\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2875\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4250\linewidth-2\tabcolsep\relax}}
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Measure}} & \textbf{\textcolor{white}{Value}} & \textbf{\textcolor{white}{Meaning}} \\
 \endhead
-Current exposure (portfolio) & \$107.7M & Loss if every counterparty defaulted today, after netting \\
-\rowcolor{gray!9}Peak EE & \$121.9M at 2026-10-16 & Highest average future exposure \\
-Peak median PFE & \$121.3M at 2026-10-16 & Typical (50th percentile) exposure at its highest date \\
-\rowcolor{gray!9}Maximum PFE99 (MPE) & \$174.7M at 2026-10-09 & Highest 99th-percentile exposure over the life of the book \\
-Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
-\rowcolor{gray!9}Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
-Greeks & t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities & Complete, by netting set (Section 9) \\
-\rowcolor{gray!9}CVA (BBB proxy) & \$210,394 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
-SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
+Peak EE (close-out exposure) & \$10.4M at 2026-09-20 & Highest average 10-day close-out exposure within one year \\
+\rowcolor{gray!9}Peak median PFE (close-out) & \$7.0M & Typical (50th percentile) close-out exposure at its highest date \\
+Maximum PFE99, MPE (close-out) & \$45.7M at 2026-09-04 & Highest 99th-percentile close-out exposure within one year \\
+\rowcolor{gray!9}Current exposure today (uncollateralized) & \$107.7M & Loss if every counterparty defaulted today with no margin, after netting \\
+MPE99, uncollateralized (secondary view) & \$174.7M at 2026-10-09 & Highest 99th-percentile level exposure over the life of the book \\
+\rowcolor{gray!9}Concentration & 99\% of current exposure is CPTY\_C & A single \$500M bond forward (BF\_0003) dominates \\
+Time profile & Most exposure has run off by December 2026 & Trades mature; a small Bond TRS tail runs to January 2028 \\
+\rowcolor{gray!9}Greeks & t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities & Complete, by netting set (Section 9) \\
+CVA (BBB proxy) & \$210,394 & Price of counterparty default risk, unilateral, uncollateralized (Section 8) \\
+\rowcolor{gray!9}SA-CVA capital & \$1.93M (RWA \$24.1M) & Basel standardised approach; dominated by counterparty credit spread risk \\
 \bottomrule
 \end{longtable}}
 
@@ -110,10 +111,11 @@ Trades with the same counterparty under one legal netting agreement are combined
 \rowcolor{navy}\textbf{\textcolor{white}{Measure}} & \textbf{\textcolor{white}{Definition}} & \textbf{\textcolor{white}{How to read it}} \\
 \endhead
 Exposure profile V+(t) & max(net MTM, 0) at each future date t, in each simulated scenario & The raw object; everything below summarises its distribution across scenarios \\
-\rowcolor{gray!9}EE (Expected Exposure) & Mean of exposure across scenarios at date t & Average loss if default happens at t; used for pricing credit charges (CVA) \\
-Median PFE & 50th percentile of exposure across scenarios at date t & The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY\_C forward \\
-\rowcolor{gray!9}PFE99 (Potential Future Exposure) & The 99th percentile of exposure at date t & In 99 of 100 scenarios exposure at t is below this level. Used to set limits \\
-MPE (Maximum PFE) & Peak of the PFE curve over all dates & One number to set a counterparty limit against \\
+\rowcolor{gray!9}Close-out exposure (headline) & max( V(t + 10bd) - V(t - 1bd), 0 ), netted by counterparty & The brief's definition (slides 8 and 9): variation margin is the prior-day NPV, no initial margin, 10-business-day close-out. EE, median PFE, PFE99 and MPE are computed on it unless labelled uncollateralized \\
+EE (Expected Exposure) & Mean of exposure across scenarios at date t & Average loss if default happens at t; used for pricing credit charges (CVA) \\
+\rowcolor{gray!9}Median PFE & 50th percentile of exposure across scenarios at date t & The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY\_C forward \\
+PFE99 (Potential Future Exposure) & The 99th percentile of exposure at date t & In 99 of 100 scenarios exposure at t is below this level. Used to set limits \\
+\rowcolor{gray!9}MPE (Maximum PFE) & Peak of the PFE curve over all dates & One number to set a counterparty limit against \\
 \bottomrule
 \end{longtable}}
 
@@ -308,7 +310,7 @@ A 39x39 matrix has 741 free correlations estimated from only 613 days, so many e
 \includegraphics[width=\linewidth]{figures/fig13.pdf}
 \caption{Loadings of each of the 39 factors on the first five principal factors.}
 \end{figure}
-\textbf{Trade-off.} The factor model is smoother and more robust to estimation noise and gives quasi-random sequences a low-dimensional space where they work best, but it only approximates the empirical matrix. Because it changes results, it is an option (corr\_mode=`factor'), not the default. Section 7.5 compares its exposure profiles with the full-rank engine.
+\textbf{Trade-off.} The factor model is smoother and more robust to estimation noise and gives quasi-random sequences a low-dimensional space where they work best, but it only approximates the empirical matrix. Because it changes results, it is an option (corr\_mode=`factor'), not the default. Section 7.6 compares its exposure profiles with the full-rank engine.
 
 \clearpage
 \subsection{JPY: a negative-rate-capable rate model}
@@ -495,6 +497,67 @@ This is not bad data; it is a structural finding confirmed by three independent 
 
 \clearpage
 \section{Results}
+\subsection{Exposure on the brief's definition (headline)}
+The project brief defines exposure for a defaulting counterparty as the movement of the position from its prior-day value over a close-out period (kickoff slide 9): variation margin collected or posted on a date is the NPV of the trade on the prior day on the path, variation margin stops at default, there is no initial margin, and close-out takes 10 business days. For each scenario and reporting date t, on the netted value V of a netting set:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+exposure(t) = max( V(t + 10bd) - V(t - 1bd), 0 )        V(t - 1bd) = variation margin, signed
+\end{verbatim}}
+EE is the mean of this across scenarios, PFE its 99th percentile, MPE the peak of PFE, all over the one-year horizon of slide 8; the median PFE is added. Netting is applied to the value before the positive part. A trade that settles inside a close-out window is excluded from both legs of that window, since its scheduled value drop to zero is a cash settlement and not a market move. The results are produced per trade and per counterparty, as slide 8 requires. The simulation grid carries three nodes around every reporting date, at t minus 1 business day, t and t plus 10 business days, all on the same simulated path (42 reporting dates); 5,000 Latin Hypercube scenarios, the number recommended in Section 5.5.
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2113\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1690\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2113\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2254\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1831\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Netting set}} & \textbf{\textcolor{white}{Peak EE}} & \textbf{\textcolor{white}{Peak median PFE}} & \textbf{\textcolor{white}{MPE (peak PFE99)}} & \textbf{\textcolor{white}{MPE date}} \\
+\endhead
+CPTY\_A & \$4.7M & \$0.5M & \$25.2M & 2026-09-20 \\
+\rowcolor{gray!9}CPTY\_B & \$1.8M & \$0.4M & \$9.8M & 2026-09-20 \\
+CPTY\_C & \$3.9M & \$0.6M & \$22.1M & 2026-09-04 \\
+\rowcolor{gray!9}Portfolio & \$10.4M & \$7.0M & \$45.7M & 2026-09-04 \\
+\bottomrule
+\end{longtable}}
+
+{\small Values in USD, maximum over the reporting dates within one year of the valuation date. The portfolio is the sum of the counterparty exposures (netting does not cross counterparties).}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig22.pdf}
+\caption{Close-out exposure through the first year: EE, median PFE and PFE99 by counterparty and for the portfolio.}
+\end{figure}
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1857\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1857\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2143\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2000\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2143\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Trade}} & \textbf{\textcolor{white}{Counterparty}} & \textbf{\textcolor{white}{NPV today}} & \textbf{\textcolor{white}{Peak EE}} & \textbf{\textcolor{white}{MPE (peak PFE99)}} \\
+\endhead
+EQTRS\_0001 & CPTY\_A & -8,377,700 & 1,884,623 & 10,179,418 \\
+\rowcolor{gray!9}EQTRS\_0002 & CPTY\_A & -2,079,657 & 1,936,254 & 10,755,759 \\
+EQTRS\_0003 & CPTY\_A & 11,151,337 & 2,159,408 & 11,952,682 \\
+\rowcolor{gray!9}EQTRS\_0004 & CPTY\_B & -1,051,939 & 837,334 & 4,626,625 \\
+EQTRS\_0005 & CPTY\_B & 51,772 & 278,068 & 1,441,254 \\
+\rowcolor{gray!9}EQTRS\_0006 & CPTY\_B & 1,393,250 & 1,357,824 & 7,274,715 \\
+EQTRS\_0007 & CPTY\_C & 826,403 & 2,013,796 & 11,370,928 \\
+\rowcolor{gray!9}EQTRS\_0008 & CPTY\_C & 1,947,022 & 600,882 & 3,183,304 \\
+BF\_0001 & CPTY\_A & 512,531 & 101,496 & 570,541 \\
+\rowcolor{gray!9}BF\_0002 & CPTY\_A & -432,501 & 78,493 & 461,684 \\
+BF\_0003 & CPTY\_C & 101,417,649 & 3,233,786 & 18,394,722 \\
+\rowcolor{gray!9}BF\_0004 & CPTY\_C & 1,973,388 & 43,922 & 237,221 \\
+BTRS\_0001 & CPTY\_A & 123,516 & 1,729 & 6,720 \\
+\rowcolor{gray!9}BTRS\_0002 & CPTY\_B & 221,019 & 66,954 & 109,235 \\
+BTRS\_0003 & CPTY\_B & 28,948 & 11,401 & 19,744 \\
+\rowcolor{gray!9}BTRS\_0004 & CPTY\_C & 37,741 & 23,531 & 28,954 \\
+\bottomrule
+\end{longtable}}
+
+{\small Per-trade close-out exposure (each trade on its own, so no netting) in USD. The per-trade figures do not add up to the counterparty figures: netting and the tail of a sum differ from the sum of tails.}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figures/fig23.pdf}
+\caption{Peak PFE99 by counterparty under three definitions of exposure. The level exposure (grey) treats the whole mark-to-market as at risk; the brief's definition (navy) recognises that variation margin covers the prior-day value and leaves only the 10-day move.}
+\end{figure}
+\textbf{Reading the results.} The close-out MPE99 is far below the level exposure because the prior-day value is margined: CPTY\_C's bond forward BF\_0003 is worth \$101M today but its 10-day move at the 99th percentile is \$18.4M, so its counterparty peaks at \$22.1M against \$144.5M of level exposure. CPTY\_A and CPTY\_B are driven by the equity swap baskets, whose 10-day equity moves set the tail. Close-out exposure is a measure of market risk over the close-out window, not of the accumulated value, which is why the peak occurs in the first weeks, when the largest baskets are alive, and falls as trades mature. Earlier versions of this report headlined the level exposure; that view is retained below as a secondary measure (Sections 7.2 to 7.4), and the earlier full-variation-margin illustration (Section 7.5) used a same-day, zero-floored margin formula that differs slightly from the brief's. CVA, SA-CVA and the Greeks in Sections 8 and 9 are still computed on the level exposure and are scheduled to be re-run on this definition (Section 15, item 4).
+
 \subsection{Exposure today (t = 0)}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.1558\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.0909\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1948\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2208\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3377\linewidth-2\tabcolsep\relax}}
@@ -510,10 +573,10 @@ CPTY\_C & 5 & 106,202,202 & 106,202,202 & One 500M bond forward dominates \\
 
 The simulated EE at t=0 equals the directly computed current exposure to 0.0000\% (the engine's built-in self-check): at t=0 there is no randomness so both must agree exactly.
 
-\subsection{Exposure profiles through time}
+\subsection{Uncollateralized exposure profiles through time (secondary view)}
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig22.pdf}
+\includegraphics[width=\linewidth]{figures/fig24.pdf}
 \caption{EE, median PFE and PFE99 for each counterparty and the portfolio. The shaded band runs from the median PFE to PFE99.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -534,24 +597,24 @@ CPTY\_C & \$106.2M & \$107.1M & \$107.8M & \$144.5M & 2026-10-23 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig23.pdf}
+\includegraphics[width=\linewidth]{figures/fig25.pdf}
 \caption{Probability that a counterparty has any positive exposure at all. Where this is far below 100\%, the median PFE is zero even though EE and PFE99 are large.}
 \end{figure}
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig24.pdf}
+\includegraphics[width=\linewidth]{figures/fig26.pdf}
 \caption{Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time.}
 \end{figure}
 \clearpage
 \subsection{Where does the risk come from?}
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig25.pdf}
+\includegraphics[width=\linewidth]{figures/fig27.pdf}
 \caption{Expected NPV by trade at each reporting date. CPTY\_C's BF\_0003 dominates the picture and disappears at its 2026-12-06 settlement; a few equity TRS contribute negative expected NPV.}
 \end{figure}
 \textbf{Concentration.} CPTY\_C accounts for 83\% of the portfolio's peak PFE99 and 99\% of today's exposure, and almost all of it comes from one trade, BF\_0003 (500M notional, short forward struck at 100 on a long-dated 2.88\% 2049 Treasury trading roughly 20 points below par, so we are owed the difference). This is concentration risk rather than diversified counterparty risk; a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report.
 
-\subsection{What if the counterparty posts margin? (MPOR-shifted exposure)}
+\subsection{Earlier illustration: full variation margin with an MPOR shift}
 The real book is treated as \textbf{uncollateralized} because trade\_data carries no CSA terms. For a collateralized counterparty, default does not mean instant close-out: there is a Margin Period of Risk (standard 10 business days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:
 
 {\fontsize{7.2}{8.8}\selectfont
@@ -563,7 +626,7 @@ Implementation: an extra look-ahead node is inserted MPOR days after every repor
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig26.pdf}
+\includegraphics[width=\linewidth]{figures/fig28.pdf}
 \caption{If a full-VM CSA existed, peak PFE99 would fall sharply, most of all for CPTY\_C whose exposure is a large, already-visible MTM that margin would cover.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -587,7 +650,7 @@ Whether any trade is actually margined is the most important open question for C
 \subsection{Full-rank correlation versus PCA factor model}
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig27.pdf}
+\includegraphics[width=\linewidth]{figures/fig29.pdf}
 \caption{Same seed and method (1,500 scenarios) with the full Cholesky correlation versus a k-factor PCA model. Curves coincide closely from k=5.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -625,7 +688,7 @@ CDS spreads for the counterparties are not available, and the counterparties are
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig28.pdf}
+\includegraphics[width=\linewidth]{figures/fig30.pdf}
 \caption{Proxy spread curves by rating on the valuation date. The BBB curve used for the counterparties runs from about 59 bp at 6 months to about 118 bp at 10 years.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -644,7 +707,7 @@ The counterparty identities and ratings were not provided, so these are explicit
 \subsection{Results: CVA}
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig29.pdf}
+\includegraphics[width=\linewidth]{figures/fig31.pdf}
 \caption{Left: expected discounted exposure by counterparty. Middle: CVA by counterparty at the BBB proxy. Right: portfolio CVA if all counterparties had the rating shown.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -706,7 +769,7 @@ Equity names are assigned to Basel buckets by size (market capitalisation of at 
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig30.pdf}
+\includegraphics[width=\linewidth]{figures/fig32.pdf}
 \caption{Left: CVA sensitivity to a 1bp rise in USD yields at each SA-CVA tenor. Middle: sensitivity of CVA to the counterparty credit spreads (three counterparties by five tenors). Right: SA-CVA capital by risk class.}
 \end{figure}
 {\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -769,7 +832,7 @@ All values in USD. The equity and bond trades are linear in the equity spot, so 
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig31.pdf}
+\includegraphics[width=\linewidth]{figures/fig33.pdf}
 \caption{Left: DV01 by netting set and tenor. Right: the twelve largest equity deltas at t = 0.}
 \end{figure}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -790,7 +853,7 @@ These are the Greeks that matter for counterparty credit risk: how EE, median PF
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig32.pdf}
+\includegraphics[width=\linewidth]{figures/fig34.pdf}
 \caption{Change in portfolio EE, median PFE and PFE99 through time for +1\% on all equities, +1\% on USDJPY and +1bp on USD rates.}
 \end{figure}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -831,7 +894,7 @@ Rate gamma (+1bp) & EE & 21 & 5 & -1,276 & -1,250 \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig33.pdf}
+\includegraphics[width=\linewidth]{figures/fig35.pdf}
 \caption{Left: the twelve largest single-name deltas of portfolio PFE99 at the peak date. Right: bucketed USD rate DV01 of PFE99 at the same date.}
 \end{figure}
 Single-name deltas of PFE99 show which positions drive the tail; because a quantile is not additive across names, the single-name deltas sum only approximately to the all-equity delta (Section 9.5).
@@ -859,7 +922,7 @@ The equity and FX Greeks, which are 37 names plus FX, each with an up and a down
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Check}} & \textbf{\textcolor{white}{Result}} \\
 \endhead
-t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.3e-03 \\
+t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.5e-03 \\
 \rowcolor{gray!9}Bump-size stability of the all-equity EE delta at the peak date: 0.5\%, 1\%, 2\% bumps (USD k per +1\%) & -2,870, -2,869, -2,869 (spread 0.03\%) \\
 Additivity: sum of the 37 single-name EE deltas against the all-equity delta (maximum over all dates after t = 0) & 1.34\% of the peak all-equity delta \\
 \rowcolor{gray!9}The same at t = 0 itself & 25\%: at t = 0 the exposure max(V, 0) is deterministic and has a kink, and a 1\% bump of one name can cross it (CPTY\_A, CPTY\_B), so single-name and joint finite differences need not add there \\
@@ -870,7 +933,7 @@ Sum of single-name PFE99 deltas against the all-equity PFE99 delta at the peak d
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/fig34.pdf}
+\includegraphics[width=\linewidth]{figures/fig36.pdf}
 \caption{Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws.}
 \end{figure}
 \subsection{Limitations}
@@ -963,7 +1026,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \section{Assumptions and limitations}
 \begin{itemize}
 \item \textbf{Exposure definition and USD curve.} The headline exposure is uncollateralized rather than the brief's 10-day movement from the prior-day NPV, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.
-\item \textbf{Uncollateralized and no CSA data.} If margin exists, results change by up to an order of magnitude (Section 7.4).
+\item \textbf{Uncollateralized and no CSA data.} If margin exists, results change by up to an order of magnitude (Section 7.5).
 \item \textbf{Volatility is a 3-year realised proxy}, not implied. Regime shifts and skew are not captured.
 \item \textbf{One static correlation matrix} from 613 days; correlations tend to rise in stress and are not stressed here.
 \item \textbf{GBM underestimates fat tails}, most relevant for PFE99 on high-vol names.
@@ -978,7 +1041,8 @@ Each defect was identified by checking against an independent source, a hand cal
 \section{Conclusions and recommendations}
 \begin{itemize}
 \item The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 82 tests) and reproducible with a single command per stage.
-\item The uncollateralized book has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
+\item On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is \$45.7M at 2026-09-04, with peak EE of \$10.4M and peak median PFE of \$7.0M (Section 7.1).
+\item The uncollateralized level exposure, kept as a secondary view, has peak portfolio PFE99 of \$174.7M at 2026-10-09, versus EE of \$121.9M and median PFE of \$121.3M; the spread between these three is the point of reporting all of them.
 \item Risk is short-dated (about four months) and concentrated (one trade, one counterparty).
 \item CVA on the uncollateralized book is about \$210k at a BBB proxy (\$126k at AA to \$325k at BB); the SA-CVA requirement is \$1.93M (RWA \$24.1M), dominated by counterparty credit spread risk.
 \item Greeks are complete for the book and for the exposure measures (Section 9): PFE99 at its peak date falls by about \$3,908k per +1\% on all equities and rises by about \$638k per +1bp on USD rates.
@@ -988,7 +1052,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \clearpage
 \section{Improvement plan for the next week}
-A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The numbers in Sections 7 to 9 should be read with the first two known issues in mind until Priority 1 is done.
+A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. Item 1 is done (Section 7.1); the CVA, SA-CVA and Greeks results in Sections 8 and 9 should be read with the remaining known issues in mind until Priority 1 is complete.
 
 \subsection{Requirements traceability}
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
@@ -999,12 +1063,12 @@ A review of this work against the requirements in the kickoff deck (project obje
 Stochastic models for rates, equity and FX, defended & Done & - \\
 \rowcolor{gray!9}Correlated joint simulation; correlation from history & Done & - \\
 Provided pricers called on simulated market states & Done & - \\
-\rowcolor{gray!9}Exposure = movement from the prior-day NPV over a 10-day close-out; no initial margin; variation margin equals the prior-day NPV (slide 9) & Gap: headline exposure is uncollateralized max(V, 0); the margined view uses a different formula and is a side calculation & Item 1 \\
-PFE at the 99th percentile of the 10-day windows, MPE as its peak, EE, over a one-year horizon (slide 8) & Partial: measures exist but on the uncollateralized definition and to January 2028 & Item 1 \\
-\rowcolor{gray!9}Exposures per trade and aggregated to the counterparty (slide 8) & Partial: counterparty and portfolio only are reported & Item 1 \\
+\rowcolor{gray!9}Exposure = movement from the prior-day NPV over a 10-day close-out; no initial margin; variation margin equals the prior-day NPV (slide 9) & Done (Section 7.1): three-node grid, signed prior-day variation margin, netting before the positive part, settlement excluded & Item 1 done \\
+PFE at the 99th percentile of the 10-day windows, MPE as its peak, EE, over a one-year horizon (slide 8) & Done (Section 7.1): PFE99, MPE, EE and median PFE within the first year & Item 1 done \\
+\rowcolor{gray!9}Exposures per trade and aggregated to the counterparty (slide 8) & Done (Section 7.1): 16 trades and 3 counterparties & Item 1 done \\
 Netting-set exposure profiles & Done & - \\
 \rowcolor{gray!9}Evidence of convergence in the number of simulations (slide 9) & Done (Section 5.5) & - \\
-Greeks, bumped or pathwise, efficient across scenarios & Done (Section 9) & Re-run after Priority 1 \\
+Greeks, bumped or pathwise, efficient across scenarios & Done (Section 9) on the level exposure & Re-run on the close-out definition (item 4) \\
 \rowcolor{gray!9}Speed and performance benchmarks; analytical accuracy benchmarks & Done (Sections 5 and 11) & - \\
 Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6) & Partial: the USD long end is flat and the JPY rate is not simulated & Items 2 and 3 \\
 \rowcolor{gray!9}Repository, technical report, presentation to the Risk department & Done; presentation to be refreshed & Item 8 \\
@@ -1015,7 +1079,7 @@ Extra credit: xVA outputs & Partial: CVA and SA-CVA capital; no DVA or FVA & Ite
 
 \subsection{Known issues in the current results}
 \begin{itemize}
-\item \textbf{Exposure definition.} The headline exposure numbers (Section 7) are uncollateralized. The brief defines exposure as the movement from the prior-day NPV over a 10-day close-out (slide 9), which is close to our margined calculation in Section 7.4 but not identical: ours compares the value 10 business days later with the same-day value floored at zero, whereas the brief uses the prior-day NPV without a floor. The margined figures in Section 7.4 (MPE99 of about \$24.9M, \$9.2M and \$26.7M for CPTY\_A, CPTY\_B and CPTY\_C) are indicative of the order of magnitude the corrected headline will take.
+\item \textbf{Exposure definition (resolved for the exposure measures).} The headline exposure now follows the brief (Section 7.1). CVA, SA-CVA and the Greeks in Sections 8 and 9 were computed earlier on the uncollateralized level exposure and are scheduled to be re-run on the close-out definition (item 4); until then they are conservative for a margined counterparty and, for CVA, are not yet on the brief's definition.
 \item \textbf{USD curve beyond seven years.} The SOFR-futures curve covers about 6.3 years and is extrapolated flat, so the 2049 Treasury underlying BF\_0003 is discounted at 4.27\% instead of about 4.64\% at 20 years. Repricing with Bloomberg's zero curve gives an NPV of \$120.9M for BF\_0003 against \$101.4M on our curve, about 16 percent higher. CPTY\_C exposure, CVA and SA-CVA are therefore understated.
 \item \textbf{JPY rate not simulated.} The JPY Hull-White factor is built and calibrated but JPY equity and USDJPY drift still use a constant differential (Section 4.5).
 \end{itemize}
@@ -1027,7 +1091,7 @@ Extra credit: xVA outputs & Partial: CVA and SA-CVA capital; no DVA or FVA & Ite
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Item}} & \textbf{\textcolor{white}{Work}} & \textbf{\textcolor{white}{Deliverable and check}} \\
 \endhead
-1 & Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view & New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.4 numbers \\
+1 & Done (Section 7.1). Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view & New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.5 numbers \\
 \rowcolor{gray!9}2 & Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract) & Curve validated against Treasury and against the Bloomberg curve; BF\_0003 NPV reconciled; all trades repriced \\
 3 & Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it & Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported \\
 \rowcolor{gray!9}4 & Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count & Refreshed data files; regression tests; comparison before and after \\

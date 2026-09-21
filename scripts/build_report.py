@@ -624,6 +624,60 @@ def fig_sa_cva(R_):
     return fig
 
 
+
+def load_spec():
+    return json.load(open(os.path.join(PROC, "spec_run", "spec_exposure.json")))
+
+
+def spec_year_mask(S_):
+    ref = date.fromisoformat(S_["ref_date"])
+    return np.array([(date.fromisoformat(d) - ref).days <= 365 for d in S_["reporting_dates"]])
+
+
+def spec_peaks(S_, entity):
+    """Peak EE, peak median PFE, MPE99 (all within one year) and their dates."""
+    mk = spec_year_mask(S_)
+    e = S_["by_counterparty"][entity]
+    ee, md, pf = np.array(e["EE"]), np.array(e["MedianExposure"]), np.array(e["PFE"])
+    idx = np.where(mk)[0]
+    return {"EE": ee[idx].max(), "EE_date": S_["reporting_dates"][idx[int(ee[idx].argmax())]],
+            "MED": md[idx].max(), "PFE": pf[idx].max(), "PFE_date": S_["reporting_dates"][idx[int(pf[idx].argmax())]]}
+
+
+def fig_spec_profiles(S_):
+    ref = date.fromisoformat(S_["ref_date"])
+    x = np.array([(date.fromisoformat(d) - ref).days for d in S_["reporting_dates"]])
+    mk = x <= 365
+    fig, axs = plt.subplots(2, 2, figsize=(7.2, 5.0))
+    for ax, c in zip(axs.ravel(), ["CPTY_A", "CPTY_B", "CPTY_C", "__portfolio__"]):
+        e = S_["by_counterparty"][c]
+        ax.plot(x[mk], np.array(e["PFE"])[mk] / 1e6, color="#8B0000", lw=1.6, label="PFE99")
+        ax.plot(x[mk], np.array(e["EE"])[mk] / 1e6, color=NAVY, lw=1.8, label="EE")
+        ax.plot(x[mk], np.array(e["MedianExposure"])[mk] / 1e6, color=GOLD, lw=1.8, label="Median PFE")
+        ax.set_title("Portfolio" if c == "__portfolio__" else c); ax.set_xlabel("days"); ax.set_ylabel("USD M")
+    axs[0, 0].legend()
+    fig.tight_layout()
+    return fig
+
+
+def fig_spec_compare(S_, D):
+    from risk_engine.exposure.collateral import mpor_vs_uncollateralized_comparison
+    meta_ = D["meta"]
+    cmp_ = mpor_vs_uncollateralized_comparison(meta_["trade_ids"], meta_["trade_counterparty"], D["npv"], D["node_map"], D["rep_dates"], 0.0, CONF)
+    cp = ["CPTY_A", "CPTY_B", "CPTY_C"]
+    unc = [prof(D["expo"][c])["P99"].max() / 1e6 for c in cp]
+    old = [cmp_["mpor_shifted"][c]["MPE"] / 1e6 for c in cp]
+    new = [spec_peaks(S_, c)["PFE"] / 1e6 for c in cp]
+    fig, ax = plt.subplots(figsize=(6.4, 2.7))
+    w = 0.27
+    ax.bar(np.arange(3) - w, unc, w, color=GREY, label="uncollateralized level, max(V,0)")
+    ax.bar(np.arange(3), old, w, color=TEAL, label="earlier full-VM illustration (Section 7.5)")
+    ax.bar(np.arange(3) + w, new, w, color=NAVY, label="brief's close-out exposure (headline)")
+    ax.set_xticks(range(3)); ax.set_xticklabels(cp); ax.set_ylabel("MPE99 (USD M)"); ax.legend(fontsize=6.5)
+    ax.set_title("Peak PFE99 under three exposure definitions")
+    return fig, unc, old, new
+
+
 # ------------------------------------------------------------------ report
 def main():
     from datetime import date as _d
@@ -656,21 +710,24 @@ def main():
           "(ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution "
           "of the USD short rate (one-factor Hull-White model), 37 equities and USDJPY (correlated geometric Brownian motion), "
           "reprices every trade in every scenario with the supplied pricer library, and reports Expected Exposure (EE), median "
-          "PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by counterparty and for the "
-          "portfolio, prices counterparty credit risk (CVA) with bond-implied credit spreads, computes the Basel SA-CVA capital requirement, and provides the full set of sensitivities (Greeks) of the book and of the exposure measures. The report sets out the underlying concepts from first principles, the market data and calibration, each "
+          "PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by trade, by counterparty and for the "
+          "portfolio on the 10-day close-out definition specified in the project brief, prices counterparty credit risk (CVA) with bond-implied credit spreads, computes the Basel SA-CVA capital requirement, and provides the full set of sensitivities (Greeks) of the book and of the exposure measures. The report sets out the underlying concepts from first principles, the market data and calibration, each "
           "modelling choice together with the alternatives considered, the validation performed, and the results. Every "
           "quantity is either measured from the engine on real market data as of 2026-08-28 or is an explicitly stated assumption."))
     add(make_toc())
     add(PageBreak())
     add("\\section*{Summary of results}\n")
-    add(P("The table reports the portfolio results for the uncollateralized book (3,000 Latin Hypercube scenarios, PFE at the 99th percentile).", BODY))
+    add(P("The table reports portfolio results. Exposure follows the definition in the project brief (kickoff slides 8 and 9): the movement of the netted value from its prior-day level over a 10-business-day close-out, with variation margin equal to the prior-day value and no initial margin (5,000 Latin Hypercube scenarios, PFE at the 99th percentile, one-year horizon). The uncollateralized level exposure is kept as a secondary view (3,000 scenarios).", BODY))
     ce0 = {c: float(per[c]["EE"][0]) for c in per}
     Rc0 = load_sa_cva()
+    S0_ = load_spec()
+    sp_ = spec_peaks(S0_, "__portfolio__")
     add(tbl([["Measure", "Value", "Meaning"],
-             ["Current exposure (portfolio)", m(tot["EE"][0]), "Loss if every counterparty defaulted today, after netting"],
-             ["Peak EE", f"{m(tot['EE'].max())} at {D['rep_dates'][int(tot['EE'].argmax())]}", "Highest average future exposure"],
-             ["Peak median PFE", f"{m(tot['MED'].max())} at {D['rep_dates'][int(tot['MED'].argmax())]}", "Typical (50th percentile) exposure at its highest date"],
-             ["Maximum PFE99 (MPE)", f"{m(mpe99)} at {D['rep_dates'][j_mpe]}", "Highest 99th-percentile exposure over the life of the book"],
+             ["Peak EE (close-out exposure)", f"{m(sp_['EE'])} at {sp_['EE_date']}", "Highest average 10-day close-out exposure within one year"],
+             ["Peak median PFE (close-out)", m(sp_["MED"]), "Typical (50th percentile) close-out exposure at its highest date"],
+             ["Maximum PFE99, MPE (close-out)", f"{m(sp_['PFE'])} at {sp_['PFE_date']}", "Highest 99th-percentile close-out exposure within one year"],
+             ["Current exposure today (uncollateralized)", m(tot["EE"][0]), "Loss if every counterparty defaulted today with no margin, after netting"],
+             ["MPE99, uncollateralized (secondary view)", f"{m(mpe99)} at {D['rep_dates'][j_mpe]}", "Highest 99th-percentile level exposure over the life of the book"],
              ["Concentration", f"{ce0['CPTY_C']/max(tot['EE'][0],1)*100:.0f}% of current exposure is CPTY_C", "A single $500M bond forward (BF_0003) dominates"],
              ["Time profile", "Most exposure has run off by December 2026", "Trades mature; a small Bond TRS tail runs to January 2028"],
              ["Greeks", "t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities", "Complete, by netting set (Section 9)"],
@@ -709,6 +766,7 @@ def main():
     add(P("1.3 The four measures reported", H2))
     add(tbl([["Measure", "Definition", "How to read it"],
              ["Exposure profile V+(t)", "max(net MTM, 0) at each future date t, in each simulated scenario", "The raw object; everything below summarises its distribution across scenarios"],
+             ["Close-out exposure (headline)", "max( V(t + 10bd) - V(t - 1bd), 0 ), netted by counterparty", "The brief's definition (slides 8 and 9): variation margin is the prior-day NPV, no initial margin, 10-business-day close-out. EE, median PFE, PFE99 and MPE are computed on it unless labelled uncollateralized"],
              ["EE (Expected Exposure)", "Mean of exposure across scenarios at date t", "Average loss if default happens at t; used for pricing credit charges (CVA)"],
              ["Median PFE", "50th percentile of exposure across scenarios at date t", "The typical scenario. Exposure is floored at zero: the median is below EE when exposure is right-skewed (most scenarios small, a few large) and can be exactly zero when most scenarios are out of the money; it can sit slightly above EE when the book is almost always in the money, as for the dominant CPTY_C forward"],
              ["PFE99 (Potential Future Exposure)", f"The {int(CONF*100)}th percentile of exposure at date t", "In 99 of 100 scenarios exposure at t is below this level. Used to set limits"],
@@ -840,7 +898,7 @@ def main():
     add(doc.figure(fig_s, "Left: the first eigenvalue (%.1f of a total 39) is one dominant market factor. Middle: %d factors explain %.0f%% of variance and 10 explain %.0f%%. Right: reconstruction error falls as k grows (exactly zero at full rank)." % (vals[0], 5, ev[4] * 100, ev[9] * 100)))
     add(doc.figure(fig_loadings(calib), "Loadings of each of the 39 factors on the first five principal factors."))
     add(P("<b>Trade-off.</b> The factor model is smoother and more robust to estimation noise and gives quasi-random sequences a low-dimensional space where they work best, but it only approximates the "
-          "empirical matrix. Because it changes results, it is an option (corr_mode='factor'), not the default. Section 7.5 compares its exposure profiles with the full-rank engine."))
+          "empirical matrix. Because it changes results, it is an option (corr_mode='factor'), not the default. Section 7.6 compares its exposure profiles with the full-rank engine."))
     add(PageBreak())
 
     add(P("4.5 JPY: a negative-rate-capable rate model", H2))
@@ -968,7 +1026,27 @@ def main():
 
     # ---------- 7 results
     add(P("7. Results", H1))
-    add(P("7.1 Exposure today (t = 0)", H2))
+    S_ = load_spec()
+    add(P("7.1 Exposure on the brief's definition (headline)", H2))
+    add(P("The project brief defines exposure for a defaulting counterparty as the movement of the position from its prior-day value over a close-out period (kickoff slide 9): variation margin collected or posted on a date is the NPV of the trade on the prior day on the path, variation margin stops at default, there is no initial margin, and close-out takes 10 business days. For each scenario and reporting date t, on the netted value V of a netting set:"))
+    add(code("exposure(t) = max( V(t + 10bd) - V(t - 1bd), 0 )        V(t - 1bd) = variation margin, signed"))
+    add(P("EE is the mean of this across scenarios, PFE its 99th percentile, MPE the peak of PFE, all over the one-year horizon of slide 8; the median PFE is added. Netting is applied to the value before the positive part. A trade that settles inside a close-out window is excluded from both legs of that window, since its scheduled value drop to zero is a cash settlement and not a market move. The results are produced per trade and per counterparty, as slide 8 requires. The simulation grid carries three nodes around every reporting date, at t minus 1 business day, t and t plus 10 business days, all on the same simulated path (%d reporting dates); %s Latin Hypercube scenarios, the number recommended in Section 5.5." % (len(S_["reporting_dates"]), format(S_["n_scenarios"], ","))))
+    rows = [["Netting set", "Peak EE", "Peak median PFE", "MPE (peak PFE99)", "MPE date"]]
+    for c in ("CPTY_A", "CPTY_B", "CPTY_C", "__portfolio__"):
+        q_ = spec_peaks(S_, c)
+        rows.append([("Portfolio" if c == "__portfolio__" else c), m(q_["EE"]), m(q_["MED"]), m(q_["PFE"]), q_["PFE_date"]])
+    add(tbl(rows, widths=[1.5, 1.2, 1.5, 1.6, 1.3]))
+    add(P("Values in USD, maximum over the reporting dates within one year of the valuation date. The portfolio is the sum of the counterparty exposures (netting does not cross counterparties).", SMALL))
+    add(doc.figure(fig_spec_profiles(S_), "Close-out exposure through the first year: EE, median PFE and PFE99 by counterparty and for the portfolio."))
+    rows = [["Trade", "Counterparty", "NPV today", "Peak EE", "MPE (peak PFE99)"]]
+    for tid_, v_ in S_["per_trade"].items():
+        rows.append([tid_, v_["counterparty"], format(v_["mtm_t0"], ",.0f"), format(v_["EE_max"], ",.0f"), format(v_["MPE"], ",.0f")])
+    add(tbl(rows, widths=[1.3, 1.3, 1.5, 1.4, 1.5], font=7.4))
+    add(P("Per-trade close-out exposure (each trade on its own, so no netting) in USD. The per-trade figures do not add up to the counterparty figures: netting and the tail of a sum differ from the sum of tails.", SMALL))
+    fgc, unc_, old_, new_ = fig_spec_compare(S_, D)
+    add(doc.figure(fgc, "Peak PFE99 by counterparty under three definitions of exposure. The level exposure (grey) treats the whole mark-to-market as at risk; the brief's definition (navy) recognises that variation margin covers the prior-day value and leaves only the 10-day move."))
+    add(P("<b>Reading the results.</b> The close-out MPE99 is far below the level exposure because the prior-day value is margined: CPTY_C's bond forward BF_0003 is worth $101M today but its 10-day move at the 99th percentile is $18.4M, so its counterparty peaks at $%.1fM against $%.1fM of level exposure. CPTY_A and CPTY_B are driven by the equity swap baskets, whose 10-day equity moves set the tail. Close-out exposure is a measure of market risk over the close-out window, not of the accumulated value, which is why the peak occurs in the first weeks, when the largest baskets are alive, and falls as trades mature. Earlier versions of this report headlined the level exposure; that view is retained below as a secondary measure (Sections 7.2 to 7.4), and the earlier full-variation-margin illustration (Section 7.5) used a same-day, zero-floored margin formula that differs slightly from the brief's. CVA, SA-CVA and the Greeks in Sections 8 and 9 are still computed on the level exposure and are scheduled to be re-run on this definition (Section 15, item 4)." % (new_[2], unc_[2])))
+    add(P("7.2 Exposure today (t = 0)", H2))
     rows = [["Counterparty", "Trades", "Net MTM today", "Netted exposure today", "Comment"]]
     for c in ("CPTY_A", "CPTY_B", "CPTY_C"):
         idx = [i for i, t in enumerate(ids) if meta["trade_counterparty"][t] == c]
@@ -977,7 +1055,7 @@ def main():
     rows.append(["Portfolio", str(len(ids)), f"{npv0.sum():,.0f}", f"{tot['EE'][0]:,.0f}", "Sum of counterparty exposures (netting does not cross counterparties)"])
     add(tbl(rows, widths=[1.2, 0.7, 1.5, 1.7, 2.6]))
     add(P("The simulated EE at t=0 equals the directly computed current exposure to 0.0000% (the engine's built-in self-check): at t=0 there is no randomness so both must agree exactly."))
-    add(P("7.2 Exposure profiles through time", H2))
+    add(P("7.3 Uncollateralized exposure profiles through time (secondary view)", H2))
     add(doc.figure(fig_profiles(D), "EE, median PFE and PFE99 for each counterparty and the portfolio. The shaded band runs from the median PFE to PFE99."))
     rows = [["Counterparty", "EE(0)", "Peak EE", "Peak median PFE", "MPE (peak PFE99)", "MPE date"]]
     for c in ("CPTY_A", "CPTY_B", "CPTY_C", "__portfolio__"):
@@ -993,12 +1071,12 @@ def main():
     add(doc.figure(fig_dists(D), "Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time."))
     add(PageBreak())
 
-    add(P("7.3 Where does the risk come from?", H2))
+    add(P("7.4 Where does the risk come from?", H2))
     add(doc.figure(fig_trade_heat(D), "Expected NPV by trade at each reporting date. CPTY_C's BF_0003 dominates the picture and disappears at its 2026-12-06 settlement; a few equity TRS contribute negative expected NPV."))
     cC = per["CPTY_C"]
     add(P("<b>Concentration.</b> CPTY_C accounts for %.0f%% of the portfolio's peak PFE99 and %.0f%% of today's exposure, and almost all of it comes from one trade, BF_0003 (500M notional, short forward struck at 100 on a long-dated 2.88%% 2049 Treasury trading roughly 20 points below par, so we are owed the difference). This is concentration risk rather than diversified counterparty risk; a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report." % (
               cC["P99"].max() / tot["P99"].max() * 100, ce0["CPTY_C"] / max(tot["EE"][0], 1) * 100)))
-    add(P("7.4 What if the counterparty posts margin? (MPOR-shifted exposure)", H2))
+    add(P("7.5 Earlier illustration: full variation margin with an MPOR shift", H2))
     add(P("The real book is treated as <b>uncollateralized</b> because trade_data carries no CSA terms. For a collateralized counterparty, default does not mean instant close-out: there is a Margin Period of Risk "
           "(standard 10 business days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:"))
     add(code("C(t)        = max( V(t) - threshold, 0 )        collateral held at reporting date t\n"
@@ -1016,7 +1094,7 @@ def main():
     add(P("Whether any trade is actually margined is the most important open question for Capitolis: it changes the answer by roughly an order of magnitude for CPTY_C."))
     add(PageBreak())
 
-    add(P("7.5 Full-rank correlation versus PCA factor model", H2))
+    add(P("7.6 Full-rank correlation versus PCA factor model", H2))
     fg, mpe_f, ee_f, ncmp = fig_factor_cmp()
     add(doc.figure(fg, f"Same seed and method ({ncmp:,} scenarios) with the full Cholesky correlation versus a k-factor PCA model. Curves coincide closely from k=5."))
     rows = [["Model", "Peak portfolio EE", "MPE (peak PFE99)", "MPE difference vs full"]]
@@ -1177,7 +1255,7 @@ def main():
             widths=[0.3, 3.3, 4.2], font=7.4))
     add(P("13. Assumptions and limitations", H1))
     add(B(["<b>Exposure definition and USD curve.</b> The headline exposure is uncollateralized rather than the brief's 10-day movement from the prior-day NPV, and the USD curve is flat beyond about seven years (Section 15.2); both are scheduled for correction in Section 15.3.",
-           "<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.4).",
+           "<b>Uncollateralized and no CSA data.</b> If margin exists, results change by up to an order of magnitude (Section 7.5).",
            "<b>Volatility is a 3-year realised proxy</b>, not implied. Regime shifts and skew are not captured.",
            "<b>One static correlation matrix</b> from 613 days; correlations tend to rise in stress and are not stressed here.",
            "<b>GBM underestimates fat tails</b>, most relevant for PFE99 on high-vol names.",
@@ -1190,7 +1268,8 @@ def main():
            "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data); acceptable for shape and level, disclosed."]))
     add(P("14. Conclusions and recommendations", H1))
     add(B([f"The engine is validated (t=0 self-check, martingale, VaR benchmark, stress test, 82 tests) and reproducible with a single command per stage.",
-           f"The uncollateralized book has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median PFE of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
+           f"On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is {m(sp_['PFE'])} at {sp_['PFE_date']}, with peak EE of {m(sp_['EE'])} and peak median PFE of {m(sp_['MED'])} (Section 7.1).",
+           f"The uncollateralized level exposure, kept as a secondary view, has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median PFE of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
            "Risk is short-dated (about four months) and concentrated (one trade, one counterparty).",
            f"CVA on the uncollateralized book is about ${Rc0['cva_total']/1e3:,.0f}k at a BBB proxy (${Rc0['cva_vs_rating']['AA']/1e3:,.0f}k at AA to ${Rc0['cva_vs_rating']['BB']/1e3:,.0f}k at BB); the SA-CVA requirement is ${Rc0['K_sa_cva']/1e6:.2f}M (RWA ${Rc0['RWA']/1e6:.1f}M), dominated by counterparty credit spread risk.",
            f"Greeks are complete for the book and for the exposure measures (Section 9): PFE99 at its peak date falls by about ${abs(g_['equity_all']['delta']['__portfolio__']['PFE'][RG.peak_node(g_)])/1e3:,.0f}k per +1% on all equities and rises by about ${g_['rate_parallel']['delta']['__portfolio__']['PFE'][RG.peak_node(g_)]/1e3:,.0f}k per +1bp on USD rates.",
@@ -1200,18 +1279,18 @@ def main():
     add(PageBreak())
 
     add(P("15. Improvement plan for the next week", H1))
-    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. The numbers in Sections 7 to 9 should be read with the first two known issues in mind until Priority 1 is done."))
+    add(P("A review of this work against the requirements in the kickoff deck (project objectives on slide 5, exposure definition and key assumptions on slides 8 and 9, deliverables and extra credit on slide 10), and against an independent implementation of the same brief, identified the gaps below. Items in Priority 1 are needed for the deliverable to meet the brief in full; Priority 2 items complete the extra-credit and validation scope. Item 1 is done (Section 7.1); the CVA, SA-CVA and Greeks results in Sections 8 and 9 should be read with the remaining known issues in mind until Priority 1 is complete."))
     add(P("15.1 Requirements traceability", H2))
     add(tbl([["Kickoff requirement", "Status", "Action"],
              ["Stochastic models for rates, equity and FX, defended", "Done", "-"],
              ["Correlated joint simulation; correlation from history", "Done", "-"],
              ["Provided pricers called on simulated market states", "Done", "-"],
-             ["Exposure = movement from the prior-day NPV over a 10-day close-out; no initial margin; variation margin equals the prior-day NPV (slide 9)", "Gap: headline exposure is uncollateralized max(V, 0); the margined view uses a different formula and is a side calculation", "Item 1"],
-             ["PFE at the 99th percentile of the 10-day windows, MPE as its peak, EE, over a one-year horizon (slide 8)", "Partial: measures exist but on the uncollateralized definition and to January 2028", "Item 1"],
-             ["Exposures per trade and aggregated to the counterparty (slide 8)", "Partial: counterparty and portfolio only are reported", "Item 1"],
+             ["Exposure = movement from the prior-day NPV over a 10-day close-out; no initial margin; variation margin equals the prior-day NPV (slide 9)", "Done (Section 7.1): three-node grid, signed prior-day variation margin, netting before the positive part, settlement excluded", "Item 1 done"],
+             ["PFE at the 99th percentile of the 10-day windows, MPE as its peak, EE, over a one-year horizon (slide 8)", "Done (Section 7.1): PFE99, MPE, EE and median PFE within the first year", "Item 1 done"],
+             ["Exposures per trade and aggregated to the counterparty (slide 8)", "Done (Section 7.1): 16 trades and 3 counterparties", "Item 1 done"],
              ["Netting-set exposure profiles", "Done", "-"],
              ["Evidence of convergence in the number of simulations (slide 9)", "Done (Section 5.5)", "-"],
-             ["Greeks, bumped or pathwise, efficient across scenarios", "Done (Section 9)", "Re-run after Priority 1"],
+             ["Greeks, bumped or pathwise, efficient across scenarios", "Done (Section 9) on the level exposure", "Re-run on the close-out definition (item 4)"],
              ["Speed and performance benchmarks; analytical accuracy benchmarks", "Done (Sections 5 and 11)", "-"],
              ["Market data: USD curve, equity spots and dividends, USDJPY spot and forward curve, vols, correlations (slide 6)", "Partial: the USD long end is flat and the JPY rate is not simulated", "Items 2 and 3"],
              ["Repository, technical report, presentation to the Risk department", "Done; presentation to be refreshed", "Item 8"],
@@ -1219,13 +1298,13 @@ def main():
              ["Extra credit: risky bonds and CDS data for new sample trades", "Not done", "Item 9"]],
             widths=[3.6, 2.8, 1.0], font=7.2))
     add(P("15.2 Known issues in the current results", H2))
-    add(B(["<b>Exposure definition.</b> The headline exposure numbers (Section 7) are uncollateralized. The brief defines exposure as the movement from the prior-day NPV over a 10-day close-out (slide 9), which is close to our margined calculation in Section 7.4 but not identical: ours compares the value 10 business days later with the same-day value floored at zero, whereas the brief uses the prior-day NPV without a floor. The margined figures in Section 7.4 (MPE99 of about $24.9M, $9.2M and $26.7M for CPTY_A, CPTY_B and CPTY_C) are indicative of the order of magnitude the corrected headline will take.",
+    add(B(["<b>Exposure definition (resolved for the exposure measures).</b> The headline exposure now follows the brief (Section 7.1). CVA, SA-CVA and the Greeks in Sections 8 and 9 were computed earlier on the uncollateralized level exposure and are scheduled to be re-run on the close-out definition (item 4); until then they are conservative for a margined counterparty and, for CVA, are not yet on the brief's definition.",
            "<b>USD curve beyond seven years.</b> The SOFR-futures curve covers about 6.3 years and is extrapolated flat, so the 2049 Treasury underlying BF_0003 is discounted at 4.27% instead of about 4.64% at 20 years. Repricing with Bloomberg's zero curve gives an NPV of $120.9M for BF_0003 against $101.4M on our curve, about 16 percent higher. CPTY_C exposure, CVA and SA-CVA are therefore understated.",
            "<b>JPY rate not simulated.</b> The JPY Hull-White factor is built and calibrated but JPY equity and USDJPY drift still use a constant differential (Section 4.5)."]))
     add(P("15.3 Work plan", H2))
     add(P("<b>Priority 1: needed to meet the brief in full</b>", BODY))
     add(tbl([["Item", "Work", "Deliverable and check"],
-             ["1", "Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view", "New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.4 numbers"],
+             ["1", "Done (Section 7.1). Implement the exposure of slides 8 and 9: NPV at t plus 10 business days minus NPV at t minus 1 business day, netted, PFE at the 99th percentile of the 10-day windows, EE, MPE, one-year horizon; per trade and per counterparty; keep uncollateralized as a secondary view", "New exposure module and grid node at t-1; unit tests against hand calculations; per-trade and counterparty profiles; comparison with the current Section 7.5 numbers"],
              ["2", "Replace the flat long end of the USD curve with the Bloomberg zero curve (or splice it beyond the last futures contract)", "Curve validated against Treasury and against the Bloomberg curve; BF_0003 NPV reconciled; all trades repriced"],
              ["3", "Wire the JPY Hull-White factor into the simulation: simulate the JPY rate correlated with the USD rate (correlation -0.04), drive JPY equity drift and USDJPY drift from it", "Engine change with tests (JPY factor martingale test, forward-matching for USDJPY); impact on JPY trades reported"],
              ["4", "Re-run everything on the corrected engine: exposure profiles, MPOR view, CVA, SA-CVA, Greeks, convergence at the recommended path count", "Refreshed data files; regression tests; comparison before and after"]],

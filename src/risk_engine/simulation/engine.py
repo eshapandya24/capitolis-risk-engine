@@ -42,14 +42,20 @@ def add_business_days(d, n):
     """d + n business days (Mon-Fri, US federal holidays skipped). The MPOR
     convention (ISDA SIMM / Basel) is 10 BUSINESS days, so look-ahead nodes
     use this rather than calendar days. Note SIFMA's bond-market holidays
-    differ slightly from the federal list (e.g. Good Friday); immaterial here."""
+    differ slightly from the federal list (e.g. Good Friday); immaterial here.
+
+    n may be negative (used for the t-1bd variation-margin node, see
+    build_time_grid's vm_lag_days). The roll direction follows the sign, so
+    a start date that isn't itself a business day rolls AWAY from the
+    target rather than over it."""
     global _US_HOLIDAYS
     import numpy as np
     if _US_HOLIDAYS is None:
         from pandas.tseries.holiday import USFederalHolidayCalendar
         h = USFederalHolidayCalendar().holidays(start="2020-01-01", end="2040-12-31")
         _US_HOLIDAYS = np.array(h.values.astype("datetime64[D]"))
-    out = np.busday_offset(np.datetime64(to_date(d)), n, roll="forward", holidays=_US_HOLIDAYS)
+    roll = "forward" if n >= 0 else "backward"
+    out = np.busday_offset(np.datetime64(to_date(d)), n, roll=roll, holidays=_US_HOLIDAYS)
     return out.astype("datetime64[D]").astype(object)
 
 
@@ -108,7 +114,7 @@ def trade_event_dates(trade):
 
 
 def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days=None,
-                     include_trade_event_dates=True, grid_mode="pillar"):
+                     include_trade_event_dates=True, grid_mode="pillar", vm_lag_days=None):
     """Base "reporting" nodes from ref_date to the last trade's expiry
     (inclusive), UNIONED with every trade's own reset/maturity/forward
     dates (see trade_event_dates) so exposure discontinuities land exactly
@@ -131,10 +137,23 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
     MPOR-shifted/collateralized exposure -- see exposure/collateral.py) --
     both node types sit on the SAME simulated path, so the look-ahead value
     is a genuine "what does this same scenario look like a bit later"
-    query, not a separate simulation. Returns (dates, times, reporting_idx)
-    where reporting_idx maps each reporting node's position in `dates` to
-    {"reporting": i, "lookahead": j or None} (None if mpor_days wasn't
-    requested, or the look-ahead would fall past the trade horizon)."""
+    query, not a separate simulation.
+
+    If `vm_lag_days` is given (normally 1), a further node is inserted that
+    many BUSINESS days BEFORE every reporting node. That is the last
+    variation-margin mark before a default at t, which Capitolis's kickoff
+    deck slide 9 defines exposure against: "collected/posted variation
+    margin on a given date in the simulation is the NPV of the trade on the
+    prior day on the path ... exposure is how much it moves from the NPV on
+    t-1". See exposure/spec_exposure.py. Nodes that would fall on or before
+    ref_date are not added (there is no path history before today), and
+    their "prev" entry is None.
+
+    Returns (dates, times, reporting_idx) where reporting_idx maps each
+    reporting node's position in `dates` to
+    {"reporting": i, "lookahead": j or None, "prev": k or None} (None if
+    mpor_days/vm_lag_days weren't requested, or the node would fall outside
+    [ref_date, horizon])."""
     ref_date = to_date(ref_date)
     horizon = max(trade_expiry(t) for t in trades.values())
 
@@ -160,17 +179,26 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
 
     reporting_dates = sorted(base_dates | event_dates)
 
-    if mpor_days is None:
+    if mpor_days is None and vm_lag_days is None:
         times = [year_fraction(ref_date, d, "ACT/365F") for d in reporting_dates]
-        return reporting_dates, times, {i: {"reporting": i, "lookahead": None} for i in range(len(reporting_dates))}
+        return reporting_dates, times, {i: {"reporting": i, "lookahead": None, "prev": None}
+                                         for i in range(len(reporting_dates))}
 
     all_dates = set(reporting_dates)
-    lookahead_for = {}
+    lookahead_for, prev_for = {}, {}
     for rd in reporting_dates:
-        la = add_business_days(rd, mpor_days)
-        if la <= horizon:
-            all_dates.add(la)
-            lookahead_for[rd] = la
+        if mpor_days is not None:
+            la = add_business_days(rd, mpor_days)
+            if la <= horizon:
+                all_dates.add(la)
+                lookahead_for[rd] = la
+        if vm_lag_days is not None:
+            pv = add_business_days(rd, -vm_lag_days)
+            # no path history before ref_date: the first reporting node(s)
+            # have no valid prior mark, so they get prev=None
+            if pv > ref_date:
+                all_dates.add(pv)
+                prev_for[rd] = pv
     dates = sorted(all_dates)
     date_to_idx = {d: i for i, d in enumerate(dates)}
     times = [year_fraction(ref_date, d, "ACT/365F") for d in dates]
@@ -178,7 +206,8 @@ def build_time_grid(ref_date, trades, step_months=MONTHLY_STEP_MONTHS, mpor_days
     node_map = {}
     for i, rd in enumerate(reporting_dates):
         node_map[i] = {"reporting": date_to_idx[rd],
-                        "lookahead": date_to_idx.get(lookahead_for.get(rd))}
+                        "lookahead": date_to_idx.get(lookahead_for.get(rd)),
+                        "prev": date_to_idx.get(prev_for.get(rd))}
     return dates, times, node_map
 
 
@@ -186,7 +215,7 @@ class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
                  step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
                  mpor_days=None, grid_mode="pillar", include_trade_event_dates=True,
-                 corr_mode="full", n_pca_factors=5):
+                 corr_mode="full", n_pca_factors=5, vm_lag_days=None):
         """
         corr_mode: "full" (default) -- exact Cholesky factor of the full
             39x39 empirical correlation matrix (unchanged behavior).
@@ -206,6 +235,7 @@ class SimulationEngine:
         self.seed = seed
         self.curve_tenors = curve_tenors
         self.mpor_days = mpor_days
+        self.vm_lag_days = vm_lag_days
         self.corr_mode = corr_mode
         self.n_pca_factors = n_pca_factors
 
@@ -231,7 +261,8 @@ class SimulationEngine:
 
         self.dates, self.times, self.node_map = build_time_grid(
             calib["ref_date"], trades, step_months, mpor_days=mpor_days,
-            grid_mode=grid_mode, include_trade_event_dates=include_trade_event_dates)
+            grid_mode=grid_mode, include_trade_event_dates=include_trade_event_dates,
+            vm_lag_days=vm_lag_days)
         self.n_steps = len(self.times) - 1
 
         self.trade_expiries = {tid: trade_expiry(t) for tid, t in trades.items()}
