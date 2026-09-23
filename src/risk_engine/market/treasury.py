@@ -28,7 +28,7 @@ import requests
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 CACHE = os.path.join(ROOT, "data", "raw", "ust_cmt_history.csv")
-SERIES = {1: "DGS1", 2: "DGS2", 5: "DGS5", 10: "DGS10", 20: "DGS20", 30: "DGS30"}
+SERIES = {0.25: "DGS3MO", 0.5: "DGS6MO", 1: "DGS1", 2: "DGS2", 5: "DGS5", 10: "DGS10", 20: "DGS20", 30: "DGS30"}
 FIT_TENORS = (2, 5, 10, 20, 30)
 TRADING_DAYS = 252
 

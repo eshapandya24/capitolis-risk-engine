@@ -479,6 +479,25 @@ def calibrate_jpy_rate_correlations(ref_date, lookback_years=3, rate_tenor=1):
             "window": (str(joined.index.min().date()), str(joined.index.max().date()))}
 
 
+def build_g2_from_treasuries(ref_date, usd_curve, lookback_years=3):
+    """Two-factor Gaussian model (models/g2pp.py) fitted to the REALISED
+    covariance of daily Treasury CMT yield changes (3m-30y) over the usual
+    3-year window, on today's USD curve. Returns (G2PP, detail)."""
+    from ..market import treasury
+    from .g2pp import G2PP, calibrate_to_yield_covariance
+    hist = treasury.load_cmt_history()
+    end = pd.Timestamp(ref_date)
+    w = hist[(hist.index > end - pd.DateOffset(years=lookback_years)) & (hist.index <= end)]
+    tenors = list(treasury.SERIES)
+    cols = [treasury.SERIES[t] for t in tenors]
+    cov = w[cols].diff().dropna().cov().values * treasury.TRADING_DAYS
+    fit = calibrate_to_yield_covariance(cov, tenors, b_bounds=(0.1, 1.5))
+    g2 = G2PP(usd_curve, fit["sigma"], fit["a"], fit["eta"], fit["b"], fit["rho"])
+    detail = {k: fit[k] for k in ("sigma", "a", "eta", "b", "rho", "rel_error")}
+    detail.update({"tenors": tenors, "realised_cov": cov.tolist(), "model_cov": fit["model_cov"].tolist()})
+    return g2, detail
+
+
 def build_calibration(ref_date):
     """Returns a dict with everything the simulation engine needs:
     hw (HullWhite1F), gbm (CorrelatedGBM), corr_matrix (DataFrame, ordered),
@@ -577,7 +596,16 @@ def build_calibration(ref_date):
         jpy_usd_rate_diff=jpy_diff,
     )
 
+    try:
+        g2, g2_detail = build_g2_from_treasuries(ref_date, usd_curve)
+        print(f"  G2++ two-factor model fitted to realised Treasury covariance: sigma {g2.sigma:.4%} a {g2.a:.3f}, "
+              f"eta {g2.eta:.4%} b {g2.b:.3f}, rho {g2.rho:+.2f} (relative fit error {g2_detail['rel_error']:.1%})")
+    except Exception as exc:
+        print(f"  WARN: could not fit the two-factor rates model ({exc})")
+        g2, g2_detail = None, None
+
     return {
+        "g2": g2, "g2_detail": g2_detail,
         "ref_date": usd_curve.ref_date,
         "usd_curve": usd_curve,
         "hw": hw,

@@ -11,6 +11,7 @@ termination/forward date (bonds' own maturity is irrelevant once the TRADE
 on them has ended -- a matured/settled trade contributes zero exposure from
 that point on, handled by `_is_active`).
 """
+import math
 from datetime import date, timedelta
 
 import numpy as np
@@ -215,7 +216,7 @@ class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
                  step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
                  mpor_days=None, grid_mode="pillar", include_trade_event_dates=True,
-                 corr_mode="full", n_pca_factors=5, vm_lag_days=None, jpy_factor=True):
+                 corr_mode="full", n_pca_factors=5, vm_lag_days=None, jpy_factor=True, rates_model="hw1f"):
         """
         corr_mode: "full" (default) -- exact Cholesky factor of the full
             39x39 empirical correlation matrix (unchanged behavior).
@@ -231,6 +232,10 @@ class SimulationEngine:
             an extra correlated factor (needs calib["hw_jpy"]) and uses it for
             the drift of JPY-listed names and USDJPY. False keeps the
             constant r_USD - r_JPY differential.
+        rates_model: "hw1f" (default, one-factor Hull-White) or "g2pp" (two-factor
+            Gaussian, needs calib["g2"]; see models/g2pp.py). The second factor
+            is driven by rho * (first factor's shock) plus an extra independent
+            shock, so it correlates with every other factor through the first.
         """
         self.calib = calib
         self.trades = trades
@@ -248,17 +253,27 @@ class SimulationEngine:
         base_order = list(calib["factor_order"])  # [equities..., FX_USDJPY, RATE_USD]
         self.hw_jpy = calib.get("hw_jpy") if jpy_factor else None
         self.factor_order = base_order + (["RATE_JPY"] if self.hw_jpy is not None else [])
+        self.g2 = calib["g2"] if rates_model == "g2pp" else None
+        if rates_model not in ("hw1f", "g2pp"):
+            raise ValueError(f"rates_model must be 'hw1f' or 'g2pp', got {rates_model!r}")
+        if self.g2 is not None:
+            self.factor_order = self.factor_order + ["RATE_USD_2"]
+        self.rm = self.g2 if self.g2 is not None else self.hw      # model that owns short_rate/alpha/node curves
         self.n_factors = len(self.factor_order)
         self.rate_idx = self.factor_order.index("RATE_USD")
         self.fx_idx = self.factor_order.index("FX_USDJPY")
         self.jpy_idx = self.factor_order.index("RATE_JPY") if self.hw_jpy is not None else None
+        self.y_idx = self.factor_order.index("RATE_USD_2") if self.g2 is not None else None
         self.equity_idx = {f: i for i, f in enumerate(self.factor_order)
-                            if f not in ("RATE_USD", "FX_USDJPY", "RATE_JPY")}
+                            if f not in ("RATE_USD", "FX_USDJPY", "RATE_JPY", "RATE_USD_2")}
 
         corr = calib["corr_matrix"].loc[base_order, base_order].values
         if self.hw_jpy is not None:
             corr = extend_correlation(corr, base_order, calib.get("jpy_rate_corr") or {},
                                        calib.get("usd_jpy_rate_factor_corr", 0.0))
+        if self.g2 is not None:
+            corr = np.pad(corr, ((0, 1), (0, 1)))
+            corr[-1, -1] = 1.0                       # independent extra shock for the second factor
         corr = _nearest_psd(corr)
         self.corr = corr
         # stock-USDJPY shock correlation, for the quanto term in JPY names' drift
@@ -313,6 +328,9 @@ class SimulationEngine:
         ln_spot = {f: np.zeros((n_scen, n_steps + 1)) for f in self.equity_idx}
         ln_fx = np.zeros((n_scen, n_steps + 1))
         x_jpy = np.zeros((n_scen, n_steps + 1)) if self.hw_jpy is not None else None
+        y_rate = np.zeros((n_scen, n_steps + 1)) if self.g2 is not None else None
+        x_only = np.zeros(n_scen)
+        y_only = np.zeros(n_scen)
 
         for f, idx in self.equity_idx.items():
             ln_spot[f][:, 0] = np.log(self.gbm.spots0[f])
@@ -321,7 +339,7 @@ class SimulationEngine:
         for k in range(n_steps):
             t_prev, t_next = self.times[k], self.times[k + 1]
             dt = t_next - t_prev
-            r_prev = self.hw.short_rate(x_rate[:, k], t_prev)  # vectorized short rate at step start
+            r_prev = self.rm.short_rate(x_rate[:, k], t_prev)  # vectorized short rate at step start
 
             if x_jpy is not None:
                 r_jpy_prev = self.hw_jpy.short_rate(x_jpy[:, k], t_prev)
@@ -330,7 +348,15 @@ class SimulationEngine:
                 r_jpy_prev = r_prev - self.gbm.jpy_usd_rate_diff
 
             z_rate = z[:, k, self.rate_idx]
-            x_rate[:, k + 1] = _vec_step_x(self.hw, x_rate[:, k], dt, z_rate)
+            if self.g2 is not None:
+                # second factor: shock rho * z_x + sqrt(1 - rho^2) * z_extra, then the exact joint OU step
+                rho = self.g2.rho
+                z_y = rho * z_rate + math.sqrt(1.0 - rho * rho) * z[:, k, self.y_idx]
+                x_only, y_only = self.g2.step_vec(x_only, y_only, dt, z_rate, z_y)
+                x_rate[:, k + 1] = x_only + y_only
+                y_rate[:, k + 1] = y_only
+            else:
+                x_rate[:, k + 1] = _vec_step_x(self.hw, x_rate[:, k], dt, z_rate)
 
             for f, idx in self.equity_idx.items():
                 z_f = z[:, k, idx]
@@ -343,6 +369,8 @@ class SimulationEngine:
         out = {"x_rate": x_rate, "ln_spot": ln_spot, "ln_fx": ln_fx}
         if x_jpy is not None:
             out["x_jpy"] = x_jpy
+        if y_rate is not None:
+            out["y_rate"] = y_rate
         return out
 
     def price_one_scenario(self, paths, s, node_indices=None):
@@ -362,8 +390,11 @@ class SimulationEngine:
 
         for oi, node_idx in enumerate(node_indices):
             node_date, t = self.dates[node_idx], self.times[node_idx]
-            r_t = self.hw.short_rate(paths["x_rate"][s, node_idx], t)
-            usd_curve = self.hw.fast_node_curve(node_date, t, r_t)
+            r_t = self.rm.short_rate(paths["x_rate"][s, node_idx], t)
+            if self.g2 is not None:
+                usd_curve = self.g2.fast_node_curve(node_date, t, r_t, paths["y_rate"][s, node_idx])
+            else:
+                usd_curve = self.hw.fast_node_curve(node_date, t, r_t)
             equity_spots = {f: float(np.exp(paths["ln_spot"][f][s, node_idx])) * eq_mult.get(f, 1.0)
                              for f in self.equity_idx}
             fx_spot = float(np.exp(paths["ln_fx"][s, node_idx])) * fx_mult

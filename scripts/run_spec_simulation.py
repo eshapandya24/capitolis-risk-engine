@@ -50,8 +50,20 @@ def main():
     p.add_argument("--include-maturing", action="store_true",
                     help="count a trade settling inside the window as a market move "
                          "(default: exclude it from both legs)")
-    p.add_argument("--outdir", default=os.path.join(ROOT, "data", "processed", "spec_run"))
+    p.add_argument("--outdir", default=None)
+    p.add_argument("--variant", default="final",
+                   choices=("final", "no_jpy", "no_jpy_flat", "no_jpy_flat_sofr", "g2",
+                            "eqvol_up", "ratevol_up", "a_x3", "corr_up"),
+                   help="attribution runs, each removing one more of this session's model fixes: "
+                        "no_jpy = constant JPY differential instead of the JPY factor; "
+                        "no_jpy_flat = also the flat long end of the USD curve; "
+                        "no_jpy_flat_sofr = also the overnight-SOFR sigma and SOFR-based rate correlations; "
+                        "g2 = the final model with the two-factor G2++ rates model; "
+                        "eqvol_up / ratevol_up = equity+FX vols / rate sigma x1.25; a_x3 = rate mean reversion x3; "
+                        "corr_up = equity-equity correlations moved 30%% of the way to 1 (model-risk study)")
     args = p.parse_args()
+    if args.outdir is None:
+        args.outdir = os.path.join(ROOT, "data", "processed", "spec_run" + ("" if args.variant == "final" else "_" + args.variant))
     os.makedirs(args.outdir, exist_ok=True)
     exclude_maturing = not args.include_maturing
 
@@ -63,9 +75,43 @@ def main():
     print(f"calibrating at {ref_date}...", flush=True)
     calib = build_calibration(ref_date)
     trades = load_trades()
+    if args.variant in ("no_jpy_flat", "no_jpy_flat_sofr"):
+        from risk_engine.market.sofr import build_curve
+        from risk_engine.models.calibration import fetch_sofr_raw
+        from risk_engine.models.rates import HullWhite1F
+        flat = build_curve(ref_date, raw_df=fetch_sofr_raw(ref_date), long_end=None)
+        calib = dict(calib, usd_curve=flat, hw=HullWhite1F(flat, calib["hw"].sigma, calib["hw"].a))
+    if args.variant == "no_jpy_flat_sofr":
+        import pandas as pd
+        from risk_engine.models.rates import HullWhite1F
+        calib = dict(calib, hw=HullWhite1F(calib["usd_curve"], calib["hw_rate_vol_detail"]["sofr_overnight_sigma"], calib["hw"].a),
+                     corr_matrix=pd.read_csv(os.path.join(ROOT, "data", "processed", "correlation_matrix_sofr.csv"), index_col=0))
+    if args.variant in ("eqvol_up", "ratevol_up", "a_x3", "corr_up"):
+        import copy
+        import numpy as np
+        import pandas as pd
+        from risk_engine.models.rates import HullWhite1F
+        calib = dict(calib)
+        if args.variant == "eqvol_up":
+            calib["gbm"] = copy.deepcopy(calib["gbm"])
+            calib["gbm"].vols = {k: (v * 1.25 if not k.startswith("RATE") else v) for k, v in calib["gbm"].vols.items()}
+            calib["gbm"].fx_vol = calib["gbm"].vols["FX_USDJPY"]
+        elif args.variant == "ratevol_up":
+            calib["hw"] = HullWhite1F(calib["usd_curve"], calib["hw"].sigma * 1.25, calib["hw"].a)
+        elif args.variant == "a_x3":
+            calib["hw"] = HullWhite1F(calib["usd_curve"], calib["hw"].sigma, calib["hw"].a * 3.0)
+        else:
+            cm = calib["corr_matrix"].copy()
+            eq = [c for c in cm.columns if c not in ("FX_USDJPY", "RATE_USD")]
+            sub = cm.loc[eq, eq].values
+            cm.loc[eq, eq] = sub + 0.3 * (1.0 - sub)
+            calib["corr_matrix"] = cm
+    print(f"variant: {args.variant}", flush=True)
 
     eng = SimulationEngine(calib, trades, method=args.method, n_scenarios=args.scenarios,
-                            seed=42, mpor_days=args.mpor_days, vm_lag_days=args.vm_lag_days)
+                            seed=42, mpor_days=args.mpor_days, vm_lag_days=args.vm_lag_days,
+                            jpy_factor=(args.variant in ("final", "g2")),
+                            rates_model=("g2pp" if args.variant == "g2" else "hw1f"))
     n_prev = sum(1 for m in eng.node_map.values() if m["prev"] is not None)
     n_la = sum(1 for m in eng.node_map.values() if m["lookahead"] is not None)
     print(f"grid: {len(eng.dates)} nodes, {len(eng.node_map)} reporting dates "
