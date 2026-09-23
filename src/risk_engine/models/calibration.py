@@ -516,6 +516,19 @@ def build_calibration(ref_date):
 
     rate_vol = vol_table["RATE_USD"]
     mean_reversion_a, hw_calib_detail = load_or_calibrate_mean_reversion(ref_date)
+    rate_vol_detail = {"source": "overnight_sofr_realised", "sigma": rate_vol}
+    try:
+        from ..market import treasury
+        ust_vols = treasury.realized_vols(ref_date)
+        sigma_fit = treasury.fit_hw_sigma(mean_reversion_a, ust_vols)
+        rate_vol_detail = {"source": "ust_cmt_realised_long_end_fit", "sigma": sigma_fit,
+                           "sofr_overnight_sigma": rate_vol, "realised_vols": ust_vols,
+                           "fit_tenors": list(treasury.FIT_TENORS)}
+        print(f"  USD Hull-White sigma fitted to realised 2y-30y Treasury yield vols: {sigma_fit:.4%} "
+              f"(overnight-SOFR realised vol was {rate_vol:.4%}; a={mean_reversion_a:.4f})")
+        rate_vol = sigma_fit
+    except Exception as exc:
+        print(f"  WARN: Treasury long-end vol fit unavailable ({exc}); using overnight SOFR realised vol {rate_vol:.4%}")
     hw = HullWhite1F(usd_curve, sigma=rate_vol, a=mean_reversion_a)
 
     try:
@@ -581,6 +594,7 @@ def build_calibration(ref_date):
         "dividends": dividends,
         "fx_spot": fx_spot,
         "jpy_usd_rate_diff": jpy_diff,
+        "hw_rate_vol_detail": rate_vol_detail,
         "hw_mean_reversion_a": mean_reversion_a,
         "hw_calibration_detail": hw_calib_detail,
     }

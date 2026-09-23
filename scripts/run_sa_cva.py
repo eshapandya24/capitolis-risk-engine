@@ -97,12 +97,109 @@ def run_case(calib, trades, n, bump):
     return np.array(eng.times), dee
 
 
+def closeout_dee(eng, paths, ids, npv):
+    """Discounted EE of the brief's exposure, max(V(t+10bd) - V(t-1bd), 0),
+    per counterparty on the reporting dates (whole life, not just one year:
+    CVA integrates over the life of the trades)."""
+    from risk_engine.exposure import spec_exposure as spec
+    from risk_engine.exposure.cva import path_discount_factors
+    prev = {i: (m["prev"] if m["prev"] is not None else m["reporting"]) for i, m in eng.node_map.items()}
+    by = spec.exposure_by_counterparty(ids, eng.trade_counterparty, np.nan_to_num(npv), eng.node_map,
+                                       prev_node=prev, trade_expiry=dict(eng.trade_expiries),
+                                       exclude_maturing=True, dates=eng.dates)
+    ridx = [eng.node_map[i]["reporting"] for i in range(len(eng.node_map))]
+    disc = path_discount_factors(paths["x_rate"], eng.times, eng.hw)[:, ridx]
+    times = np.array([eng.times[r] for r in ridx])
+    return times, {c: (by[c] * disc.T).mean(axis=1) for c in by}
+
+
+def run_closeout(calib, trades, n, bumps, holders_by_bucket, fx_holders):
+    """All SA-CVA cases on the close-out exposure. Equity and FX delta bumps
+    reuse the base paths (spot bumps rescale GBM paths exactly) and reprice
+    only the trades holding the bumped factor; rate and vol bumps
+    re-simulate with the same random numbers."""
+    from risk_engine.simulation.engine import SimulationEngine
+    from risk_engine.simulation.parallel import reprice_all_parallel, reprice_bumps_parallel
+    from risk_engine.greeks.exposure import apply_rows
+
+    def cached(key):
+        path = os.path.join(OUT, key + ".npz")
+        if os.path.exists(path):
+            z = np.load(path, allow_pickle=True)
+            return z["times"], {c: z["dee_" + c] for c in ("CPTY_A", "CPTY_B", "CPTY_C")}
+        return None
+
+    def save(key, times, dee):
+        np.savez(os.path.join(OUT, key + ".npz"), times=times, **{"dee_" + c: v for c, v in dee.items()})
+
+    def build(cal):
+        return SimulationEngine(cal, trades, method="latin_hypercube", n_scenarios=n, seed=42,
+                                mpor_days=10, vm_lag_days=1)
+
+    res = {}
+    base_key = key_of(("base", "-"))
+    eng = build(calib)
+    paths = eng.simulate_paths()
+    base_npv_path = os.path.join(OUT, "base_npv.npz")
+    t0 = time.perf_counter()
+    if os.path.exists(base_npv_path):
+        ids, npv0 = list(np.load(base_npv_path, allow_pickle=True)["ids"]), np.load(base_npv_path)["npv"]
+    else:
+        ids, npv0 = reprice_all_parallel(eng, paths)
+        npv0 = np.nan_to_num(npv0)
+        np.savez_compressed(base_npv_path, ids=np.array(ids), npv=npv0)
+    times, dee = closeout_dee(eng, paths, ids, npv0)
+    save(base_key, times, dee)
+    res[base_key] = (times, dee)
+    print(f"  base done in {time.perf_counter() - t0:.0f}s", flush=True)
+
+    delta = [b for b in bumps if b[0] in ("eq_delta", "fx_delta")]
+    if delta:
+        specs = []
+        for b in delta:
+            if b[0] == "fx_delta":
+                specs.append({"eq": {}, "fx": 1.01, "trades": set(fx_holders)})
+            else:
+                names = b[2]
+                held = set().union(*[holders_by_bucket.get(i, set()) for i in names])
+                specs.append({"eq": {i: 1.01 for i in names}, "fx": 1.0, "trades": held})
+        t0 = time.perf_counter()
+        out = reprice_bumps_parallel(eng, paths, specs)
+        for b, (rows, arr) in zip(delta, out):
+            t2, d2 = closeout_dee(eng, paths, ids, apply_rows(npv0, rows, arr))
+            save(key_of(b), t2, d2)
+            res[key_of(b)] = (t2, d2)
+        print(f"  {len(delta)} equity/FX delta bumps (subset repricing) in {time.perf_counter() - t0:.0f}s", flush=True)
+
+    for b in bumps:
+        k = key_of(b)
+        if k in res:
+            continue
+        hit = cached(k)
+        if hit is not None:
+            res[k] = hit
+            continue
+        t0 = time.perf_counter()
+        e2 = build(make_calib(calib, b))
+        p2 = e2.simulate_paths()
+        i2, n2 = reprice_all_parallel(e2, p2)
+        t2, d2 = closeout_dee(e2, p2, i2, n2)
+        save(k, t2, d2)
+        res[k] = (t2, d2)
+        print(f"  {k:20s} re-simulated in {time.perf_counter() - t0:.0f}s", flush=True)
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenarios", type=int, default=1000)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--exposure", choices=("closeout", "level"), default="closeout",
+                    help="closeout: exposure = max(V(t+10bd) - V(t-1bd), 0) (the brief); level: uncollateralized max(V, 0)")
     args = ap.parse_args()
     global OUT
+    if args.exposure == "closeout":
+        OUT = OUT + "_closeout"
     if args.tag:
         OUT = OUT + "_" + args.tag
     os.makedirs(OUT, exist_ok=True)
@@ -127,7 +224,14 @@ def main():
     bumps += [("eq_delta", b, tuple(names)) for b, names in sorted(buckets.items())]
     bumps += [("eq_vega", b, tuple(names)) for b, names in sorted(buckets.items())]
     print(f"{len(bumps)} simulations at N={args.scenarios} (common random numbers)", flush=True)
-    res = {key_of(b): run_case(calib, trades, args.scenarios, b) for b in bumps}
+    if args.exposure == "closeout":
+        from risk_engine.greeks.book import book_greeks
+        bg = book_greeks(calib, trades)
+        holders = {i: {t for t, x in v["delta"].items() if abs(x) > 1e-6} for i, v in bg["equity"].items()}
+        fx_holders = {t for t, x in bg["fx"]["delta"].items() if abs(x) > 1e-6}
+        res = run_closeout(calib, trades, args.scenarios, bumps, holders, fx_holders)
+    else:
+        res = {key_of(b): run_case(calib, trades, args.scenarios, b) for b in bumps}
 
     cptys = ["CPTY_A", "CPTY_B", "CPTY_C"]
     curves = {c: rating_spread_curve(COUNTERPARTY_ASSUMPTIONS[c]["rating"], ref, S.CCS_TENORS) for c in cptys}
@@ -138,7 +242,7 @@ def main():
         return sum(cva(dee[c], times, cc[c][0], cc[c][1]) for c in cptys)
 
     base = total_cva("base_-")
-    out = {"n_scenarios": args.scenarios, "ref_date": str(ref), "ratings": {c: COUNTERPARTY_ASSUMPTIONS[c]["rating"] for c in cptys},
+    out = {"n_scenarios": args.scenarios, "exposure": args.exposure, "ref_date": str(ref), "ratings": {c: COUNTERPARTY_ASSUMPTIONS[c]["rating"] for c in cptys},
            "spread_curves_bp": {c: [float(x) * 1e4 for x in curves[c][1]] for c in cptys},
            "cva_by_cpty": {c: cva(res["base_-"][1][c], res["base_-"][0], *curves[c]) for c in cptys}, "cva_total": base}
 
@@ -190,7 +294,8 @@ def main():
     out["RWA"] = out["K_sa_cva"] * 12.5
     out["K_sa_cva_m125"] = out["K_sa_cva"] * 1.25
     out["equity_buckets"] = {str(b): len(v) for b, v in buckets.items()}
-    with open(os.path.join(ROOT, "data", "processed", "sa_cva_results%s.json" % (("_" + args.tag) if args.tag else "")), "w") as f:
+    name = "sa_cva_results%s%s.json" % ("_level" if args.exposure == "level" else "", ("_" + args.tag) if args.tag else "")
+    with open(os.path.join(ROOT, "data", "processed", name), "w") as f:
         json.dump(out, f, indent=1)
     print(json.dumps({k: out[k] for k in ("cva_by_cpty", "cva_total", "capital_by_class", "K_sa_cva", "RWA")}, indent=1))
 

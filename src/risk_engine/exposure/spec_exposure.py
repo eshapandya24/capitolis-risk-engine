@@ -45,7 +45,7 @@ def _net_npv(npv, trade_idx):
     return npv[trade_idx, :, :].sum(axis=0)
 
 
-def window_exposure(net_npv, node_map, prev_node=None):
+def window_exposure(net_npv, node_map, prev_node=None, side="pos"):
     """exposure(t) = max( V(t+10bd) - V(t_prev), 0 ) for each reporting node.
 
     net_npv : (n_nodes, n_scenarios) netted NPV on the full simulation grid
@@ -53,6 +53,10 @@ def window_exposure(net_npv, node_map, prev_node=None):
     prev_node: {reporting_i: node index of t-1bd}, or None for INTERIM mode
                (see module docstring -- substitutes the reporting node,
                which biases exposure low by one business day of move).
+
+    side: "pos" (default) is the exposure to the counterparty,
+    max(V(t+10bd) - VM, 0); "neg" is the mirror image, the counterparty's
+    exposure to us, max(VM - V(t+10bd), 0), used for DVA and funding benefit.
 
     Returns (n_reporting, n_scenarios).
     """
@@ -75,7 +79,8 @@ def window_exposure(net_npv, node_map, prev_node=None):
         else:
             v_close_out = net_npv[lookahead_node, :]
 
-        out[i, :] = np.maximum(v_close_out - vm, 0.0)
+        move = v_close_out - vm
+        out[i, :] = np.maximum(move if side == "pos" else -move, 0.0)
     return out
 
 
@@ -123,7 +128,7 @@ def exposure_by_trade(trade_ids, npv, node_map, prev_node=None, trade_expiry=Non
 
 def exposure_by_counterparty(trade_ids, trade_counterparty, npv, node_map,
                               prev_node=None, trade_expiry=None,
-                              exclude_maturing=False, dates=None):
+                              exclude_maturing=False, dates=None, side="pos"):
     """Slide 8's netting-set leg: {counterparty: (n_reporting, n_scenarios)}.
 
     Netting is applied BEFORE the max(.,0), which is the whole point of a
@@ -135,7 +140,7 @@ def exposure_by_counterparty(trade_ids, trade_counterparty, npv, node_map,
     for cpty in cptys:
         idx = [i for i, tid in enumerate(trade_ids) if trade_counterparty[tid] == cpty]
         if not exclude_maturing:
-            out[cpty] = window_exposure(_net_npv(npv, idx), node_map, prev_node)
+            out[cpty] = window_exposure(_net_npv(npv, idx), node_map, prev_node, side)
             continue
 
         # maturity exclusion is per-window, so the trade set changes by node
@@ -151,7 +156,7 @@ def exposure_by_counterparty(trade_ids, trade_counterparty, npv, node_map,
                 continue
             single = {0: mapping}
             exposure[i, :] = window_exposure(_net_npv(npv, live), single, None
-                                              if prev_node is None else {0: prev_node[i]})[0, :]
+                                              if prev_node is None else {0: prev_node[i]}, side)[0, :]
         out[cpty] = exposure
     return out
 

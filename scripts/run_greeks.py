@@ -42,7 +42,13 @@ def main():
     ap.add_argument("--scenarios", type=int, default=2000)
     ap.add_argument("--crn-n", type=int, default=300)
     ap.add_argument("--crn-repeats", type=int, default=4)
+    ap.add_argument("--convention", choices=("closeout", "level"), default="closeout",
+                    help="closeout: exposure = max(V(t+10bd) - V(t-1bd), 0) within one year (the brief); "
+                         "level: uncollateralized max(V, 0) over the whole life (earlier version)")
     args = ap.parse_args()
+    global OUT
+    if args.convention == "level":
+        OUT = OUT.replace("greeks_results.json", "greeks_results_level.json")
 
     from run_simulation import load_trades
     from risk_engine.models.calibration import build_calibration
@@ -50,7 +56,7 @@ def main():
     from risk_engine.simulation.parallel import reprice_all_parallel, reprice_bumps_parallel
     from risk_engine.greeks.book import book_greeks, netting_set_totals
     from risk_engine.greeks.bumps import make_calib, DEFAULT_TENORS
-    from risk_engine.greeks.exposure import measures, apply_rows, diff_measures
+    from risk_engine.greeks.exposure import measures, apply_rows, diff_measures, CloseOut, measures_closeout
 
     ref = date(2026, 8, 28)
     calib = build_calibration(ref)
@@ -78,16 +84,34 @@ def main():
           f"{len(fx_holders)} FX-sensitive trades", flush=True)
 
     # ---------------- base simulation
-    eng = SimulationEngine(calib, trades, method="latin_hypercube", n_scenarios=N, seed=42)
+    closeout = args.convention == "closeout"
+    eng_kw = dict(mpor_days=10, vm_lag_days=1) if closeout else {}
+
+    def make_engine(cal, n, seed):
+        return SimulationEngine(cal, trades, method="latin_hypercube", n_scenarios=n, seed=seed, **eng_kw)
+
+    def measure(e, ids_, npv_):
+        """Exposure measures on the chosen convention for engine `e`."""
+        if closeout:
+            return measures_closeout(ids_, e.trade_counterparty, npv_, CloseOut(e, ref))
+        return measures(ids_, e.trade_counterparty, npv_, list(range(len(e.dates))))
+
+    eng = make_engine(calib, N, 42)
     t0 = time.perf_counter()
     paths = eng.simulate_paths()
     ids, npv0 = reprice_all_parallel(eng, paths)
     npv0 = np.nan_to_num(npv0)
     timing["base_run_s"] = time.perf_counter() - t0
-    node_idx = list(range(len(eng.dates)))
     cpm = eng.trade_counterparty
-    base = measures(ids, cpm, npv0, node_idx)
-    res = {"n_scenarios": N, "dates": [str(d) for d in eng.dates], "times": list(map(float, eng.times)),
+    base = measure(eng, ids, npv0)
+    if closeout:
+        ctx0 = CloseOut(eng, ref)
+        out_dates = ctx0.report_dates()
+        out_times = [eng.times[ctx0.reporting_idx[i]] for i in ctx0.keep]
+    else:
+        out_dates, out_times = list(eng.dates), list(eng.times)
+    res = {"n_scenarios": N, "convention": args.convention, "dates": [str(d) for d in out_dates],
+           "times": list(map(float, out_times)),
            "base": base, "book_t0": book, "equity": {}, "timing": timing}
     print(f"base run {timing['base_run_s']:.0f}s", flush=True)
 
@@ -108,7 +132,7 @@ def main():
     timing["n_equity_fx_bumps"] = len(bumps)
     M = {}
     for (kind, name, tag), (rows, arr) in zip(tags, rep):
-        M[(kind, name, tag)] = measures(ids, cpm, apply_rows(npv0, rows, arr), node_idx)
+        M[(kind, name, tag)] = measure(eng, ids, apply_rows(npv0, rows, arr))
     for isin in holders:
         up, dn = M[("eq", isin, "up")], M[("eq", isin, "dn")]
         res["equity"][isin] = {"delta": diff_measures(up, dn, 0.5),
@@ -126,10 +150,10 @@ def main():
     # ---------------- B2. rates and vols: re-simulation with the same random numbers
     def resim(bump, seed=42, n=N):
         cal = make_calib(calib, bump)
-        e2 = SimulationEngine(cal, trades, method="latin_hypercube", n_scenarios=n, seed=seed)
+        e2 = make_engine(cal, n, seed)
         p2 = e2.simulate_paths()
         i2, n2 = reprice_all_parallel(e2, p2)
-        return measures(i2, e2.trade_counterparty, np.nan_to_num(n2), list(range(len(e2.dates))))
+        return measure(e2, i2, np.nan_to_num(n2))
 
     t0 = time.perf_counter()
     up = resim(("ir_delta", None, 1e-4))
@@ -151,13 +175,13 @@ def main():
     crn, ind = [], []
     for r in range(args.crn_repeats):
         seed_a, seed_b = 1000 + r, 2000 + r
-        e = SimulationEngine(calib, trades, method="latin_hypercube", n_scenarios=args.crn_n, seed=seed_a)
+        e = make_engine(calib, args.crn_n, seed_a)
         p = e.simulate_paths()
         i_, n_ = reprice_all_parallel(e, p)
         n_ = np.nan_to_num(n_)
-        b_ = measures(i_, e.trade_counterparty, n_, list(range(len(e.dates))))
+        b_ = measure(e, i_, n_)
         rows_arr = reprice_bumps_parallel(e, p, [{"eq": {i: 1.01 for i in holders}, "fx": 1.0, "trades": all_eq_trades}])[0]
-        u_ = measures(i_, e.trade_counterparty, apply_rows(n_, *rows_arr), list(range(len(e.dates))))
+        u_ = measure(e, i_, apply_rows(n_, *rows_arr))
         crn.append(u_["__portfolio__"]["EE"][peak] - b_["__portfolio__"]["EE"][peak])
         indep_up = resim(("eq_delta", tuple(holders)), seed=seed_b, n=args.crn_n)
         ind.append(indep_up["__portfolio__"]["EE"][peak] - b_["__portfolio__"]["EE"][peak])
