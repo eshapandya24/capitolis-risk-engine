@@ -1,27 +1,38 @@
 """
 Equity spots (37 names) + USDJPY FX: correlated Geometric Brownian Motion
-under the risk-neutral measure, driven by the same short rate path as
-models/rates.py (a "hybrid" short-rate + lognormal-equity model -- standard
-for CCR engines; simpler than a full stochastic-vol or local-vol model,
-and consistent with the lognormal vol convention already computed).
+under the USD risk-neutral measure (USD money-market numeraire), driven by
+the simulated USD short rate (models/rates.py) and, for JPY-quoted names and
+USDJPY, the simulated JPY short rate (a second Hull-White factor).
 
-    dS_i/S_i = (r(t) - q_i) dt + sigma_i dW_i        (USD-quoted names)
-    dS_i/S_i = (r_JPY(t) - q_i) dt + sigma_i dW_i    (JPY-quoted names)
-    dFX/FX   = (r(t) - r_JPY(t)) dt + sigma_FX dW_FX  (JPY per USD)
+Notation: X = USDJPY, quoted as JPY per 1 USD; Y = 1/X = USD per JPY.
+All drifts below follow from requiring that every USD-denominated tradable
+asset, discounted by the USD money market, is a martingale:
 
-r_JPY(t) is not a separately-simulated factor (we have no JPY curve, and
-building a full second Hull-White factor for 2 small compo trades is not
-worth the complexity) -- instead it's approximated as r(t) minus a constant
-calibrated differential, backed out from REAL market data: CME JPY futures
-(6J, via Databento, same account/dataset as the SOFR futures) compared
-against our own real USD curve via covered interest rate parity. See
-models/calibration.py for exactly how that differential is derived. This
-is a disclosed simplification, not a fabricated number.
+    USD names      d ln S = (r_USD - q - s^2/2) dt + s dW
+    JPY names      d ln S = (r_JPY - q + rho_SX s s_X - s^2/2) dt + s dW    (S in JPY)
+    USDJPY         d ln X = (r_JPY - r_USD + s_X^2/2) dt + s_X dW_X
 
-Discretization: exact-in-distribution log-Euler step (GBM increments are
-lognormal in closed form given a piecewise-constant drift over one step,
-so this is exact given the short rate is held at r(t) constant across
-the step, matching the same discretization granularity as the rate model).
+* The JPY bank account, valued in USD (B_JPY * Y), must earn r_USD, which
+  gives Y drift r_USD - r_JPY and hence the X drift above. (An earlier
+  version of this module used +(r_USD - r_JPY) for X, the drift of USD per
+  JPY: the wrong direction for a JPY-per-USD quote.)
+* A JPY-listed name held by a USD investor has USD value S*Y; requiring it to
+  earn r_USD - q gives the JPY-currency drift r_JPY - q + rho_SX s s_X (the
+  familiar quanto correction; rho_SX is the correlation between the stock and
+  USDJPY shocks). Check: d ln(S*Y) = (r_USD - q - (s^2 + s_X^2 - 2 rho s s_X)/2) dt + ...
+* Equity trades are USD trades; a JPY name enters through its USD value
+  S*Y = S / X, whose drift is r_USD - q whatever the JPY rate does. The JPY
+  rate therefore changes the drift of S and X separately, not (in
+  expectation) their ratio; it does change the dispersion of exposure through
+  the S and X paths individually.
+
+r_JPY(t) is the simulated JPY Hull-White short rate when the engine has a JPY
+factor. Without one (older calibrations), it falls back to r_USD(t) minus a
+constant differential backed out from real market data (calibration.py).
+
+Discretization: exact-in-distribution log-Euler step for each name given a
+piecewise-constant drift over the step (short rates held at their step-start
+values, the same granularity as the rate models).
 """
 import math
 
@@ -50,20 +61,31 @@ class CorrelatedGBM:
         self.fx_vol = vols["FX_USDJPY"]
 
     def r_jpy(self, r_usd_t):
+        """JPY short rate implied by the constant differential (fallback when
+        no JPY factor is simulated)."""
         return r_usd_t - self.jpy_usd_rate_diff
 
-    def step_log_spot(self, ln_s_prev, isin, r_usd_t, dt, z):
-        """One log-Euler step for equity `isin`."""
+    def log_spot_drift(self, isin, r_usd_t, r_jpy_t=None, rho_fx=0.0):
+        """Per-year drift of ln S under the USD risk-neutral measure."""
         sigma = self.vols[isin]
         q = self.dividends.get(isin, 0.0)
-        r = self.r_jpy(r_usd_t) if self.currencies.get(isin) == "JPY" else r_usd_t
-        drift = (r - q - 0.5 * sigma ** 2) * dt
-        return ln_s_prev + drift + sigma * math.sqrt(max(dt, 0.0)) * z
+        if self.currencies.get(isin) == "JPY":
+            r_j = self.r_jpy(r_usd_t) if r_jpy_t is None else r_jpy_t
+            return r_j - q + rho_fx * sigma * self.fx_vol - 0.5 * sigma ** 2
+        return r_usd_t - q - 0.5 * sigma ** 2
 
-    def step_log_fx(self, ln_fx_prev, r_usd_t, dt, z):
-        """One log-Euler step for USDJPY spot (JPY per USD). Drift under the
-        USD risk-neutral measure is r_USD - r_JPY (covered interest parity),
-        which collapses to the constant differential itself."""
-        sigma = self.fx_vol
-        drift = (self.jpy_usd_rate_diff - 0.5 * sigma ** 2) * dt
-        return ln_fx_prev + drift + sigma * math.sqrt(max(dt, 0.0)) * z
+    def log_fx_drift(self, r_usd_t, r_jpy_t=None):
+        """Per-year drift of ln USDJPY (JPY per USD)."""
+        r_j = self.r_jpy(r_usd_t) if r_jpy_t is None else r_jpy_t
+        return r_j - r_usd_t + 0.5 * self.fx_vol ** 2
+
+    def step_log_spot(self, ln_s_prev, isin, r_usd_t, dt, z, r_jpy_t=None, rho_fx=0.0):
+        """One log-Euler step for equity `isin`."""
+        sigma = self.vols[isin]
+        return (ln_s_prev + self.log_spot_drift(isin, r_usd_t, r_jpy_t, rho_fx) * dt
+                + sigma * math.sqrt(max(dt, 0.0)) * z)
+
+    def step_log_fx(self, ln_fx_prev, r_usd_t, dt, z, r_jpy_t=None):
+        """One log-Euler step for USDJPY spot (JPY per USD)."""
+        return (ln_fx_prev + self.log_fx_drift(r_usd_t, r_jpy_t) * dt
+                + self.fx_vol * math.sqrt(max(dt, 0.0)) * z)

@@ -149,7 +149,7 @@ def _contract_period(symbol, ref_date):
     return start, end
 
 
-def build_curve(ref_date, raw_df=None, basis="ACT/365F"):
+def build_curve(ref_date, raw_df=None, basis="ACT/365F", long_end="bloomberg"):
     """Bootstrap a capitolis_pricers.curves.Curve from SR3 futures.
 
     Each contract's implied rate is treated as the (simply-compounded, ACT/360)
@@ -183,7 +183,57 @@ def build_curve(ref_date, raw_df=None, basis="ACT/365F"):
         discount_factors.append(df)
         prev_end = end
 
-    return Curve(ref_date, pillar_times, discount_factors, basis)
+    curve = Curve(ref_date, pillar_times, discount_factors, basis)
+    return extend_long_end(curve) if long_end == "bloomberg" else curve
+
+
+def extend_long_end(curve):
+    """Splice the Bloomberg USD SOFR zero curve beyond the last futures pillar.
+
+    SR3 futures only reach ~6.3 years, and Curve extrapolates flat in the zero
+    rate beyond that, which understates the discounting of long-dated trades
+    (e.g. the 2049 Treasury underlying BF_0003). Beyond the last futures
+    pillar we keep Bloomberg's *forward* structure: for T > T_last,
+
+        DF(T) = DF_fut(T_last) * DF_bbg(T) / DF_bbg(T_last)
+
+    so the curve is continuous at the join and inside the futures range is
+    unchanged. Bloomberg's curve is dated 2026-08-31 and ours 2026-08-28, so
+    its pillar dates are re-expressed from our reference date. Returns the
+    curve unchanged (with a warning) if the Bloomberg export is not on disk."""
+    import math
+    from datetime import timedelta
+    from ..market import bloomberg as bbg
+    if not bbg.available():
+        print("  WARN: Bloomberg USD zero curve not on disk; long end stays flat beyond the last futures pillar")
+        return curve
+    zc = bbg.load_usd_bloomberg_zero_curve()
+    bbg_date = date.fromisoformat(bbg.BBG_DATE)
+    off = (bbg_date - curve.ref_date).days / 365.0
+    ts, ln = [], []
+    for _, r in zc.iterrows():
+        ts.append(bbg._tenor_to_years(r["tenor"]) + off)
+        ln.append(math.log(float(r["discount_factor"])))
+    # Bloomberg ln DF from its own date; anchor (t=off) so it can be interpolated at any t
+    ts = [off] + ts
+    ln = [0.0] + ln
+
+    def bbg_ln(t):
+        for i in range(1, len(ts)):
+            if t <= ts[i]:
+                w = (t - ts[i - 1]) / (ts[i] - ts[i - 1])
+                return ln[i - 1] * (1 - w) + ln[i] * w
+        return ln[-1]
+
+    t_last = curve._t[-1]
+    base = curve._lndf[-1] - bbg_ln(t_last)
+    new_t = list(curve._t)
+    new_ln = list(curve._lndf)
+    for t in ts[1:]:
+        if t > t_last + 1e-9:
+            new_t.append(t)
+            new_ln.append(base + bbg_ln(t))
+    return Curve(curve.ref_date, new_t, [math.exp(v) for v in new_ln], curve.basis)
 
 
 FRED_SOFR_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SOFR"

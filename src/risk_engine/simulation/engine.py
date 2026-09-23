@@ -215,7 +215,7 @@ class SimulationEngine:
     def __init__(self, calib, trades, method="pseudo_random", n_scenarios=2000,
                  step_months=MONTHLY_STEP_MONTHS, seed=42, curve_tenors=(0.25, 0.5, 1, 2, 3, 5, 7, 10),
                  mpor_days=None, grid_mode="pillar", include_trade_event_dates=True,
-                 corr_mode="full", n_pca_factors=5, vm_lag_days=None):
+                 corr_mode="full", n_pca_factors=5, vm_lag_days=None, jpy_factor=True):
         """
         corr_mode: "full" (default) -- exact Cholesky factor of the full
             39x39 empirical correlation matrix (unchanged behavior).
@@ -227,6 +227,10 @@ class SimulationEngine:
             offered as a more parsimonious, more estimation-robust
             alternative, not a replacement default.
         n_pca_factors: only used when corr_mode="factor".
+        jpy_factor: True (default) simulates the JPY Hull-White short rate as
+            an extra correlated factor (needs calib["hw_jpy"]) and uses it for
+            the drift of JPY-listed names and USDJPY. False keeps the
+            constant r_USD - r_JPY differential.
         """
         self.calib = calib
         self.trades = trades
@@ -241,15 +245,24 @@ class SimulationEngine:
 
         self.hw = calib["hw"]
         self.gbm = calib["gbm"]
-        self.factor_order = calib["factor_order"]  # [equities..., FX_USDJPY, RATE_USD]
+        base_order = list(calib["factor_order"])  # [equities..., FX_USDJPY, RATE_USD]
+        self.hw_jpy = calib.get("hw_jpy") if jpy_factor else None
+        self.factor_order = base_order + (["RATE_JPY"] if self.hw_jpy is not None else [])
         self.n_factors = len(self.factor_order)
         self.rate_idx = self.factor_order.index("RATE_USD")
         self.fx_idx = self.factor_order.index("FX_USDJPY")
+        self.jpy_idx = self.factor_order.index("RATE_JPY") if self.hw_jpy is not None else None
         self.equity_idx = {f: i for i, f in enumerate(self.factor_order)
-                            if f not in ("RATE_USD", "FX_USDJPY")}
+                            if f not in ("RATE_USD", "FX_USDJPY", "RATE_JPY")}
 
-        corr = calib["corr_matrix"].loc[self.factor_order, self.factor_order].values
+        corr = calib["corr_matrix"].loc[base_order, base_order].values
+        if self.hw_jpy is not None:
+            corr = extend_correlation(corr, base_order, calib.get("jpy_rate_corr") or {},
+                                       calib.get("usd_jpy_rate_factor_corr", 0.0))
         corr = _nearest_psd(corr)
+        self.corr = corr
+        # stock-USDJPY shock correlation, for the quanto term in JPY names' drift
+        self.rho_fx = {f: float(corr[i, self.fx_idx]) for f, i in self.equity_idx.items()}
 
         if corr_mode == "full":
             self.L = np.linalg.cholesky(corr)
@@ -299,6 +312,7 @@ class SimulationEngine:
         x_rate = np.zeros((n_scen, n_steps + 1))
         ln_spot = {f: np.zeros((n_scen, n_steps + 1)) for f in self.equity_idx}
         ln_fx = np.zeros((n_scen, n_steps + 1))
+        x_jpy = np.zeros((n_scen, n_steps + 1)) if self.hw_jpy is not None else None
 
         for f, idx in self.equity_idx.items():
             ln_spot[f][:, 0] = np.log(self.gbm.spots0[f])
@@ -309,17 +323,27 @@ class SimulationEngine:
             dt = t_next - t_prev
             r_prev = self.hw.short_rate(x_rate[:, k], t_prev)  # vectorized short rate at step start
 
+            if x_jpy is not None:
+                r_jpy_prev = self.hw_jpy.short_rate(x_jpy[:, k], t_prev)
+                x_jpy[:, k + 1] = _vec_step_x(self.hw_jpy, x_jpy[:, k], dt, z[:, k, self.jpy_idx])
+            else:
+                r_jpy_prev = r_prev - self.gbm.jpy_usd_rate_diff
+
             z_rate = z[:, k, self.rate_idx]
             x_rate[:, k + 1] = _vec_step_x(self.hw, x_rate[:, k], dt, z_rate)
 
             for f, idx in self.equity_idx.items():
                 z_f = z[:, k, idx]
-                ln_spot[f][:, k + 1] = _vec_step_log_spot(self.gbm, ln_spot[f][:, k], f, r_prev, dt, z_f)
+                ln_spot[f][:, k + 1] = _vec_step_log_spot(self.gbm, ln_spot[f][:, k], f, r_prev, r_jpy_prev,
+                                                           dt, z_f, self.rho_fx[f])
 
             z_fx = z[:, k, self.fx_idx]
-            ln_fx[:, k + 1] = _vec_step_log_fx(self.gbm, ln_fx[:, k], r_prev, dt, z_fx)
+            ln_fx[:, k + 1] = _vec_step_log_fx(self.gbm, ln_fx[:, k], r_prev, r_jpy_prev, dt, z_fx)
 
-        return {"x_rate": x_rate, "ln_spot": ln_spot, "ln_fx": ln_fx}
+        out = {"x_rate": x_rate, "ln_spot": ln_spot, "ln_fx": ln_fx}
+        if x_jpy is not None:
+            out["x_jpy"] = x_jpy
+        return out
 
     def price_one_scenario(self, paths, s, node_indices=None):
         """Reprice every trade, for ONE scenario index `s`, across all (or a
@@ -344,9 +368,13 @@ class SimulationEngine:
                              for f in self.equity_idx}
             fx_spot = float(np.exp(paths["ln_fx"][s, node_idx])) * fx_mult
             fx_curve = FxCurve("USD", "JPY", fx_spot, usd_curve)
+            curves = {"USD": usd_curve}
+            if self.hw_jpy is not None:
+                r_jpy_t = self.hw_jpy.short_rate(paths["x_jpy"][s, node_idx], t)
+                curves["JPY"] = self.hw_jpy.fast_node_curve(node_date, t, r_jpy_t)
             market = MarketState(
                 ref_date=node_date, reporting_ccy="USD",
-                discount_curves={"USD": usd_curve},
+                discount_curves=curves,
                 equity_spots=equity_spots,
                 equity_dividend_rates=self.gbm.dividends,
                 fx_curves={("USD", "JPY"): fx_curve},
@@ -396,17 +424,30 @@ def _vec_step_x(hw, x_prev, dt, z):
     return mean + math.sqrt(max(var, 0.0)) * z
 
 
-def _vec_step_log_spot(gbm, ln_s_prev, isin, r_usd_t, dt, z):
+def _vec_step_log_spot(gbm, ln_s_prev, isin, r_usd_t, r_jpy_t, dt, z, rho_fx=0.0):
     import math
     sigma = gbm.vols[isin]
-    q = gbm.dividends.get(isin, 0.0)
-    r = (r_usd_t - gbm.jpy_usd_rate_diff) if gbm.currencies.get(isin) == "JPY" else r_usd_t
-    drift = (r - q - 0.5 * sigma ** 2) * dt
-    return ln_s_prev + drift + sigma * math.sqrt(max(dt, 0.0)) * z
+    drift = gbm.log_spot_drift(isin, r_usd_t, r_jpy_t, rho_fx)
+    return ln_s_prev + drift * dt + sigma * math.sqrt(max(dt, 0.0)) * z
 
 
-def _vec_step_log_fx(gbm, ln_fx_prev, r_usd_t, dt, z):
+def _vec_step_log_fx(gbm, ln_fx_prev, r_usd_t, r_jpy_t, dt, z):
     import math
-    sigma = gbm.fx_vol
-    drift = (gbm.jpy_usd_rate_diff - 0.5 * sigma ** 2) * dt
-    return ln_fx_prev + drift + sigma * math.sqrt(max(dt, 0.0)) * z
+    return ln_fx_prev + gbm.log_fx_drift(r_usd_t, r_jpy_t) * dt + gbm.fx_vol * math.sqrt(max(dt, 0.0)) * z
+
+
+def extend_correlation(corr, factor_order, jpy_corr, usd_jpy_rate_corr):
+    """Append a RATE_JPY row/column to the base correlation matrix.
+    jpy_corr: {factor: correlation of the JPY rate factor with that factor}
+    (equities and FX_USDJPY; missing entries are 0); RATE_USD takes
+    `usd_jpy_rate_corr`. The result is what the engine Cholesky-factors, so it
+    must stay positive semi-definite (the engine repairs tiny violations)."""
+    n = len(factor_order)
+    v = np.zeros(n)
+    for i, f in enumerate(factor_order):
+        v[i] = usd_jpy_rate_corr if f == "RATE_USD" else jpy_corr.get(f, 0.0)
+    out = np.eye(n + 1)
+    out[:n, :n] = corr
+    out[n, :n] = v
+    out[:n, n] = v
+    return out
