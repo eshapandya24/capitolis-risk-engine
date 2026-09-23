@@ -18,6 +18,7 @@ import numpy as np
 
 from capitolis_pricers.market import MarketState
 from capitolis_pricers.curves import FxCurve
+from capitolis_pricers.credit import CreditCurve
 from capitolis_pricers.daycount import to_date, year_fraction
 
 from .random_numbers import generate as gen_randoms
@@ -239,6 +240,10 @@ class SimulationEngine:
         """
         self.calib = calib
         self.trades = trades
+        # {issuer: (tenors_years, spreads, recovery)}: issuer credit for RISKY bonds (extra credit).
+        # Spreads are held deterministic: at every node the issuer curve is re-anchored at the node
+        # date with the same spread term structure (a constant-spread scenario), disclosed in the report.
+        self.issuer_spreads = calib.get("issuer_spreads") or {}
         self.method = method
         self.n_scenarios = n_scenarios
         self.seed = seed
@@ -403,9 +408,12 @@ class SimulationEngine:
             if self.hw_jpy is not None:
                 r_jpy_t = self.hw_jpy.short_rate(paths["x_jpy"][s, node_idx], t)
                 curves["JPY"] = self.hw_jpy.fast_node_curve(node_date, t, r_jpy_t)
+            credit = ({iss: CreditCurve(node_date, tn, sp, rec) for iss, (tn, sp, rec) in self.issuer_spreads.items()}
+                      if self.issuer_spreads else {})
             market = MarketState(
                 ref_date=node_date, reporting_ccy="USD",
                 discount_curves=curves,
+                credit_curves=credit,
                 equity_spots=equity_spots,
                 equity_dividend_rates=self.gbm.dividends,
                 fx_curves={("USD", "JPY"): fx_curve},

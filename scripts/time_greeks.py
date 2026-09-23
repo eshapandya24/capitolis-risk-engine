@@ -26,7 +26,7 @@ def main():
     fx_h = {t for t, x in bg["fx"]["delta"].items() if abs(x) > 1e-6}
     all_t = set().union(*holders.values())
     N = 300
-    eng = SimulationEngine(calib, trades, method="latin_hypercube", n_scenarios=N, seed=42)
+    eng = SimulationEngine(calib, trades, method="latin_hypercube", n_scenarios=N, seed=42, mpor_days=10, vm_lag_days=1)
     paths = eng.simulate_paths()
     t0 = time.perf_counter(); reprice_all_parallel(eng, paths); base = time.perf_counter() - t0
     bumps = []
@@ -39,7 +39,7 @@ def main():
     t0 = time.perf_counter(); reprice_bumps_parallel(eng, paths, bumps); sub = time.perf_counter() - t0
     cal = make_calib(calib, ("ir_delta", None, 1e-4))
     t0 = time.perf_counter()
-    e2 = SimulationEngine(cal, trades, method="latin_hypercube", n_scenarios=N, seed=42)
+    e2 = SimulationEngine(cal, trades, method="latin_hypercube", n_scenarios=N, seed=42, mpor_days=10, vm_lag_days=1)
     p2 = e2.simulate_paths(); reprice_all_parallel(e2, p2); resim = time.perf_counter() - t0
     out = {"n": N, "base_run_s": base, "n_bumps": len(bumps), "subset_bumps_s": sub, "one_resim_s": resim}
     path = os.path.join(ROOT, "data", "processed", "greeks_results.json")

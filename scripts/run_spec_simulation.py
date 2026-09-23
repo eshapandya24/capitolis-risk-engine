@@ -53,14 +53,18 @@ def main():
     p.add_argument("--outdir", default=None)
     p.add_argument("--variant", default="final",
                    choices=("final", "no_jpy", "no_jpy_flat", "no_jpy_flat_sofr", "g2",
-                            "eqvol_up", "ratevol_up", "a_x3", "corr_up"),
+                            "eqvol_up", "ratevol_up", "a_x3", "corr_up", "eqvol_x2",
+                            "rate_eq_flight", "rate_eq_together"),
                    help="attribution runs, each removing one more of this session's model fixes: "
                         "no_jpy = constant JPY differential instead of the JPY factor; "
                         "no_jpy_flat = also the flat long end of the USD curve; "
                         "no_jpy_flat_sofr = also the overnight-SOFR sigma and SOFR-based rate correlations; "
                         "g2 = the final model with the two-factor G2++ rates model; "
                         "eqvol_up / ratevol_up = equity+FX vols / rate sigma x1.25; a_x3 = rate mean reversion x3; "
-                        "corr_up = equity-equity correlations moved 30%% of the way to 1 (model-risk study)")
+                        "corr_up = equity-equity correlations moved 30%% of the way to 1; eqvol_x2 = equity+FX vols x2; "
+                        "rate_eq_flight / rate_eq_together = the USD yield made positively / negatively correlated "
+                        "with the equity market (flight to quality: equities down, yields down, bonds up; "
+                        "together: equities and bonds fall together) (model-risk study)")
     args = p.parse_args()
     if args.outdir is None:
         args.outdir = os.path.join(ROOT, "data", "processed", "spec_run" + ("" if args.variant == "final" else "_" + args.variant))
@@ -86,25 +90,36 @@ def main():
         from risk_engine.models.rates import HullWhite1F
         calib = dict(calib, hw=HullWhite1F(calib["usd_curve"], calib["hw_rate_vol_detail"]["sofr_overnight_sigma"], calib["hw"].a),
                      corr_matrix=pd.read_csv(os.path.join(ROOT, "data", "processed", "correlation_matrix_sofr.csv"), index_col=0))
-    if args.variant in ("eqvol_up", "ratevol_up", "a_x3", "corr_up"):
+    if args.variant in ("eqvol_up", "ratevol_up", "a_x3", "corr_up", "eqvol_x2", "rate_eq_flight", "rate_eq_together"):
         import copy
         import numpy as np
         import pandas as pd
         from risk_engine.models.rates import HullWhite1F
         calib = dict(calib)
-        if args.variant == "eqvol_up":
+        if args.variant in ("eqvol_up", "eqvol_x2"):
             calib["gbm"] = copy.deepcopy(calib["gbm"])
-            calib["gbm"].vols = {k: (v * 1.25 if not k.startswith("RATE") else v) for k, v in calib["gbm"].vols.items()}
+            mult = 2.0 if args.variant == "eqvol_x2" else 1.25
+            calib["gbm"].vols = {k: (v * mult if not k.startswith("RATE") else v) for k, v in calib["gbm"].vols.items()}
             calib["gbm"].fx_vol = calib["gbm"].vols["FX_USDJPY"]
         elif args.variant == "ratevol_up":
             calib["hw"] = HullWhite1F(calib["usd_curve"], calib["hw"].sigma * 1.25, calib["hw"].a)
         elif args.variant == "a_x3":
             calib["hw"] = HullWhite1F(calib["usd_curve"], calib["hw"].sigma, calib["hw"].a * 3.0)
-        else:
+        elif args.variant == "corr_up":
             cm = calib["corr_matrix"].copy()
             eq = [c for c in cm.columns if c not in ("FX_USDJPY", "RATE_USD")]
             sub = cm.loc[eq, eq].values
             cm.loc[eq, eq] = sub + 0.3 * (1.0 - sub)
+            calib["corr_matrix"] = cm
+        else:
+            # rate-equity dependence: corr(yield, name i) = +/-0.4 * corr(name i, equal-weight equity index)
+            cm = calib["corr_matrix"].copy()
+            eq = [c for c in cm.columns if c not in ("FX_USDJPY", "RATE_USD")]
+            sub = cm.loc[eq, eq].values
+            beta = sub.mean(axis=1) / np.sqrt(sub.mean())          # corr of each name with the equal-weight index
+            target = (0.4 if args.variant == "rate_eq_flight" else -0.4) * beta
+            cm.loc[eq, "RATE_USD"] = target
+            cm.loc["RATE_USD", eq] = target
             calib["corr_matrix"] = cm
     print(f"variant: {args.variant}", flush=True)
 

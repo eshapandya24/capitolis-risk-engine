@@ -96,6 +96,7 @@ def main():
     print("\n=== Test 1: bank-account consistency  E[exp(-int r)] vs P(0,T) ===")
     check_nodes = [i for i in range(0, len(eng.dates), max(1, len(eng.dates) // 6))]
     all_ok = True
+    results = {"n_scenarios": n_scenarios, "equity_z": {}, "bank_account_max_rel_bp": 0.0}
     for i in check_nodes:
         T = times[i]
         mc_df = disc[:, i].mean()
@@ -111,26 +112,55 @@ def main():
         # economically negligible one (<5bp relative).
         ok = abs(z) < 4 or rel_diff < 5e-4
         all_ok &= ok
+        results["bank_account_max_rel_bp"] = max(results["bank_account_max_rel_bp"], rel_diff * 1e4)
         print(f"  T={T:6.3f}y  MC E[disc]={mc_df:.6f} +/- {se:.6f}   P(0,T)={true_df:.6f}   "
               f"z={z:+.2f}  rel_diff={rel_diff*1e4:.2f}bp  {'OK' if ok else 'FAIL'}")
 
-    print("\n=== Test 2: equity gains-process martingale  E[S_T*e^(qT)*disc] vs S_0 ===")
-    tickers = sorted(gbm.vols.keys(), key=lambda f: -gbm.vols[f])[:6]  # a spread of vols
+    print("\n=== Test 2: equity gains-process martingale  E[S_T*e^(qT)*disc] vs S_0 (USD value for JPY names) ===")
+    cur = getattr(gbm, "currencies", {})
+    jp = [f for f in gbm.vols if cur.get(f) == "JPY"]
+    us = [f for f in gbm.vols if f in gbm.spots0 and f != "FX_USDJPY" and cur.get(f) != "JPY"]
+    tickers = sorted(us, key=lambda f: -gbm.vols[f])[:4] + sorted(jp, key=lambda f: -gbm.vols[f])[:2]
     T_final_idx = len(eng.dates) - 1
     T_final = times[T_final_idx]
+    x_fx0 = gbm.spots0["FX_USDJPY"]
     for isin in tickers:
         S0 = gbm.spots0[isin]
         q = gbm.dividends.get(isin, 0.0)
         ST = np.exp(paths["ln_spot"][isin][:, T_final_idx])
+        if cur.get(isin) == "JPY":
+            # a JPY name is a martingale in USD terms: S / X, with X = JPY per USD
+            ST = ST / np.exp(paths["ln_fx"][:, T_final_idx])
+            S0 = S0 / x_fx0
         gains = ST * np.exp(q * T_final) * disc[:, T_final_idx]
         mc_mean = gains.mean()
         se = gains.std() / np.sqrt(n_scenarios)
         z = (mc_mean - S0) / se if se > 0 else 0.0
         ok = abs(z) < 4
         all_ok &= ok
-        print(f"  {isin:14s} S0={S0:9.2f}  E[gains]={mc_mean:9.2f} +/- {se:6.3f}  z={z:+.2f}  "
+        results["equity_z"][isin] = float(z)
+        tag = "(JPY, USD value)" if cur.get(isin) == "JPY" else ""
+        print(f"  {isin:14s} {tag:17s} S0={S0:9.3f}  E[gains]={mc_mean:9.3f} +/- {se:6.4f}  z={z:+.2f}  "
               f"{'OK' if ok else 'FAIL'}")
 
+    print("\n=== Test 3: JPY bank account in USD  E[B_JPY(T) / (X_T B_USD(T))] = 1/X_0 ===")
+    hwj = calib.get("hw_jpy")
+    if hwj is not None and "x_jpy" in paths:
+        disc_j = money_market_discount(hwj, paths["x_jpy"], times)      # exp(-int r_JPY)
+        bj = 1.0 / disc_j[:, T_final_idx]
+        v = x_fx0 * bj * disc[:, T_final_idx] / np.exp(paths["ln_fx"][:, T_final_idx])
+        se = v.std() / np.sqrt(n_scenarios)
+        z = (v.mean() - 1.0) / se
+        ok = abs(z) < 4
+        all_ok &= ok
+        results["jpy_account_z"] = float(z)
+        results["usdjpy_mean_log_change"] = float((paths['ln_fx'][:, T_final_idx] - paths['ln_fx'][:, 0]).mean())
+        print(f"  E = {v.mean():.5f} +/- {se:.5f}  z={z:+.2f}  {'OK' if ok else 'FAIL'}")
+        print("  (USDJPY drifts down when USD rates exceed JPY rates: mean ln(X_T/X_0) = "
+              f"{(paths['ln_fx'][:, T_final_idx] - paths['ln_fx'][:, 0]).mean():+.4f})")
+
+    import json as _json
+    _json.dump(results, open(os.path.join(ROOT, 'data', 'processed', 'martingale_results.json'), 'w'), indent=1)
     print(f"\n{'PASS' if all_ok else 'FAIL'}: simulated paths are consistent with the "
           f"risk-neutral martingale property to within Monte Carlo noise.")
 

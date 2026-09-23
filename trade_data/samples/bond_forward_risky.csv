@@ -1,0 +1,2 @@
+trade_id,trade_ccy,bond_id,position,forward_date,strike_clean,notional,repo_rate,counterparty
+BF_RISKY_S1,USD,Bond_RISKY1,long,2/26/2027,100,25000000,,CPTY_S

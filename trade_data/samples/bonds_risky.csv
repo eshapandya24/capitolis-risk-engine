@@ -1,0 +1,2 @@
+bond_id,isin,cusip,name,issuer,currency,issue_date,maturity_date,coupon,coupon_frequency_months,day_count,par
+Bond_RISKY1,,,SAMPLE BBB CORPORATE 5.00 01-Mar-2031,SAMPLE_BBB_CORP,USD,3/1/2026,3/1/2031,0.05,6,30/360,100

@@ -671,7 +671,7 @@ def fig_spec_compare(S_, D):
     fig, ax = plt.subplots(figsize=(6.4, 2.7))
     w = 0.27
     ax.bar(np.arange(3) - w, unc, w, color=GREY, label="uncollateralized level, max(V,0)")
-    ax.bar(np.arange(3), old, w, color=TEAL, label="earlier full-VM illustration (Section 7.5)")
+    ax.bar(np.arange(3), old, w, color=TEAL, label="earlier full-VM illustration (Section 7.7)")
     ax.bar(np.arange(3) + w, new, w, color=NAVY, label="brief's close-out exposure (headline)")
     ax.set_xticks(range(3)); ax.set_xticklabels(cp); ax.set_ylabel("MPE99 (USD M)"); ax.legend(fontsize=6.5)
     ax.set_title("Peak PFE99 under three exposure definitions")
