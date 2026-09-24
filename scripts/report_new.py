@@ -23,11 +23,12 @@ def _j(*parts):
 
 
 def _m(x, d=1):
-    return f"${x/1e6:,.{d}f}M"
+    return ("-" if x < 0 else "") + f"${abs(x)/1e6:,.{d}f}M"
 
 
 def _k(x):
-    return f"${x/1e3:,.0f}k"
+    v = int(round(x / 1e3))
+    return "$0k" if v == 0 else (f"-${abs(v):,}k" if v < 0 else f"${v:,}k")
 
 
 def spec(run="spec_run"):
@@ -48,8 +49,8 @@ def _peaks(S, ent):
 # ---------------------------------------------------------------- attribution and model risk
 ATTR = [("Earlier version (flat USD curve beyond 6.5y, SOFR-overnight sigma, no JPY factor, USDJPY drift sign error)", "spec_run", "spec_exposure_before_fixes.json"),
         ("Corrected USDJPY drift only (no JPY factor, flat curve, SOFR sigma)", "spec_run_no_jpy_flat_sofr", "spec_exposure.json"),
-        ("+ Bloomberg long end spliced onto the USD curve", "spec_run_no_jpy_flat", "spec_exposure.json"),
-        ("+ long-end volatility fit and 10-year-yield correlations", "spec_run_no_jpy", "spec_exposure.json"),
+        ("+ long-end volatility fit and 10-year-yield correlations", "spec_run_no_jpy_flat", "spec_exposure.json"),
+        ("+ Bloomberg long end spliced onto the USD curve", "spec_run_no_jpy", "spec_exposure.json"),
         ("+ JPY Hull-White factor in the simulation (final model)", "spec_run_final2000", "spec_exposure.json")]
 
 
@@ -253,7 +254,7 @@ def sa_ccr_section(doc, S):
 def backtest_section(doc):
     R = _j("backtest_results.json")
     cfg = R["config"]
-    out = [P("A model that is correct on average can still misstate the tail. The simulated exposure quantiles were therefore backtested against realised history, with the Kupiec proportion-of-failures test (Basel's standard backtest). At each historical as-of date the model is calibrated using only data up to that date (a trailing 3-year window), asked for the 95th and 99th percentile of the 10-business-day change in value of a fixed set of positions, and the realised change is read off history. An exception is a realised move above the predicted quantile; a correct model has exceptions with probability 5% or 1%, independently. Windows do not overlap, and the starting phase is shifted over ten offsets to check robustness. The equity leg uses the actual equity TRS positions of each counterparty (JPY names through USDJPY) and the engine's own lognormal model on %s to %s daily data; the rates leg tests the Hull-White distribution of 10-day yield changes at 5, 10 and 20 years." % (cfg["history"][0], cfg["history"][1]))]
+    out = [P("A model that is correct on average can still misstate the tail. The simulated exposure quantiles were therefore backtested against realised history, with the Kupiec proportion-of-failures test (Basel's standard backtest). At each historical as-of date the model is calibrated using only data up to that date (a trailing 3-year window), asked for the 95th and 99th percentile of the 10-business-day change in value of a fixed set of positions, and the realised change is read off history. An exception is a realised move above the predicted quantile; a correct model has exceptions with probability 5%% or 1%%, independently. Windows do not overlap, and the starting phase is shifted over ten offsets to check robustness. The equity leg uses the actual equity TRS positions of each counterparty (JPY names through USDJPY) and the engine's own lognormal model on %s to %s daily data; the rates leg tests the Hull-White distribution of 10-day yield changes at 5, 10 and 20 years." % (cfg["history"][0], cfg["history"][1]))]
     rows = [["Netting set", "Level", "Exceptions", "Expected", "Rate", "Kupiec p-value", "Offsets rejecting (of 10)", "Mean rate over offsets"]]
     for c in CP:
         for lev in ("0.95", "0.99"):
@@ -308,3 +309,39 @@ def override_cva_with_xva(Rc, Xv):
         vs[rt] = float(sum(cva(np.array(prof[c]["EPE"]), t, tn, sp) for c in CP))
     out["cva_vs_rating"] = vs
     return out
+
+
+def sa_cva_conventions(doc):
+    """SA-CVA capital on the close-out and on the uncollateralized level exposure."""
+    c, l = _j("sa_cva_results.json"), _j("sa_cva_results_level.json")
+    rows = [["Risk class", "Close-out exposure (USD)", "Uncollateralized level exposure (USD)"]]
+    for k in c["capital_by_class"]:
+        rows.append([k.replace("_", " "), format(c["capital_by_class"][k], ",.0f"), format(l["capital_by_class"][k], ",.0f")])
+    rows.append(["Total SA-CVA capital (m_CVA = 1)", format(c["K_sa_cva"], ",.0f"), format(l["K_sa_cva"], ",.0f")])
+    rows.append(["Risk-weighted assets (12.5 x capital)", format(c["RWA"], ",.0f"), format(l["RWA"], ",.0f")])
+    rows.append(["CVA in the sensitivity base run", format(c["cva_total"], ",.0f"), format(l["cva_total"], ",.0f")])
+    return [P("<b>SA-CVA capital on the two exposure definitions.</b> The capital is a multiple of the CVA and its sensitivities, so it follows the exposure definition: on the margined close-out exposure it is $%.2fM (RWA $%.1fM), on the uncollateralized level exposure $%.2fM (RWA $%.1fM). If no margin is ever called the second figure is the relevant one; the first applies only to a counterparty with daily variation margin at the prior-day value. Both are dominated by counterparty credit spread risk." % (c["K_sa_cva"] / 1e6, c["RWA"] / 1e6, l["K_sa_cva"] / 1e6, l["RWA"] / 1e6)),
+            tbl(rows, widths=[3.0, 2.2, 2.6], font=7.4)]
+
+
+def convergence_closeout(doc):
+    R = _j("convergence_closeout.json")
+    rows = [["Netting set", "N = 250", "N = 500", "N = 1,000", "N = 2,000", "N = 3,000"]]
+    for e, lab in (("CPTY_A", "CPTY_A"), ("CPTY_B", "CPTY_B"), ("CPTY_C", "CPTY_C"), ("__portfolio__", "Portfolio")):
+        d = {r["N"]: r for r in R["results"][e]["rows"]}
+        rows.append([lab] + ["%.1f%% / %.1f%%" % (d[n]["rse_pfe99_pct"], d[n]["rse_mpe_pct"]) for n in (250, 500, 1000, 2000, 3000)])
+    p = {r["N"]: r for r in R["results"]["__portfolio__"]["rows"]}
+    est5 = p[2000]["rse_mpe_pct"] * (2000 / 5000) ** 0.5
+    est10 = p[2000]["rse_mpe_pct"] * (2000 / 10000) ** 0.5
+    return [P("<b>Convergence of the close-out measures.</b> The study above concerns the level exposure of the earlier calibration. The same bootstrap on the 5,000-scenario close-out run (subsets drawn without replacement, corrected for the finite pool) gives the relative standard error of the PFE99 at the date of the portfolio peak (%s) and of the MPE itself, shown as PFE99 / MPE:" % R["peak_date"]),
+            tbl(rows, widths=[1.4, 1.2, 1.2, 1.2, 1.2, 1.2], font=7.4),
+            P("On this definition the MPE99 of the portfolio has a relative standard error of about %.1f%% at N = 2,000, which extrapolates by the 1/sqrt(N) law to about %.1f%% at N = 5,000 and %.1f%% at N = 10,000. The close-out exposure is the tail of a 10-day move of a margined position, so it is noisier per scenario than the level exposure; the recommended counts are unchanged, but the precision to quote for the headline MPE at N = 5,000 is roughly %.1f%%." % (p[2000]["rse_mpe_pct"], est5, est10, est5))]
+
+
+def model_risk_text(doc):
+    b = json.load(open(os.path.join(PROC, "spec_run_final2000", "spec_exposure.json")))
+    pk = lambda run, e: _peaks(json.load(open(os.path.join(PROC, run, "spec_exposure.json"))), e)["PFE"]
+    bp = _peaks(b, "__portfolio__")["PFE"]
+    ch = lambda run: pk(run, "__portfolio__") / bp - 1
+    chc = lambda run: pk(run, "CPTY_C") / _peaks(b, "CPTY_C")["PFE"] - 1
+    return P("<b>Reading the table.</b> The largest inputs are the equity volatilities and correlations: doubling equity and FX volatilities raises the portfolio MPE99 by %.0f%% and raising them by a quarter by %.0f%%, and moving the equity correlations 30%% of the way to one by %.0f%%, because the tail of the equity swaps is what sets CPTY_A and CPTY_B. The USD rate assumptions matter for CPTY_C: a quarter more rate volatility raises its MPE99 by %.0f%% and a mean reversion three times larger lowers it by %.0f%%. The dependence between rates and equities, which the data cannot pin down, moves the portfolio figure by %+.0f%% (yields fall with equities, so the short-bond and short-equity gains oppose each other) and %+.0f%% (the two fall together, so they coincide). The two-factor rates model changes the portfolio MPE99 by only %.0f%%. The model risk in the headline is therefore dominated by equity volatility and by the rate-equity dependence, not by the choice of rate model." % (ch("spec_run_eqvol_x2") * 100, ch("spec_run_eqvol_up") * 100, ch("spec_run_corr_up") * 100, chc("spec_run_ratevol_up") * 100, abs(chc("spec_run_a_x3")) * 100, ch("spec_run_rate_eq_flight") * 100, ch("spec_run_rate_eq_together") * 100, ch("spec_run_g2") * 100))

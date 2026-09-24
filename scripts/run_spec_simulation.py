@@ -92,7 +92,6 @@ def main():
                      corr_matrix=pd.read_csv(os.path.join(ROOT, "data", "processed", "correlation_matrix_sofr.csv"), index_col=0))
     if args.variant in ("eqvol_up", "ratevol_up", "a_x3", "corr_up", "eqvol_x2", "rate_eq_flight", "rate_eq_together"):
         import copy
-        import numpy as np
         import pandas as pd
         from risk_engine.models.rates import HullWhite1F
         calib = dict(calib)

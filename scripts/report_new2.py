@@ -133,12 +133,20 @@ def stress_section(doc):
     # findings, computed
     port_co = {n: sc[n]["closeout"]["__portfolio__"]["MPE"] / base["closeout"]["__portfolio__"]["MPE"] - 1 for n in names}
     port_lv = {n: sc[n]["level"]["__portfolio__"]["MPE"] / base["level"]["__portfolio__"]["MPE"] - 1 for n in names}
+    _rb = np.array(base["closeout"]["__portfolio__"]["PFE"])
+    _rr = np.array(sc["RATES_DOWN_200"]["closeout"]["__portfolio__"]["PFE"]) / np.maximum(_rb, 1.0)
+    _kk = np.where(keep)[0]
+    _jm = _kk[int(np.argmax(_rr[_kk]))]
+    _rd_max, _rd_day = float(_rr[_jm]), int(days[_jm])
+    _after = [i for i in _kk if days[i] > 105 and _rb[i] > 1e5]
+    _rd_after = float(np.median(_rr[_after])) if _after else float("nan")
+    _eq_ratio = float(np.median((np.array(sc["EQ_DOWN_30"]["closeout"]["__portfolio__"]["PFE"]) / np.maximum(_rb, 1.0))[[i for i in _kk if days[i] < 60]]))
     wco = max(port_co, key=lambda n: abs(port_co[n]))
     wlv = max(port_lv, key=lambda n: abs(port_lv[n]))
     n_trade_moves = {n: int(np.sum(np.abs(M[:, j][np.isfinite(M[:, j])]) > 10)) for j, n in enumerate(names)}
     n_valid = int(np.sum(np.isfinite(M[:, 0])))
     eq_only = [n for n in names if defs[n]["dy_bp"] is None and n.startswith("EQ")]
-    out.append(P("<b>What the stress tests show.</b> (1) The close-out exposure is far less sensitive to instantaneous level shocks than the level exposure: the largest portfolio change is %+.0f%% (%s) for close-out MPE99, against %+.0f%% (%s) for level MPE99. This is structural: the close-out exposure measures the move over 10 days from a margined start, so a shock to today's levels changes it only through the size of the positions, whereas the uncollateralized exposure is the level itself. (2) Sensitivity is not uniform across products. The number of trades (of %d with a meaningful base MPE) whose close-out MPE99 moves by more than 10%% ranges from %d to %d across the scenarios; equity-driven trades respond to equity and FX shocks and hardly to rates, and the bond forwards and bond TRS respond to rate shocks and not to equities, as the trade structure implies (heat map above). (3) Along the path, the effect is strongest at the dates where the shocked positions are still alive and fades as trades mature; the ratio plot shows the dates at which each scenario bites. (4) Combined scenarios are not the sum of their parts: flight to quality and stagflation, which apply the same equity shock with opposite rate shocks, give portfolio close-out MPE99 of %s and %s against %s in the base, because the equity-heavy netting sets and the rate-heavy netting set react in opposite ways to the rate leg." % (port_co[wco] * 100, SHORT.get(wco, wco), port_lv[wlv] * 100, SHORT.get(wlv, wlv), n_valid, min(n_trade_moves.values()), max(n_trade_moves.values()), _m(sc["FLIGHT_TO_QUALITY"]["closeout"]["__portfolio__"]["MPE"]), _m(sc["STAGFLATION"]["closeout"]["__portfolio__"]["MPE"]), _m(base["closeout"]["__portfolio__"]["MPE"]))))
+    out.append(P("<b>What the stress tests show.</b> (1) The close-out exposure is far less sensitive to instantaneous level shocks than the level exposure: the largest portfolio change is %+.0f%% (%s) for close-out MPE99, against %+.0f%% (%s) for level MPE99. This is structural: the close-out exposure measures the move over 10 days from a margined start, so a shock to today's levels changes it only through the size of the positions, whereas the uncollateralized exposure is the level itself. (2) Sensitivity is not uniform across products. The number of trades (of %d with a meaningful base MPE) whose close-out MPE99 moves by more than 10%% ranges from %d to %d across the scenarios; equity-driven trades respond to equity and FX shocks and hardly to rates, and the bond forwards and bond TRS respond to rate shocks and not to equities, as the trade structure implies (heat map above). (3) Along the path the effect follows the life of the positions that carry the shocked factor: for the rates -200bp scenario the ratio of portfolio close-out PFE99 to the base rises to %.2f (at about day %d) and is back near %.2f once BF_0003 settles on 6 December 2026, whereas the equity scenarios keep their constant scaling (%.2f for -30%%) while the baskets are alive. (4) Combined scenarios show how the pieces interact: the flight-to-quality and stagflation scenarios apply the same equity shock with opposite rate shocks. In both, CPTY_A and CPTY_B fall by about the same amount (their positions are smaller after the equity fall), but CPTY_C rises with the fall in yields (a 22-year bond has more duration at lower yields) and falls with the rise, so the portfolio close-out MPE99 is %s in flight to quality and %s in stagflation, against %s in the base." % (port_co[wco] * 100, SHORT.get(wco, wco), port_lv[wlv] * 100, SHORT.get(wlv, wlv), n_valid, min(n_trade_moves.values()), max(n_trade_moves.values()), _rd_max, _rd_day, _rd_after, _eq_ratio, _m(sc["FLIGHT_TO_QUALITY"]["closeout"]["__portfolio__"]["MPE"]), _m(sc["STAGFLATION"]["closeout"]["__portfolio__"]["MPE"]), _m(base["closeout"]["__portfolio__"]["MPE"]))))
     return out, R
 
 
@@ -152,7 +160,7 @@ def greeks_method_section(doc, g):
     naive_per = tc["base_run_s"]
     crn = g["crn_vs_independent"]
     ratio = crn["independent_std"] / max(crn["crn_std"], 1e-9)
-    out = [P("<b>What was done, stated plainly.</b> Every sensitivity is a finite difference of a simulated exposure measure, computed as bump-and-reprice on the same random numbers. For each risk factor: (1) shift the factor (spot by +1% and -1%; the curve by +1bp and -1bp in parallel and by bucket; volatilities by +1% relative); (2) regenerate the paths from the shifted calibration with the same seed and Latin Hypercube draws; (3) reprice the trades on the shifted paths; (4) recompute EE, median PFE and PFE99 by netting set; (5) take the difference from the base run (central difference for delta and gamma, one-sided for vega and bucketed DV01). Because the random numbers are common, the difference is sensitivity and not sampling noise: the standard deviation of the EE delta estimate is %s against %s with independent draws (%.0fx lower, equivalent to about %.0fx more scenarios)." % (_k(crn["crn_std"]), _k(crn["independent_std"]), ratio, ratio ** 2))]
+    out = [P("<b>What was done, stated plainly.</b> Every sensitivity is a finite difference of a simulated exposure measure, computed as bump-and-reprice on the same random numbers. For each risk factor: (1) shift the factor (spot by +1%% and -1%%; the curve by +1bp and -1bp in parallel and by bucket; volatilities by +1%% relative); (2) regenerate the paths from the shifted calibration with the same seed and Latin Hypercube draws; (3) reprice the trades on the shifted paths; (4) recompute EE, median PFE and PFE99 by netting set; (5) take the difference from the base run (central difference for delta and gamma, one-sided for vega and bucketed DV01). Because the random numbers are common, the difference is sensitivity and not sampling noise: the standard deviation of the EE delta estimate is %s against %s with independent draws (%.0fx lower)." % (_k(crn["crn_std"]), _k(crn["independent_std"]), ratio))]
     out.append(P("<b>The efficiency choices.</b> Two structural facts avoid most of the cost. A spot bump rescales every GBM path exactly, so equity and FX Greeks need no re-simulation; and only the trades holding the bumped factor are repriced (an equity name appears in one to three of the sixteen trades). All %d equity and FX bumps are priced in one process pool. Curve and volatility bumps change the paths, so they need a re-simulation, but the random numbers are reused and the simulation is a small part of the cost: the repricing of every trade at every node dominates." % nb_fx))
     rows = [["Component", "Count", "Cost each", "Total", "Naive cost (full re-simulation and repricing each time)"],
             ["Base run (paths and full repricing)", "1", "%.0f s" % tc["base_run_s"], "%.0f s" % tc["base_run_s"], "-"],
@@ -183,9 +191,9 @@ def greeks_method_section(doc, g):
         s = V.get("fx_EE_summary")
         if s:
             rows.append(["EE delta (USDJPY)", str(s["n"]), "%.1f%% of peak" % (s["median_max_abs"] * 100), "%.1f%% of peak" % (s["worst_max_abs"] * 100)])
-        out.append(P("<b>Is there a faster alternative? Yes, for equity and FX.</b> The pathwise estimator gives every equity and FX delta of every netting set at every reporting date in %.1f seconds from the paths and NPVs already in memory, against %.0f seconds for the %d bump-and-reprice runs. Against those bump results, on the same scenarios:" % (V["pathwise_seconds"], V["bump_seconds"]["equity_fx_bumps_s"] or tc["subset_bumps_s"], V["bump_seconds"]["n_equity_fx_bumps"] or nb_fx)))
+        out.append(P("<b>Is there a faster alternative? Yes, for equity and FX.</b> The pathwise estimator gives every equity and FX delta of every netting set at every reporting date in %.1f seconds from the paths and NPVs already in memory, against %.0f seconds for the %d bump-and-reprice runs. Compared on the same paths and NPVs, so that both see identical inputs:" % (V["pathwise_seconds"], V["bump_seconds"], V["n_bumps"])))
         out.append(tbl(rows, widths=[2.2, 2.0, 1.6, 1.6], font=7.4))
-        out.append(P("Differences are the maximum over reporting dates as a percentage of the peak absolute delta. EE matches (the estimators are algebraically the same up to the kink at zero); the median and PFE99 pathwise deltas are local averages over a few dozen scenarios and are therefore noisier, which is why the bump-and-reprice values remain the reported ones and pathwise is used as an independent check and as the fast path for equity and FX. The remaining cost is the rate and volatility bumps, which no pathwise formula covers here.", SMALL))
+        out.append(P("Differences are the maximum over reporting dates, as a percentage of the largest single-name delta of the same netting set and measure. The EE deltas agree to numerical precision (the two estimators are algebraically the same up to the kink at zero); the median and PFE99 pathwise deltas are local averages over a few dozen scenarios and are noisier, which is why the bump-and-reprice values remain the reported ones and pathwise is the independent check and the fast path for equity and FX. The remaining cost is the rate and volatility bumps, which no pathwise formula covers here.", SMALL))
     return out
 
 
@@ -193,20 +201,25 @@ def greeks_method_section(doc, g):
 def pca_section(doc):
     R = _j("pca_study.json")
     ev = R["explained"]
-    out = [P("<b>What the factors are.</b> The factors are the eigenvectors of the 40x40 correlation matrix; each name's loading is its correlation with that factor. They are statistical, not economic, factors, but their loadings can be read off the data. The first factor is the market: every name loads positively and it alone explains %.0f%% of the variance. The later factors separate groups of names that move together."  % (R["factors"][0]["variance_share"] * 100))]
+    out = [P("<b>What the factors are.</b> The factors are the eigenvectors of the 39x39 correlation matrix of the 37 equities, USDJPY and the USD rate; each name's loading is its correlation with that factor. They are statistical, not economic, factors, but their loadings can be read off the data. The first factor is the market: every name loads positively and it alone explains %.0f%% of the variance. The later factors separate groups of names that move together."  % (R["factors"][0]["variance_share"] * 100))]
     rows = [["Factor", "Share of variance", "Highest loadings", "Lowest loadings", "Mean loading, US names / JPY names", "Reading"]]
     for f in R["factors"][:5]:
         us, jp = f["mean_loading_us_names"], f["mean_loading_jpy_names"]
+        pos_ = {a for a, _ in f["top_positive"][:4]}
         if f["index"] == 1:
             rd = "Market factor: all names, both regions"
         elif abs(us - jp) > 0.25:
             rd = "Japan versus US"
+        elif {"KO", "PG"} & pos_:
+            rd = "Defensive staples against high-growth technology and power names"
+        elif {"MPC", "XOM"} & pos_:
+            rd = "Energy names and the USD rate against the Indian ADRs"
         else:
-            rd = "A group of names (see the extremes)"
+            rd = "Growth and power names against banks and semiconductors"
         rows.append([str(f["index"]), "%.1f%%" % (f["variance_share"] * 100), ", ".join("%s %+.2f" % (a, b) for a, b in f["top_positive"][:4]),
                      ", ".join("%s %+.2f" % (a, b) for a, b in f["top_negative"][:4]), "%+.2f / %+.2f" % (us, jp), rd])
     out.append(tbl(rows, widths=[0.5, 0.8, 2.2, 2.2, 1.0, 1.4], font=6.8))
-    out.append(P("Tickers, signed loadings; the sign of a factor is arbitrary. Factors 2 to 5 mostly separate the Tokyo listings from the US names and single out a few high-volatility names, which is what one would expect from a book of 37 stocks in two markets; they explain little each, which is why more than five factors are needed to reproduce the matrix closely.", SMALL))
+    out.append(P("Tickers, signed loadings; the sign of a factor is arbitrary. Factor 2 separates the Tokyo listings from the US names; factors 3 to 5 pick out groups that move together (defensive staples, energy names together with the USD rate, and growth and power names against banks and semiconductors). Each explains only a few percent of the variance, which is why more than five factors are needed to reproduce the matrix closely.", SMALL))
     rows = [["Factors k", "Cumulative variance explained"] + ["Portfolio vol, %s" % c for c in R["position_vol"]]]
     for k in ("3", "5", "10"):
         rows.append([k, "%.0f%%" % (ev[k] * 100)] + ["%s (%+.1f%%)" % (_m(v[k]), (v[k] / v["full"] - 1) * 100) for v in R["position_vol"].values()])
@@ -218,11 +231,11 @@ def pca_section(doc):
     full, p5 = sp["full"]["draws_s"], sp["pca5"]["draws_s"]
     rows = [["Corr. mode", "Random factors per step", "Correlated-shock step (5,000 scenarios)", "Share of the reporting run"]]
     for mode, lab in (("full", "Full Cholesky"), ("pca5", "PCA, 5 factors"), ("pca10", "PCA, 10 factors")):
-        rows.append([lab, str(sp[mode]["n_factors"] + (0 if mode == "full" else int(mode[3:]))), "%.2f s" % sp[mode]["draws_s"],
+        rows.append([lab, str(sp["full"]["n_factors"] + (0 if mode == "full" else int(mode[3:]))), "%.2f s" % sp[mode]["draws_s"],
                      "%.3f%%" % (sp[mode]["draws_s"] / dr * 100) if dr else "n/a"])
-    out.append(P("<b>How much speed does it add?</b> Almost none, and it is worth saying why. The factor model replaces a 40x40 matrix product per step with a 40x5 one plus independent noise, which does make the correlated-shock step cheaper, but that step is a vanishing part of the run; the run is dominated by repricing every trade at every node (%s for 5,000 scenarios on the close-out grid):" % ("%.0f s" % dr if dr else "about 47 minutes")))
+    out.append(P("<b>How much speed does it add?</b> None, and slightly the opposite. The factor model replaces a 40x40 matrix product per step with a 40x5 one plus independent noise, but the engine then has to draw k systematic and 40 idiosyncratic normals per step instead of 40, and the measured time of the correlated-shock step is not lower (%s). In any case that step is a vanishing part of the run, which is dominated by repricing every trade at every node (%s for 5,000 scenarios on the close-out grid):" % (", ".join("%s %.2f s" % (lab, sp[mode]["draws_s"]) for mode, lab in (("full", "full"), ("pca5", "5 factors"), ("pca10", "10 factors"))), "%.0f s" % dr if dr else "about 35 minutes")))
     out.append(tbl(rows, widths=[1.6, 1.6, 2.6, 1.6], font=7.4))
-    out.append(P("The step costs %.2f s against %.2f s, a saving of %.2f s in a run of %s, so the end-to-end speed added is under 0.1%%." % (full, p5, full - p5, "%.0f s" % dr if dr else "roughly 47 minutes")))
+    out.append(P("The correlated-shock step is %.2f s (full) against %.2f s (5 factors) in a run of %s, so the end-to-end speed added is nil; whichever is faster, the difference is under 0.1%% of the run." % (full, p5, "%.0f s" % dr if dr else "roughly 35 minutes")))
     S = R["sampling"]
     ref = S["reference_pfe99_full_pseudo_10000"]
     rows = [["Corr. mode"] + ["Std of PFE99, %s (%% of reference)" % c for c in ref] + ["Bias, %s (%% of reference)" % c for c in ref]]
@@ -231,7 +244,7 @@ def pca_section(doc):
         rows.append([lab] + ["%.1f%%" % (m_[c]["std"] / abs(ref[c]) * 100) for c in ref] + ["%+.1f%%" % (m_[c]["bias_vs_reference"] / abs(ref[c]) * 100) for c in ref])
     out.append(P("<b>Does it help the sampling error?</b> The hope for a factor model with quasi-random numbers is a lower-dimensional space. Here the engine draws the five systematic and the 40 idiosyncratic shocks with the same Latin Hypercube generator, so the dimension per step rises from 40 to 45. Measured on the one-month PFE99 of each netting set's equity positions over %d seeds at N = %d, against a pseudo-random full-rank reference at N = 10,000:" % (S["seeds"], S["n"])))
     out.append(tbl(rows, widths=[1.6] + [1.0] * (2 * len(ref)), font=7.0))
-    out.append(callout("Conclusion: the PCA factor model is explainable (a market factor, a Japan-versus-US factor and group factors) but it approximates the correlation matrix, it does not speed up the run, and it does not reduce sampling error in its present form. The full-rank Cholesky remains the default; the factor model is kept as a robustness option, and would become useful only if the systematic factors alone were drawn quasi-randomly and the idiosyncratic noise pseudo-randomly."))
+    out.append(callout("Conclusion: the PCA factor model is explainable (a market factor, a Japan-versus-US factor and group factors) but it approximates the correlation matrix (the volatility of a netting set differs from the full matrix by several percent), it adds no speed, and its sampling error is not consistently lower than the full-rank model's (it varies with the number of factors and the netting set). The full-rank Cholesky remains the default; the factor model is kept as a robustness option, and would become useful only if the systematic factors alone were drawn quasi-randomly and the idiosyncratic noise pseudo-randomly."))
     return out
 
 
@@ -246,14 +259,15 @@ def additivity_section(doc):
     for c in CP:
         e, r = d["equity_delta_per_1pct"][c], d["dv01_per_bp"][c]
         parts = []
-        if e < -1e4:
-            parts.append("equities fall")
-        if e > 1e4:
-            parts.append("equities rise")
-        if r > 1e3:
-            parts.append("yields rise")
-        if r < -1e3:
-            parts.append("yields fall")
+        big_e = max(abs(v) for v in d["equity_delta_per_1pct"].values())
+        big_r = max(abs(v) for v in d["dv01_per_bp"].values())
+        fxv = d["fx_delta_per_1pct"][c]
+        if abs(e) > 0.1 * big_e:
+            parts.append("equities fall" if e < 0 else "equities rise")
+        if abs(r) > 0.1 * big_r:
+            parts.append("yields rise" if r > 0 else "yields fall")
+        if abs(fxv) > 1e5:
+            parts.append("USDJPY rises (yen weakens)" if fxv > 0 else "USDJPY falls (yen strengthens)")
         txt[c] = " and ".join(parts) or "little"
         rows.append([c, format(e, ",.0f"), format(r, ",.0f"), format(d["fx_delta_per_1pct"][c], ",.0f"), txt[c]])
     out = [P("<b>Which netting set is driven by what.</b> The t = 0 sensitivities separate the netting sets clearly:")]
@@ -263,7 +277,7 @@ def additivity_section(doc):
     out.append(P("<b>Should bonds be inversely related to equities?</b> Economically the relation changes sign with the regime: in a growth scare (flight to quality) equities fall and bonds rally, so yields fall with equities; in an inflation shock (as in 2022) both fall together. The calibration reflects only the last three years, in which the correlation of daily 10-year-yield changes with the 37 stocks averages %+.2f (range %+.2f to %+.2f), i.e. essentially none. The book is short both equities (CPTY_A, CPTY_B) and the long bond (CPTY_C): it gains from falling equities and from rising yields. In a flight to quality the two gains oppose each other (equities fall, yields fall); when both fall together they coincide." % (re_["mean"], re_["min"], re_["max"])))
     at = A["at_portfolio_mpe_date"]
     ssum = at["sum"]
-    out.append(P("<b>Why is the portfolio MPE close to the sum of the counterparty MPEs?</b> The portfolio exposure is the sum of the counterparties' exposures, because netting never crosses counterparties: it is sum over c of max(V_c, 0), not max of the sum. Its 99th percentile is below the sum of the counterparties' 99th percentiles only to the extent that the counterparties are not simultaneously in their tails. At the portfolio's peak date (%s) the three counterparties' PFE99 are %s, %s and %s, summing to %s, against a portfolio PFE99 of %s: %.0f%% of the sum, i.e. a diversification benefit of %.0f%%. The peak dates of the individual counterparties fall within days of each other (%s) because all three books are largest in the first weeks, before the equity swaps mature, so there is little timing diversification." % (A["portfolio_mpe_date"], _m(at["pfe99"]["CPTY_A"]), _m(at["pfe99"]["CPTY_B"]), _m(at["pfe99"]["CPTY_C"]), _m(ssum), _m(at["portfolio"]), at["portfolio"] / ssum * 100, (1 - at["portfolio"] / ssum) * 100, ", ".join("%s %s" % (c[-1], A["mpe_date"][c]) for c in CP))))
+    out.append(P("<b>Why is the portfolio MPE close to the sum of the counterparty MPEs?</b> The portfolio exposure is the sum of the counterparties' exposures, because netting never crosses counterparties: it is sum over c of max(V_c, 0), not max of the sum. Its 99th percentile is below the sum of the counterparties' 99th percentiles only to the extent that the counterparties are not simultaneously in their tails. At the portfolio's peak date (%s) the three counterparties' PFE99 are %s, %s and %s, summing to %s, against a portfolio PFE99 of %s: %.0f%% of the sum, i.e. a diversification benefit of %.0f%%. The peak dates of the individual counterparties (%s) fall within about %d days of each other because all three books are largest in the first weeks, before the equity swaps mature, so there is little timing diversification." % (A["portfolio_mpe_date"], _m(at["pfe99"]["CPTY_A"]), _m(at["pfe99"]["CPTY_B"]), _m(at["pfe99"]["CPTY_C"]), _m(ssum), _m(at["portfolio"]), at["portfolio"] / ssum * 100, (1 - at["portfolio"] / ssum) * 100, ", ".join("%s %s" % (c[-1], A["mpe_date"][c]) for c in CP), (max(date.fromisoformat(v) for v in A["mpe_date"].values()) - min(date.fromisoformat(v) for v in A["mpe_date"].values())).days)))
     rc = A["rank_corr"]
     tc = A["tail_coexceedance"]
     cont = A["contribution_at_p99"]
@@ -273,7 +287,10 @@ def additivity_section(doc):
             ["Probability that the exposure is positive"] + ["%.0f%%" % (A["prob_positive"][c] * 100) for c in CP],
             ["Share of the portfolio's tail scenarios in which the counterparty has zero exposure"] + ["%.0f%%" % (A["share_zero_in_tail"][c] * 100) for c in CP]]
     out.append(tbl(rows, widths=[3.6, 1.1, 1.1, 1.1], font=7.4))
-    out.append(P("Rank correlations of the counterparty exposures at that date: A-B %+.2f, A-C %+.2f, B-C %+.2f. Probability that one counterparty is above its own 99th percentile given another is: A given B %.0f%%, A given C %.0f%%, C given B %.0f%% (an independent pair would give 1%%). The two equity netting sets are strongly dependent, because they hold overlapping large-cap names and are driven by the same market factor, which is why their tails coincide and their PFEs nearly add; the interest-rate netting set is close to independent of them in the base calibration." % (rc["CPTY_A-CPTY_B"], rc["CPTY_A-CPTY_C"], rc["CPTY_B-CPTY_C"], tc["CPTY_A|CPTY_B"] * 100, tc["CPTY_A|CPTY_C"] * 100, tc["CPTY_C|CPTY_B"] * 100)))
+    eqd, dvd = d["equity_delta_per_1pct"], d["dv01_per_bp"]
+    out.append(P("Rank correlations of the counterparty exposures at that date: A-B %+.2f, A-C %+.2f, B-C %+.2f. Probability that one counterparty is above its own 99th percentile given another is: A given B %.0f%%, A given C %.0f%%, B given C %.0f%% (an independent pair would give 1%%). All three exposures are positively dependent, for a common reason: every netting set holds pay-equity swaps (equity delta per +1%%: A %s, B %s, C %s), so all three gain when the equity market falls. CPTY_C is therefore not a pure interest-rate netting set: its DV01 of %s per bp is dominated by BF_0003, but it also carries an equity delta comparable to CPTY_B's. The dependence is moderate rather than strong, which is why the portfolio 99th percentile sits at %.0f%% of the sum of the standalone ones and not lower." % (rc["CPTY_A-CPTY_B"], rc["CPTY_A-CPTY_C"], rc["CPTY_B-CPTY_C"], tc["CPTY_A|CPTY_B"] * 100, tc["CPTY_A|CPTY_C"] * 100, tc["CPTY_B|CPTY_C"] * 100, _m(eqd["CPTY_A"]), _m(eqd["CPTY_B"]), _m(eqd["CPTY_C"]), _k(dvd["CPTY_C"]), at["portfolio"] / ssum * 100)))
+    a_, b_, c_ = at["pfe99"]["CPTY_A"], at["pfe99"]["CPTY_B"], at["pfe99"]["CPTY_C"]
+    out.append(P("<b>Which pair is the portfolio close to?</b> At that date the standalone PFE99 are A %s, B %s and C %s: the two large ones, A and C, sum to %s (%.0f%% of the portfolio figure %s), and B adds the rest. The portfolio figure is therefore close to the sum of A and C, with B small, not to the sum of A and B." % (_m(a_), _m(b_), _m(c_), _m(a_ + c_), (a_ + c_) / at["portfolio"] * 100, _m(at["portfolio"]))))
     rows = [["Rate-equity dependence assumed", "CPTY_A", "CPTY_B", "CPTY_C", "Sum of MPEs", "Portfolio MPE", "Portfolio / sum"]]
     variants = [("Base case (calibrated, about zero)", "spec_run_final2000"), ("Flight to quality: yields fall with equities (corr +0.4 x market beta)", fl),
                 ("Both fall together: yields rise as equities fall (corr -0.4 x market beta)", tg)]
@@ -312,18 +329,19 @@ def cva_walkthrough(doc, calib_ref):
         pd_ = marginal_pd(t, tn, sp, LGD)
         contrib = LGD * 0.5 * (dee[:-1] + dee[1:]) * pd_
         rows = [["Date (years)", "DEE", "Spread (bp)", "Survival Q(t)", "Interval PD", "Contribution to CVA"]]
-        keep = [i for i in range(1, len(t)) if contrib[i - 1] > 0.02 * contrib.max()][:14]
+        targets = [0.0, 0.04, 0.08, 0.16, 0.25, 0.33, 0.42, 0.5, 0.58, 0.67, 0.75, 1.0, 1.25, float(t[-1])]
+        keep = sorted({int(np.argmin(np.abs(t[1:] - x))) + 1 for x in targets})
         for i in keep:
             rows.append(["%.2f" % t[i], _k(dee[i]), "%.0f" % (spread_at(tn, sp, t[i]) * 1e4), "%.4f" % np.exp(-spread_at(tn, sp, t[i]) * t[i] / LGD), "%.3f%%" % (pd_[i - 1] * 100), _k(contrib[i - 1])])
         rows.append(["All %d intervals" % len(contrib), "", "", "", "%.2f%%" % (pd_.sum() * 100), _k(contrib.sum())])
-        out.append(P("<b>CPTY_C, %s.</b> The rows with the largest contributions; the last row sums all intervals:" % lab))
+        out.append(P("<b>CPTY_C, %s.</b> Selected dates spread over the life of the book; the last row sums all intervals:" % lab))
         out.append(tbl(rows, widths=[0.9, 0.9, 0.9, 1.0, 1.0, 1.4], font=7.2))
     tc, tl = R["conventions"]["closeout"]["total"], R["conventions"]["level"]["total"]
     cco = R["conventions"]["closeout"]["by_cpty"]
     out.append(P("<b>Reading the numbers.</b> The CVA is small relative to the exposure because the default probability over a year or two is small (a BBB spread of about 100bp gives roughly 1.7%% a year at 60%% LGD) and because the exposure runs off quickly as trades mature. On the close-out definition the total CVA for the three netting sets is %s; on the uncollateralized level exposure it is %s, larger because the level exposure keeps the whole mark-to-market at risk (for CPTY_C the 500M bond forward: %s against %s). The close-out figure is what a margined counterparty would cost; the level figure is the price if no margin were ever called." % (_k(tc["CVA"]), _k(tl["CVA"]), _k(R["conventions"]["level"]["by_cpty"]["CPTY_C"]["CVA"]), _k(cco["CPTY_C"]["CVA"]))))
     out.append(P("<b>To settle at the next session.</b>"))
     out.append(B(["<b>Exposure definition for CVA.</b> Confirm that CVA should be on the brief's margined close-out exposure, with the uncollateralized figure as an upper bound, or whether Capitolis prices CVA on the level exposure.",
-                  "<b>Counterparty credit.</b> Real ratings or CDS for CPTY_A, CPTY_B and CPTY_C (the BBB proxy drives everything; the sensitivity of the total to the rating is in the table of Section 8.1). Whether a sector or region adjustment is wanted.",
+                  "<b>Counterparty credit.</b> Real ratings or CDS for CPTY_A, CPTY_B and CPTY_C (the BBB proxy drives everything; the sensitivity of the total to the rating is in the table of Section 8.3). Whether a sector or region adjustment is wanted.",
                   "<b>Capitolis' own credit and funding.</b> DVA and FVA are computed on assumptions (own credit BBB, funding spread equal to own spread); they need a Capitolis curve, and a decision on whether DVA is recognised at all (Basel CVA capital ignores it).",
                   "<b>Wrong-way risk.</b> The independence of exposure and default is assumed. Is a dependence model wanted, and for which counterparties (an equity swap counterparty that is itself an equity-sensitive institution)?",
                   "<b>Capital.</b> SA-CVA is computed with the m_CVA = 1 multiplier; agree whether the reduced basic approach (BA-CVA) or the standardised approach is the reference, and whether hedges should be included.",

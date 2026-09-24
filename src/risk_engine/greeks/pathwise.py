@@ -81,6 +81,8 @@ def pathwise_deltas(engine, paths, ids, npv, keep_nodes, window=0.02, isins=None
         fx_res = {k: np.zeros(len(keep_nodes)) for k in ("EE", "MED", "PFE")}
         for j, (i, prev, la, w0, w1) in enumerate(_windows(engine, keep_nodes)):
             live = spec._live_trade_idx(ids, idx, texp, w0, w1, True)
+            # a trade that matured before the window has NPV zero on both legs: no gradient
+            live = [li for li in live if texp.get(ids[li]) is None or texp[ids[li]] >= w0]
             if not live:
                 continue
             v = npv[live].sum(axis=0)

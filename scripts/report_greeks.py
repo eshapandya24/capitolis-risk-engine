@@ -6,6 +6,7 @@ import numpy as np
 
 from report_lib import GOLD, GREY, NAVY, ORANGE, PAL, TEAL, plt
 from report_tex import B, H1, H2, SMALL, callout, code, P, tbl
+import report_new2 as RN2
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, "data", "processed", "greeks_results.json")
@@ -116,7 +117,7 @@ def section(add, doc, g, tickers, trade_meta):
     add(B(["<b>Delta</b> to an equity or to USDJPY: change per +1% relative move of the spot. <b>Gamma</b>: change in that delta, [M(+1%) - 2 M + M(-1%)]. <b>DV01</b>: change per +1bp in USD zero rates, parallel and bucketed at 0.25, 0.5, 1, 2, 3, 5, 10 and 30 years (triangular weights that sum exactly to the parallel shift). <b>Vega</b>: change per +1% relative shift of the volatility of the USD rate, of USDJPY and of all equities.",
            "<b>Bump-and-reprice with common random numbers</b> (the same Latin Hypercube draws in base and bumped runs): the difference is then sensitivity, not Monte Carlo noise. It works on the pricers as a black box, and it applies equally to quantile measures such as PFE99, which have no simple pathwise derivative. Its accuracy compared with the pathwise estimator is shown in Section 11.6.",
            "<b>Efficiency.</b> A bump of an equity or of USDJPY rescales every simulated path exactly (the GBM drift does not depend on the spot level), so no re-simulation is needed: the existing paths are reused with the spot multiplied and only the trades holding that factor are repriced, all bumps in one process pool. Rate and volatility bumps change the paths themselves, so they are re-simulated with the same random numbers.",
-           "Exposure Greeks are computed at N = %s scenarios (Latin Hypercube), for the uncollateralized book, on the pillar date grid." % format(N, ",")]))
+           "Exposure Greeks are computed at N = %s scenarios (Latin Hypercube), on the brief's close-out exposure, on the pillar date grid with the t - 1bd and t + 10bd nodes." % format(N, ",")]))
     add(P("Sign convention: Capitolis is strictly the seller on these trades, and the equity swaps are of type pay-equity (we pay the equity return and receive funding), so equity deltas are negative: our value rises when the shares fall."))
 
     add(P("9.2 Book Greeks today", H2))
@@ -172,10 +173,11 @@ def section(add, doc, g, tickers, trade_meta):
              ["t = 0 book Greeks", "%.1f s" % tm["book_greeks_s"], "Central differences on the pricers: every trade, 37 equities, FX, DV01 parallel and 8 buckets"],
              ["Base run (paths and full repricing)", "%.0f s" % tc["base_run_s"], "16 trades, all dates, 8 worker processes (includes process start-up)"],
              ["%d equity and FX bumps" % nb, "%.0f s" % tc["subset_bumps_s"], "No re-simulation; only the trades holding the factor are repriced; one process pool. Re-simulating each would cost about %s s (%.0fx more)" % (format(naive, ",.0f"), naive / tc["subset_bumps_s"])],
-             ["One rate or volatility re-simulation", "%.0f s" % tc["one_resim_s"], "12 are needed: parallel up and down, 8 buckets, three vega bumps"]],
+             ["One rate or volatility re-simulation", "%.0f s" % tc["one_resim_s"], "13 are needed: parallel up and down, 8 buckets, three vega bumps"]],
             widths=[2.2, 0.9, 4.6], font=7.4))
-    add(P("Timings were measured separately at N = %d because the wall-clock of the N = %s production run was distorted by the machine sleeping during the overnight job; costs scale about linearly with N once process start-up is amortised." % (tc["n"], format(N, ","))))
+    add(P("The timings in the table were measured on an otherwise idle machine at N = %d, because the production run shared the machine with other jobs; costs scale about linearly with N once process start-up is amortised." % tc["n"]))
     add(P("The equity and FX Greeks, which are 37 names plus FX, each with an up and a down bump, cost a small fraction of what naive bump-and-resimulate would. This is the main efficiency gain: it exploits the structure of the model (exact rescaling of GBM paths) rather than approximating anything."))
+    add(RN2.greeks_method_section(doc, g))
 
     add(P("9.5 Validation of the Greeks", H2))
     tk = trade_meta
@@ -207,7 +209,7 @@ def section(add, doc, g, tickers, trade_meta):
     add(P("9.6 Limitations", H2))
     add(B(["Sensitivities are finite differences with a 1% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.",
            "Quantile Greeks (PFE99) carry more estimation noise than EE even with common random numbers; the reported figures use %s scenarios." % format(N, ","),
-           "Interest rate Greeks are for the USD curve only: the JPY rate is not simulated, so JPY rate risk enters through the USD curve. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).",
+           "Interest rate Greeks are for the USD curve only: the simulated JPY rate drives only the drift of JPY-listed names and USDJPY, and no trade is discounted on JPY. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).",
            "Volatility bumps are parallel across each factor class (all equity vols together); there is no vol-surface or per-name vega. No cross-gamma is computed, and theta is represented by the exposure profile itself.",
-           "Exposure Greeks are for the uncollateralized book at 99%; a collateralized book would have different (much smaller) sensitivities."]))
+           "Exposure Greeks are for the close-out exposure over the first year at 99%; the uncollateralized level exposure has much larger sensitivities (its delta is the delta of the mark-to-market itself)."]))
     add("\\clearpage\n")

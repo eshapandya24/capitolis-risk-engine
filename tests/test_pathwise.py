@@ -74,3 +74,25 @@ def test_pathwise_quantile_deltas_are_finite_and_have_the_right_sign_for_a_long_
     us = res["equity"]["C"]["US"]
     assert np.isfinite(us["PFE"]).all() and (us["EE"] > 0).all()
     assert (us["PFE"] > 0).all()                 # tail scenarios are those where the long US position gained
+
+
+def test_expired_trades_contribute_no_gradient_after_maturity():
+    """T1 matures after node 2; at the later windows its NPV is zero, so pathwise must give
+    zero for its name, in agreement with a bump of the same paths."""
+    eng, paths, ids, npv_of, _ = _setup()
+    eng.trade_expiries["T1"] = REF + timedelta(days=2)
+    sp = {k: np.exp(v) for k, v in paths["ln_spot"].items()}
+    xx = np.exp(paths["ln_fx"])
+
+    def npv_alive(spots, fxx):
+        n = npv_of(spots, fxx)
+        n[0, 3:, :] = 0.0                                   # T1 is worth nothing once expired
+        return n
+
+    npv = npv_alive(sp, xx)
+    res = pathwise_deltas(eng, paths, ids, npv, keep_nodes=[0, 1, 2])
+    up, dn = dict(sp), dict(sp)
+    up["US"], dn["US"] = sp["US"] * 1.01, sp["US"] * 0.99
+    bump = 0.5 * (_ee(eng, ids, npv_alive(up, xx)) - _ee(eng, ids, npv_alive(dn, xx)))
+    assert np.allclose(res["equity"]["C"]["US"]["EE"], bump, rtol=0.03, atol=2.0)
+    assert res["equity"]["C"]["US"]["EE"][2] == 0.0          # reporting node 2 window starts after expiry
