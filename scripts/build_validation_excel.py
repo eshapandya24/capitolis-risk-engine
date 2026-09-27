@@ -266,6 +266,92 @@ def build_simcheck_sheet(wb, calib, trades, sample_factors):
     _autosize(ws, [22, 14, 14, 26, 26, 16, 12])
 
 
+def build_vega_bump_sheet(wb, calib, trades, isin):
+    """Bump one equity's volatility +/-1% (relative) and compare the closed-form
+    (undiscounted Black) vega of a simple ATM position against the vega the
+    Monte Carlo engine actually produces for the same position, at the same
+    simulated node -- the "bump vol of equities and show it matches" check."""
+    from risk_engine.simulation.engine import SimulationEngine
+    import copy
+
+    ws = wb.create_sheet("Equity vega bump")
+    _title(ws, "4. Bumping equity volatility: closed-form vega vs Monte Carlo vega",
+           "A hypothetical $1,000,000 receive-equity position, struck at today's spot (K=S0). Its expected exposure "
+           "at a future date T is E[max(S_T-K,0)] per share, which for a lognormal S_T has the closed-form (undiscounted "
+           "Black) formula below -- live in this sheet -- bumped +/-1% relative vol, and checked against the same "
+           "bump run through the Monte Carlo engine (N=5,000, Latin Hypercube, same seed as the base run).")
+
+    vol0 = float(calib["gbm"].vols[isin])
+    S0 = float(calib["gbm"].spots0[isin])
+    q = float(calib["gbm"].dividends.get(isin, 0.0))
+    notional = 1_000_000.0
+
+    ws["A4"], ws["C4"] = "Spot S0", S0
+    ws["A5"], ws["C5"] = "Strike K (= S0, ATM)", S0
+    ws["A6"], ws["C6"] = "Base volatility", vol0
+    ws["A7"], ws["C7"] = "Notional (USD)", notional
+    ws["A8"], ws["C8"] = "Shares (= notional / S0)", "=C7/C4"
+
+    times = None
+    node = None
+    T = None
+    rows_out = []
+    for label, mult in (("Base", 1.0), ("Vol +1%", 1.01), ("Vol -1%", 0.99)):
+        c = dict(calib)
+        c["gbm"] = copy.deepcopy(calib["gbm"])
+        c["gbm"].vols[isin] = vol0 * mult
+        eng = SimulationEngine(c, trades, method="latin_hypercube", n_scenarios=5000, seed=42)
+        paths = eng.simulate_paths()
+        if times is None:
+            times = np.array(eng.times)
+            node = int(np.argmin(np.abs(times - 1.0)))
+            T = float(times[node])
+            r = -np.log(calib["usd_curve"].discount(eng.dates[node])) / T
+        s_t = np.exp(paths["ln_spot"][isin][:, node])
+        ee_sim = float(np.mean(np.maximum(s_t - S0, 0.0)))
+        rows_out.append((label, vol0 * mult, ee_sim))
+
+    row = 10
+    ws.cell(row=row, column=1, value="Node T (years, ~1y)").value
+    ws["A10"], ws["C10"] = "Node T (years, ~1y)", T
+    ws["A11"], ws["C11"] = "Deterministic r (zero rate to T, from today's curve)", r
+    ws["A12"], ws["C12"] = "Dividend yield q", q
+
+    row = 14
+    _header(ws, row, ["Case", "Vol", "F = S0*EXP((r-q)*T)", "d1", "d2",
+                      "Closed-form E[max(S_T-K,0)] per share (undiscounted Black)",
+                      "x Shares = USD EE (closed-form)", "Simulated USD EE (Monte Carlo, same node)", "Diff"])
+    row += 1
+    r0 = row
+    for i, (label, v, ee_sim) in enumerate(rows_out):
+        rr = r0 + i
+        ws.cell(row=rr, column=1, value=label)
+        ws.cell(row=rr, column=2, value=v)
+        ws.cell(row=rr, column=3, value=f"=$C$4*EXP(($C$11-$C$12)*$C$10)")
+        ws.cell(row=rr, column=4, value=f"=(LN(C{rr}/$C$5)+0.5*B{rr}^2*$C$10)/(B{rr}*SQRT($C$10))")
+        ws.cell(row=rr, column=5, value=f"=D{rr}-B{rr}*SQRT($C$10)")
+        ws.cell(row=rr, column=6, value=f"=C{rr}*NORM.S.DIST(D{rr},TRUE)-$C$5*NORM.S.DIST(E{rr},TRUE)")
+        ws.cell(row=rr, column=7, value=f"=F{rr}*$C$8")
+        ws.cell(row=rr, column=8, value=ee_sim * notional / S0)
+        ws.cell(row=rr, column=9, value=f"=ABS(G{rr}-H{rr})/H{rr}")
+    r_up, r_dn = r0 + 1, r0 + 2
+    ws.cell(row=r0 + 4, column=1, value="Vega (per +1% relative vol), closed-form")
+    ws.cell(row=r0 + 4, column=3, value=f"=(G{r_up}-G{r_dn})/2")
+    ws.cell(row=r0 + 5, column=1, value="Vega (per +1% relative vol), Monte Carlo")
+    ws.cell(row=r0 + 5, column=3, value=f"=(H{r_up}-H{r_dn})/2")
+    ws.cell(row=r0 + 6, column=1, value="Ratio (MC / closed-form)")
+    ws.cell(row=r0 + 6, column=3, value=f"=C{r0+5}/C{r0+4}")
+    ws.cell(row=r0 + 8, column=1,
+            value="A USD-listed name is used deliberately, so the drift is the simple r-q (no JPY quanto correction, "
+                  "Section 4). The closed-form formula still assumes a constant rate to T (today's zero rate) and no "
+                  "rate-equity correlation; the engine simulates a stochastic Hull-White short rate correlated with "
+                  "equities. That is a real, small, and separately-quantified source of difference (Section 7.9, "
+                  "model risk), not a bug: the two vegas are expected to be close, not identical.")
+    ws.cell(row=r0 + 8, column=1).font = NOTE
+    ws.merge_cells(start_row=r0 + 8, start_column=1, end_row=r0 + 8, end_column=9)
+    _autosize(ws, [30, 10, 14, 10, 10, 24, 18, 20, 10])
+
+
 def main():
     from run_simulation import load_trades
     from risk_engine.models.calibration import build_calibration, load_vol_table
@@ -280,6 +366,10 @@ def main():
     sample = build_equity_sheet(wb, calib, vol_table, px)
     build_rate_sheet(wb, calib)
     build_simcheck_sheet(wb, calib, trades, sample)
+    from risk_engine.models.calibration import _isin_currency
+    currencies = _isin_currency()
+    vega_isin = next(s for s in sample if s != "FX_USDJPY" and currencies.get(s) == "USD")
+    build_vega_bump_sheet(wb, calib, trades, vega_isin)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     wb.save(OUT)
     print("wrote", OUT)
