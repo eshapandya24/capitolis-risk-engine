@@ -20,6 +20,12 @@ RUN = os.path.join(ROOT, "data", "processed", "spec_run")
 OUT = os.path.join(ROOT, "data", "processed", "xva_results.json")
 CPTYS = ("CPTY_A", "CPTY_B", "CPTY_C")
 OWN_RATING = "BBB"
+# KVA is illustrative/parametric (see risk_engine.exposure.xva docstring): no capital
+# methodology or cost of capital is supplied, so we sweep a small assumed grid.
+KVA_COC_GRID = (0.08, 0.10, 0.12)
+KVA_ALPHA = 1.4
+KVA_CAPITAL_RATIO = 0.08
+KVA_RISK_WEIGHT = 1.0
 
 
 def main():
@@ -29,7 +35,7 @@ def main():
     from risk_engine.exposure import spec_exposure as spec
     from risk_engine.exposure.cva import path_discount_factors
     from risk_engine.exposure.sa_cva import CCS_TENORS
-    from risk_engine.exposure.xva import xva_summary
+    from risk_engine.exposure.xva import xva_summary, kva
     from risk_engine.market.credit_spreads import rating_spread_curve, RATING_SERIES
     from risk_engine.models.credit import COUNTERPARTY_ASSUMPTIONS
 
@@ -91,14 +97,22 @@ def main():
                 for k in row:
                     row[k] += s[k]
             sens[r] = row
+        # KVA: parametric capital charge on the EPE profile, swept over an assumed cost-of-capital grid
+        kva_by_c = {c: {f"CoC_{coc:.0%}": kva(prof[conv][c]["pos"], times, coc, KVA_CAPITAL_RATIO, KVA_RISK_WEIGHT, KVA_ALPHA)
+                        for coc in KVA_COC_GRID} for c in CPTYS}
+        kva_total = {k: float(sum(kva_by_c[c][k] for c in CPTYS)) for k in kva_by_c[CPTYS[0]]}
         res["conventions"][conv] = {
             "by_cpty": by_c, "total": tot, "own_rating_sensitivity": sens,
+            "kva_by_cpty": kva_by_c, "kva_total": kva_total,
+            "kva_assumptions": {"cost_of_capital_grid": list(KVA_COC_GRID), "alpha": KVA_ALPHA,
+                               "capital_ratio": KVA_CAPITAL_RATIO, "risk_weight": KVA_RISK_WEIGHT},
             "profiles": {c: {"EPE": prof[conv][c]["pos"].tolist(), "ENE": prof[conv][c]["neg"].tolist()} for c in CPTYS}}
         print(f"\n{conv}:")
         for c in CPTYS:
             b = by_c[c]
             print(f"  {c}: CVA {b['CVA']:,.0f}  DVA {b['DVA']:,.0f}  FCA {b['FCA']:,.0f}  FBA {b['FBA']:,.0f}  FVA {b['FVA']:,.0f}")
         print(f"  TOTAL: " + "  ".join(f"{k} {v:,.0f}" for k, v in tot.items()))
+        print(f"  KVA (parametric, CoC grid): " + "  ".join(f"{k} {v:,.0f}" for k, v in kva_total.items()))
     json.dump(res, open(OUT, "w"), indent=1)
     print("\nwrote", OUT)
 

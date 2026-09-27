@@ -748,7 +748,7 @@ def main():
              ["CVA, uncollateralized exposure", "$" + format(Xv["conventions"]["level"]["total"]["CVA"], ",.0f"), "The same on the level exposure: the price if no margin were ever called"],
              ["DVA and FVA (close-out)", "$%s and $%s" % (format(Xv["conventions"]["closeout"]["total"]["DVA"], ",.0f"), format(Xv["conventions"]["closeout"]["total"]["FVA"], ",.0f")), "On assumed own credit and funding spreads (Section 8.5)"],
              ["SA-CVA capital", "$%.2fM close-out; $%.2fM uncollateralized (RWA $%.1fM; $%.1fM)" % (Rc0["K_sa_cva"] / 1e6, RN._j("sa_cva_results_level.json")["K_sa_cva"] / 1e6, Rc0["RWA"] / 1e6, RN._j("sa_cva_results_level.json")["RWA"] / 1e6), "Basel standardised approach on the two exposure definitions; dominated by counterparty credit spread risk (Section 8.4)"],
-             ["SA-CCR exposure at default", m(Sa["total"]["EAD"]), "Regulatory EAD, uncollateralized; dominated by the replacement cost of BF_0003 (Section 8.6)"],
+             ["SA-CCR exposure at default", m(Sa["total"]["EAD"]), "Regulatory EAD, uncollateralized; dominated by the replacement cost of BF_0003 (Section 8.7)"],
              ["Greeks", "t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities", "Complete, by netting set, method and cost stated (Section 9)"],
              ["Stress test", "%d scenarios; largest close-out MPE %s (%s)" % (len(Sx["scenarios"]), m(Sx["scenarios"][_stress_worst]["closeout"]["__portfolio__"]["MPE"]), RN2.SHORT.get(_stress_worst, _stress_worst)), "Hypothetical and historical replays, by product and along the time path (Section 7.10)"],
              ["Backtest (Kupiec)", "99%% equity leg: %s exceptions against %s expected in the three netting sets" % ("/".join(str(r["x"]) for r in _bt99), "/".join("%.1f" % r["expected"] for r in _bt99)), "Realised 10-day moves against the model's quantiles, out of sample (Section 11.7)"]],
@@ -1238,11 +1238,25 @@ def main():
     add(_xv_out)
     _c, _l = Xv["conventions"]["closeout"]["total"], Xv["conventions"]["level"]["total"]
     add(P("<b>Reading the table.</b> On the margined close-out exposure the total CVA is %s and DVA %s, so the net credit charge is %s; funding costs %s (FCA %s less FBA %s). On the close-out definition the positive and negative sides are nearly symmetric, because both are 10-day moves around a margined start, so CVA and DVA almost cancel and the funding terms are small. On the level exposure CVA is %s and DVA %s: the difference from the close-out figures is the whole mark-to-market that margin would otherwise cover, and the asymmetry comes from the book being mostly in our favour (CPTY_C's bond forward), which makes the positive exposure, and therefore CVA and FCA, much larger than the negative exposure that drives DVA and FBA." % (RN._k(_c["CVA"]), RN._k(_c["DVA"]), RN._k(_c["CVA"] - _c["DVA"]), RN._k(_c["FVA"]), RN._k(_c["FCA"]), RN._k(_c["FBA"]), RN._k(_l["CVA"]), RN._k(_l["DVA"]))))
-    add(P("8.6 SA-CCR exposure at default", H2))
+    add(P("8.6 KVA: a parametric capital charge", H2))
+    add(P("KVA is the cost of holding regulatory capital against the counterparty exposure over the life of the book, discounted like the other xVA terms. It is included here because the team asked for it, but it is explicitly illustrative, not a production number: neither a capital methodology (SA-CCR/IMM chain to risk-weighted assets) nor Capitolis' own cost of capital is supplied. We use the simplest capital-charge proxy in the literature, integrated over the expected positive exposure (EPE) profile:"))
+    add(code("K(t) = capital_ratio * risk_weight * alpha * EPE(t)     (ratio=8% Basel min, alpha=1.4, RW=100%)\n"
+             "KVA  = CoC * sum_i 0.5 [ DF(t_{i-1}) K(t_{i-1}) + DF(t_i) K(t_i) ] dt_i"))
+    add(P("alpha = 1.4 is the standard EAD multiplier used elsewhere in this report (SA-CCR, Section 8.7/CRE52); risk_weight = 100% is a placeholder in the absence of a counterparty-specific IMM or standardised credit risk weight. Since no cost of capital (CoC) is given, we sweep a small assumed grid (8%, 10%, 12%), typical of a bank's target return on capital."))
+    kv = Xv["conventions"]["closeout"]["kva_total"]
+    kv_l = Xv["conventions"]["level"]["kva_total"]
+    rows = [["Cost of capital", "KVA, close-out exposure (USD)", "KVA, level exposure (USD)"]]
+    for k_ in kv:
+        coc_label = k_.replace("CoC_", "")
+        rows.append([coc_label, format(kv[k_], ",.0f"), format(kv_l[k_], ",.0f")])
+    add(tbl(rows, widths=[2.0, 2.6, 2.6]))
+    add(P("At a 10%% cost of capital, KVA is %s on the close-out exposure and %s on the level exposure -- larger than CVA (%s / %s) because the capital charge multiplies the whole EPE profile by alpha = 1.4 and a fixed 8%% ratio, rather than by a market-implied default probability that is small for an investment-grade proxy. This is exactly the caveat above: the number is a sensitivity to the assumed capital and cost-of-capital inputs, not a calibrated result, and should not be compared directly to the CVA figures without first fixing a capital methodology." % (RN._k(kv["CoC_10%"]), RN._k(kv_l["CoC_10%"]), RN._k(_c["CVA"]), RN._k(_l["CVA"]))))
+    add(P("8.7 SA-CCR exposure at default", H2))
     add(RN.sa_ccr_section(doc, S_))
-    add(P("8.7 CVA walk-through and set-up for the next session", H2))
+    add(P("8.8 CVA walk-through and set-up for the next session", H2))
     add(RN2.cva_walkthrough(doc, calib["ref_date"]))
-    add(P("8.5 Assumptions and limitations of the CVA work", H2))
+    add(P("<b>Why we walk through CVA in this much detail.</b> The point of building CVA end-to-end is less the headline number (small, because the counterparties are proxied as investment grade and the close-out exposure is small once margin is assumed) and more that it gives us a full chain of Greeks and sensitivities to reason about: CVA01 to the counterparty spread, the rating sensitivity table (Section 8.3), and the SA-CVA weighted sensitivities by risk class (Section 8.4). Those sensitivities are what a credit or XVA desk actually manages day to day, far more than the point-in-time CVA figure itself."))
+    add(P("8.9 Assumptions and limitations of the CVA work", H2))
     add(B(["<b>Counterparty ratings are assumed</b> (BBB financials). CVA and the credit-spread capital scale with this assumption; Section 8.3 shows the range.",
            "<b>Spreads are bond-index proxies</b>, not CDS: the maturity shape is common to all ratings, and the indices are US corporate spreads regardless of counterparty region or sector.",
            "<b>Independence and margin.</b> Headline CVA is unilateral, with exposure and default independent (no wrong-way risk). The two exposure definitions bracket the truth: the close-out exposure assumes daily variation margin at the prior-day value, the level exposure assumes none. Threshold, minimum transfer amount and initial margin are not in the data. DVA and FVA rest on an assumed own credit and funding spread.",
@@ -1250,7 +1264,7 @@ def main():
            "<b>Sensitivities are one-sided bumps</b> with common random numbers, not adjoint sensitivities; vega shifts apply to the volatilities driving the simulated paths (the trades contain no options, so there are no option-pricing volatilities).",
            "<b>Parameters</b> are transcribed from the BIS text (July 2020 revisions); the vega risk weights follow the 100% and 78% values in that text. Regulatory use requires supervisory approval and validation of the sensitivity calculation.",
            "The Basel Basic Approach (BA-CVA) is not computed; it needs only counterparty exposure and maturity and is the natural fallback if SA-CVA approval is not held."]))
-    add(P("8.9 Extra credit: a risky-bond sample trade", H2))
+    add(P("8.10 Extra credit: a risky-bond sample trade", H2))
     add(RN2.risky_bond_section(doc))
     add(PageBreak())
 
@@ -1394,14 +1408,14 @@ def main():
              ["Real counterparty ratings or CDS for CPTY_A, CPTY_B, CPTY_C", "The counterparties are anonymised and no CDS quotes could be sourced; the BBB proxy drives every credit number (Section 8.3 shows the range)", "Names or ratings, or CDS quotes"],
              ["Credit support annexes (threshold, minimum transfer amount, initial margin)", "Not in the data; the two exposure definitions of Section 7 bracket the answer", "Terms per netting set"],
              ["Wrong-way risk in CVA", "Independence of exposure and default is assumed", "A decision on the dependence model and on which counterparties it applies to"],
-             ["Risky bonds and CDS beyond the proxy", "The sample of Section 8.9 uses a bond-index issuer curve with deterministic spreads; no CDS pricer exists in the library and no CDS data was obtainable", "CDS quotes; a CDS pricer; stochastic issuer spreads"],
+             ["Risky bonds and CDS beyond the proxy", "The sample of Section 8.10 uses a bond-index issuer curve with deterministic spreads; no CDS pricer exists in the library and no CDS data was obtainable", "CDS quotes; a CDS pricer; stochastic issuer spreads"],
              ["All-factor Greeks by adjoint differentiation", "The cheapest route for rate and volatility Greeks, but the supplied pricers are a black box (Section 9.4)", "A differentiable port of the pricers"],
              ["Two-factor model as the default", "G2++ is implemented and compared (Sections 4.6, 7.9); its calibration is to realised yield covariance with a 16% fit error", "Calibration to the swaption cube and a decision on adoption"],
              ["Hybrid sampling for the PCA factor model", "Section 4.4 shows the factor model adds no speed and no accuracy as implemented", "Draw the systematic factors quasi-randomly and the idiosyncratic noise pseudo-randomly, then re-measure"],
              ["Stochastic volatility and skew", "Needs single-name option surfaces, which the data does not include", "Option data, or an index-basis assumption"],
              ["Production hardening", "Vectorised pricers if scenario counts must exceed about 10,000; scheduling, monitoring and independent validation by Capitolis Risk", "Scope and infrastructure decisions"]],
             widths=[2.4, 3.6, 1.8], font=7.2))
-    add(P("The CVA questions to settle at the next session are listed at the end of Section 8.7."))
+    add(P("The CVA questions to settle at the next session are listed at the end of Section 8.8."))
     add(PageBreak())
     add(P("Appendix A. Glossary", H1))
     add(tbl([["Term", "Meaning"],

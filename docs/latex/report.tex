@@ -72,7 +72,7 @@ CVA, close-out exposure (BBB proxy) & \$11,747 & Price of counterparty default r
 \rowcolor{gray!9}CVA, uncollateralized exposure & \$247,133 & The same on the level exposure: the price if no margin were ever called \\
 DVA and FVA (close-out) & \$11,244 and \$503 & On assumed own credit and funding spreads (Section 8.5) \\
 \rowcolor{gray!9}SA-CVA capital & \$0.10M close-out; \$2.23M uncollateralized (RWA \$1.2M; \$27.8M) & Basel standardised approach on the two exposure definitions; dominated by counterparty credit spread risk (Section 8.4) \\
-SA-CCR exposure at default & \$260.3M & Regulatory EAD, uncollateralized; dominated by the replacement cost of BF\_0003 (Section 8.6) \\
+SA-CCR exposure at default & \$260.3M & Regulatory EAD, uncollateralized; dominated by the replacement cost of BF\_0003 (Section 8.7) \\
 \rowcolor{gray!9}Greeks & t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities & Complete, by netting set, method and cost stated (Section 9) \\
 Stress test & 11 scenarios; largest close-out MPE \$60.7M (Rates -200bp) & Hypothetical and historical replays, by product and along the time path (Section 7.10) \\
 \rowcolor{gray!9}Backtest (Kupiec) & 99\% equity leg: 4/6/2 exceptions against 2.4/2.4/2.4 expected in the three netting sets & Realised 10-day moves against the model's quantiles, out of sample (Section 11.7) \\
@@ -1218,6 +1218,29 @@ BBB & \$11k & \$12k & \$11k & \$1k & \$12k \\
 
 \textbf{Reading the table.} On the margined close-out exposure the total CVA is \$12k and DVA \$11k, so the net credit charge is \$1k; funding costs \$1k (FCA \$12k less FBA \$11k). On the close-out definition the positive and negative sides are nearly symmetric, because both are 10-day moves around a margined start, so CVA and DVA almost cancel and the funding terms are small. On the level exposure CVA is \$247k and DVA \$8k: the difference from the close-out figures is the whole mark-to-market that margin would otherwise cover, and the asymmetry comes from the book being mostly in our favour (CPTY\_C's bond forward), which makes the positive exposure, and therefore CVA and FCA, much larger than the negative exposure that drives DVA and FBA.
 
+\subsection{KVA: a parametric capital charge}
+KVA is the cost of holding regulatory capital against the counterparty exposure over the life of the book, discounted like the other xVA terms. It is included here because the team asked for it, but it is explicitly illustrative, not a production number: neither a capital methodology (SA-CCR/IMM chain to risk-weighted assets) nor Capitolis' own cost of capital is supplied. We use the simplest capital-charge proxy in the literature, integrated over the expected positive exposure (EPE) profile:
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+K(t) = capital_ratio * risk_weight * alpha * EPE(t)     (ratio=8% Basel min, alpha=1.4, RW=100%)
+KVA  = CoC * sum_i 0.5 [ DF(t_{i-1}) K(t_{i-1}) + DF(t_i) K(t_i) ] dt_i
+\end{verbatim}}
+alpha = 1.4 is the standard EAD multiplier used elsewhere in this report (SA-CCR, Section 8.7/CRE52); risk\_weight = 100\% is a placeholder in the absence of a counterparty-specific IMM or standardised credit risk weight. Since no cost of capital (CoC) is given, we sweep a small assumed grid (8\%, 10\%, 12\%), typical of a bank's target return on capital.
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2778\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3611\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3611\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Cost of capital}} & \textbf{\textcolor{white}{KVA, close-out exposure (USD)}} & \textbf{\textcolor{white}{KVA, level exposure (USD)}} \\
+\endhead
+8\% & 17,886 & 376,318 \\
+\rowcolor{gray!9}10\% & 22,357 & 470,398 \\
+12\% & 26,829 & 564,478 \\
+\bottomrule
+\end{longtable}}
+
+At a 10\% cost of capital, KVA is \$22k on the close-out exposure and \$470k on the level exposure -- larger than CVA (\$12k / \$247k) because the capital charge multiplies the whole EPE profile by alpha = 1.4 and a fixed 8\% ratio, rather than by a market-implied default probability that is small for an investment-grade proxy. This is exactly the caveat above: the number is a sensitivity to the assumed capital and cost-of-capital inputs, not a calibrated result, and should not be compared directly to the CVA figures without first fixing a capital methodology.
+
 \subsection{SA-CCR exposure at default}
 The Basel standardised approach for counterparty credit risk (SA-CCR, CRE52) gives a regulatory exposure at default, EAD = 1.4 x (replacement cost + multiplier x add-on), for each uncollateralized netting set. It is built in exposure/sa\_ccr.py for the asset classes present in the book (interest rate for the Treasury forwards and bond TRS, equity for the equity TRS; no FX, credit or commodity trades), validated against hand calculations of the supervisory duration, maturity factor, bucket and entity aggregation and the multiplier.
 
@@ -1310,6 +1333,8 @@ All 41 intervals &  &  &  & 1.40\% & \$237k \\
 \item \textbf{Capital.} SA-CVA is computed with the m\_CVA = 1 multiplier; agree whether the reduced basic approach (BA-CVA) or the standardised approach is the reference, and whether hedges should be included.
 \item \textbf{Margin terms.} Threshold, minimum transfer amount and initial margin are not in the data; the CVA under those terms would sit between the two exposure definitions shown.
 \end{itemize}
+\textbf{Why we walk through CVA in this much detail.} The point of building CVA end-to-end is less the headline number (small, because the counterparties are proxied as investment grade and the close-out exposure is small once margin is assumed) and more that it gives us a full chain of Greeks and sensitivities to reason about: CVA01 to the counterparty spread, the rating sensitivity table (Section 8.3), and the SA-CVA weighted sensitivities by risk class (Section 8.4). Those sensitivities are what a credit or XVA desk actually manages day to day, far more than the point-in-time CVA figure itself.
+
 \subsection{Assumptions and limitations of the CVA work}
 \begin{itemize}
 \item \textbf{Counterparty ratings are assumed} (BBB financials). CVA and the credit-spread capital scale with this assumption; Section 8.3 shows the range.
@@ -1600,7 +1625,7 @@ An independent standard method: portfolio dollar-deltas by bump-and-reprice with
 The earlier directional test (a few bumps of volatility and the curve, one paragraph of results) has been replaced by the structured programme of Sections 7.9 (one-at-a-time model perturbations) and 7.10 (stress scenarios with stated data and inputs, by netting set, by trade and along the time path), which answers what the inputs were, how sensitive the outputs are across the path, and whether all products react.
 
 \subsection{Statistical and unit tests}
-150 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures); and, added in this version, the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), the long-end volatility fit, the G2++ model (curve fit, martingale property, calibration recovery, engine integration), DVA and FVA against closed forms, SA-CCR against hand calculations, the Kupiec and Christoffersen tests and both backtests, the stress-scenario helpers, the pathwise Greeks against central bumps, and the risky-bond sample.
+153 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures); and, added in this version, the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), the long-end volatility fit, the G2++ model (curve fit, martingale property, calibration recovery, engine integration), DVA and FVA against closed forms, SA-CCR against hand calculations, the Kupiec and Christoffersen tests and both backtests, the stress-scenario helpers, the pathwise Greeks against central bumps, and the risky-bond sample.
 
 \subsection{Greeks (sensitivities)}
 Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
@@ -1706,7 +1731,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \section{Conclusions and recommendations}
 \begin{itemize}
-\item The engine is validated (t=0 self-check, martingale tests including the JPY components, delta-normal VaR benchmark, Kupiec backtest, 150 automated tests) and reproducible with a single command per stage.
+\item The engine is validated (t=0 self-check, martingale tests including the JPY components, delta-normal VaR benchmark, Kupiec backtest, 153 automated tests) and reproducible with a single command per stage.
 \item On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is \$51.0M at 2026-09-20, with peak EE of \$11.6M and peak median PFE of \$8.2M (Section 7.1). The earlier version of this work reported \$45.7M before the model corrections of Section 7.3.
 \item The portfolio MPE99 is 78\% of the sum of the counterparty MPE99s: netting does not cross counterparties and the three books peak within about four weeks of each other, so there is little diversification (Section 7.2).
 \item The uncollateralized level exposure, kept as a secondary view, has peak portfolio PFE99 of \$201.9M at 2026-10-09, versus EE of \$140.1M and median PFE of \$140.3M; the spread between these three is the point of reporting all of them.
@@ -1731,7 +1756,7 @@ Everything in the plan that could be completed with the data and information ava
 Real counterparty ratings or CDS for CPTY\_A, CPTY\_B, CPTY\_C & The counterparties are anonymised and no CDS quotes could be sourced; the BBB proxy drives every credit number (Section 8.3 shows the range) & Names or ratings, or CDS quotes \\
 \rowcolor{gray!9}Credit support annexes (threshold, minimum transfer amount, initial margin) & Not in the data; the two exposure definitions of Section 7 bracket the answer & Terms per netting set \\
 Wrong-way risk in CVA & Independence of exposure and default is assumed & A decision on the dependence model and on which counterparties it applies to \\
-\rowcolor{gray!9}Risky bonds and CDS beyond the proxy & The sample of Section 8.9 uses a bond-index issuer curve with deterministic spreads; no CDS pricer exists in the library and no CDS data was obtainable & CDS quotes; a CDS pricer; stochastic issuer spreads \\
+\rowcolor{gray!9}Risky bonds and CDS beyond the proxy & The sample of Section 8.10 uses a bond-index issuer curve with deterministic spreads; no CDS pricer exists in the library and no CDS data was obtainable & CDS quotes; a CDS pricer; stochastic issuer spreads \\
 All-factor Greeks by adjoint differentiation & The cheapest route for rate and volatility Greeks, but the supplied pricers are a black box (Section 9.4) & A differentiable port of the pricers \\
 \rowcolor{gray!9}Two-factor model as the default & G2++ is implemented and compared (Sections 4.6, 7.9); its calibration is to realised yield covariance with a 16\% fit error & Calibration to the swaption cube and a decision on adoption \\
 Hybrid sampling for the PCA factor model & Section 4.4 shows the factor model adds no speed and no accuracy as implemented & Draw the systematic factors quasi-randomly and the idiosyncratic noise pseudo-randomly, then re-measure \\
@@ -1740,7 +1765,7 @@ Production hardening & Vectorised pricers if scenario counts must exceed about 1
 \bottomrule
 \end{longtable}}
 
-The CVA questions to settle at the next session are listed at the end of Section 8.7.
+The CVA questions to settle at the next session are listed at the end of Section 8.8.
 
 \clearpage
 \clearpage
@@ -1843,7 +1868,7 @@ Greeks & Bump-and-reprice with common random numbers; equity and FX bumps reuse 
 xVA and capital & DVA and FVA from discounted EPE and ENE; SA-CCR EAD & Own credit BBB proxy; funding spread = own spread & exposure/xva.py, exposure/sa\_ccr.py \\
 \rowcolor{gray!9}Stress test & Instantaneous shocks (8 hypothetical, 3 historical replays) followed by the full exposure simulation & Same random numbers as the base case & stress/scenarios.py, scripts/run\_stress.py \\
 Backtest & Rolling out-of-sample Kupiec and Christoffersen tests, non-overlapping 10-day windows, 10 offsets & 3-year calibration window; 95\% and 99\% & validation/backtest.py, scripts/run\_backtest.py \\
-\rowcolor{gray!9}Validation & t=0 self-check, martingale tests, delta-normal VaR, backtest, attribution, unit tests & 150 automated tests & scripts/, tests/ \\
+\rowcolor{gray!9}Validation & t=0 self-check, martingale tests, delta-normal VaR, backtest, attribution, unit tests & 153 automated tests & scripts/, tests/ \\
 \bottomrule
 \end{longtable}}
 
@@ -1860,7 +1885,7 @@ simulation/ & engine (grid, paths, MPOR nodes), random\_numbers (five sampling s
 stress/, validation/ & stress/scenarios (hypothetical and historical-replay shocks, curve shift); validation/backtest (Kupiec, Christoffersen, equity and rates backtests) \\
 \rowcolor{gray!9}exposure/ & spec\_exposure (the brief's close-out exposure), aggregate (netting, level exposure), collateral (MPOR-shifted illustration), cva (regulatory CVA), xva (DVA, FVA), sa\_cva (Basel aggregation), sa\_ccr (EAD) \\
 scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_report\_data, build\_report (LaTeX), build\_exec\_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks \\
-\rowcolor{gray!9}tests/ & 150 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA, close-out exposure, curve splice, JPY factor, G2++, xVA, SA-CCR, backtests, stress, pathwise, risky bond \\
+\rowcolor{gray!9}tests/ & 153 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA, close-out exposure, curve splice, JPY factor, G2++, xVA, SA-CCR, backtests, stress, pathwise, risky bond \\
 \bottomrule
 \end{longtable}}
 

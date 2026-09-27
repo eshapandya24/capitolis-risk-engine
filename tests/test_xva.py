@@ -4,7 +4,7 @@ import pytest
 
 from risk_engine.exposure import spec_exposure as spec
 from risk_engine.exposure.cva import cva
-from risk_engine.exposure.xva import dva, funding_cost, xva_summary
+from risk_engine.exposure.xva import dva, funding_cost, kva, xva_summary
 from risk_engine.models.credit import LGD
 
 T = np.linspace(0.0, 5.0, 11)
@@ -38,6 +38,33 @@ def test_fva_is_spread_times_discounted_mean_value():
 def test_zero_negative_exposure_means_no_dva_or_funding_benefit():
     s = xva_summary(np.ones_like(T), np.zeros_like(T), T, FLAT, FLAT)
     assert s["DVA"] == 0.0 and s["FBA"] == 0.0 and s["bilateral_CVA"] == s["CVA"]
+
+
+def test_kva_of_constant_exposure_is_coc_times_capital_charge_times_time():
+    """K(t) = capital_ratio * RW * alpha * EPE is constant here, so
+    KVA = CoC * K * T exactly (trapezoid rule is exact for a constant)."""
+    epe = np.full_like(T, 4.0)
+    coc, cr, rw, alpha = 0.10, 0.08, 1.0, 1.4
+    got = kva(epe, T, coc, cr, rw, alpha)
+    assert got == pytest.approx(coc * (cr * rw * alpha * 4.0) * 5.0)
+
+
+def test_kva_scales_linearly_with_cost_of_capital_and_exposure():
+    epe = np.linspace(2.0, 0.0, len(T))
+    k1 = kva(epe, T, 0.10)
+    k2 = kva(epe, T, 0.20)
+    assert k2 == pytest.approx(2 * k1)
+    assert kva(2 * epe, T, 0.10) == pytest.approx(2 * k1)
+
+
+def test_xva_summary_includes_kva_only_when_cost_of_capital_is_given():
+    epe, ene = np.full_like(T, 4.0), np.full_like(T, 1.5)
+    s0 = xva_summary(epe, ene, T, FLAT, FLAT)
+    assert "KVA" not in s0
+    s1 = xva_summary(epe, ene, T, FLAT, FLAT, cost_of_capital=0.10)
+    assert s1["KVA"] == pytest.approx(kva(epe, T, 0.10))
+    assert s1["total_with_kva"] == pytest.approx(s1["total"] + s1["KVA"])
+    assert s1["total_no_overlap_with_kva"] == pytest.approx(s1["total_no_overlap"] + s1["KVA"])
 
 
 def test_negative_side_closeout_exposure_is_the_mirror_of_the_positive_side():
