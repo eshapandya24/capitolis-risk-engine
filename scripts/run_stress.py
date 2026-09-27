@@ -94,7 +94,16 @@ def main():
 
     px = pd.read_csv(os.path.join(ROOT, "data", "raw", "backtest_prices.csv"), index_col=0, parse_dates=True)
     fx = px.pop("FX_USDJPY").ffill()
-    scen = S.hypothetical(isins) + S.historical_windows(px.ffill(limit=5), fx, treasury.load_cmt_history(), isins)
+    cmt = treasury.load_cmt_history()
+    scen = S.hypothetical(isins) + S.historical_windows(px.ffill(limit=5), fx, cmt, isins)
+    ext_path = os.path.join(ROOT, "data", "raw", "backtest_prices_ext.csv")
+    if os.path.exists(ext_path):
+        px_ext = pd.read_csv(ext_path, index_col=0, parse_dates=True)
+        fx_ext = px_ext.pop("FX_USDJPY").ffill()
+        scen += S.crisis_windows(px_ext.ffill(limit=5), fx_ext, cmt, isins)
+    else:
+        print("WARN: data/raw/backtest_prices_ext.csv not found; skipping the pre-2014 crisis scenarios "
+              "(run scripts/pull_extended_history.py)")
 
     t0 = time.perf_counter()
     eng = build(calib)
@@ -110,7 +119,8 @@ def main():
             "equity_return_median": float(np.median(list(sc["eq"].values()))) if sc["eq"] else 0.0,
             "equity_return_max": max(sc["eq"].values()) if sc["eq"] else 0.0,
             "fx_return": sc["fx"], "dy_tenors": None if sc["dy"] is None else list(sc["dy"][0]),
-            "dy_bp": None if sc["dy"] is None else [x * 1e4 for x in sc["dy"][1]]}
+            "dy_bp": None if sc["dy"] is None else [x * 1e4 for x in sc["dy"][1]],
+            "n_names_with_data": sc.get("n_names_with_data"), "n_names_total": sc.get("n_names_total")}
 
     for sc in scen:
         t0 = time.perf_counter()

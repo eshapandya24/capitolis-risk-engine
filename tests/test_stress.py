@@ -55,3 +55,47 @@ def test_historical_windows_pick_the_planted_extremes():
     assert ws["HIST_EQUITY_CRASH"]["eq"]["D"] == pytest.approx(np.median([ws["HIST_EQUITY_CRASH"]["eq"][k] for k in "ABC"]))   # missing name -> median
     assert ws["HIST_RATES_SPIKE"]["dy"][1][tuple(ws["HIST_RATES_SPIKE"]["dy"][0]).index(10)] > 0.02
     assert ws["HIST_YEN_SURGE"]["fx"] < -0.1
+
+
+def test_historical_window_in_range_only_looks_inside_the_given_dates():
+    px, fx, cmt = _history()
+    # two crashes: a bigger one outside the search range, a smaller one inside it
+    px.iloc[50:60] = px.iloc[50:60].values * np.linspace(1, 0.5, 10)[:, None]
+    px.iloc[60:] = px.iloc[60:].values * 0.5
+    px.iloc[200:210] = px.iloc[200:210].values * np.linspace(1, 0.85, 10)[:, None]
+    px.iloc[210:] = px.iloc[210:].values * 0.85
+    start, end = px.index[190], px.index[230]
+    sc = S.historical_window_in_range(px, fx, cmt, ["A", "B", "C"], start, end, "TEST", "test window")
+    w0 = pd.Timestamp(sc["window"][0])
+    assert start <= w0 <= end
+    assert px.index.get_loc(w0) in range(195, 206)          # finds the smaller, in-range crash
+    assert sc["eq"]["A"] < 0
+    assert sc["n_names_with_data"] == 3 and sc["n_names_total"] == 3
+
+
+def test_historical_window_in_range_returns_none_without_enough_data():
+    px, fx, cmt = _history()
+    sc = S.historical_window_in_range(px, fx, cmt, ["A"], "2019-01-01", "2019-01-05", "TEST", "no data here")
+    assert sc is None
+
+
+def test_crisis_windows_skips_episodes_the_data_cannot_support():
+    px, fx, cmt = _history()  # starts 2020, so neither named crisis episode (2008, 2015) has any data
+    assert S.crisis_windows(px, fx, cmt, ["A", "B", "C"]) == []
+
+
+def test_crisis_windows_finds_a_planted_2008_crash():
+    idx = pd.bdate_range("2007-06-01", periods=400)
+    rng = np.random.default_rng(1)
+    px = pd.DataFrame({k: 100 * np.exp(np.cumsum(rng.normal(0, 0.008, len(idx)))) for k in ("A", "B")}, index=idx)
+    fx = pd.Series(110.0, index=idx)
+    cmt = pd.DataFrame({"DGS10": 0.04}, index=idx)
+    i0 = idx.get_loc(pd.Timestamp("2008-10-01"))
+    px.iloc[i0:i0 + 10] = px.iloc[i0:i0 + 10].values * np.linspace(1, 0.6, 10)[:, None]
+    px.iloc[i0 + 10:] = px.iloc[i0 + 10:].values * 0.6
+    out = {s["name"]: s for s in S.crisis_windows(px, fx, cmt, ["A", "B"])}
+    assert "HIST_GFC_2008" in out
+    w0 = pd.Timestamp(out["HIST_GFC_2008"]["window"][0])
+    assert pd.Timestamp("2008-09-15") <= w0 <= pd.Timestamp("2008-10-15")
+    assert out["HIST_GFC_2008"]["eq"]["A"] < -0.2
+    assert "HIST_CHINA_DEVAL_2015" not in out          # 2015 is outside this synthetic history

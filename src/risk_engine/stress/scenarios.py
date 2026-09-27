@@ -71,6 +71,40 @@ def _window_returns(prices, fx, cmt, i0, i1, isins):
     return eq, fxr, dy, str(d0.date()), str(d1.date())
 
 
+def historical_window_in_range(prices, fx, cmt, isins, start, end, name, description, horizon=10, rule="worst_equity"):
+    """One real `horizon`-business-day window, chosen by `rule` WITHIN
+    [start, end] only (a named historical episode, e.g. the 2008 crisis),
+    instead of the single global extremum historical_windows() picks over
+    the whole available history. `rule` is "worst_equity" (lowest median
+    return across `isins`) or "yen_surge" (largest fall in USDJPY). Returns
+    one scenario dict, or None if the range has no usable data."""
+    idx = prices.index
+    win = idx[(idx >= pd.Timestamp(start)) & (idx <= pd.Timestamp(end))]
+    if len(win) <= horizon:
+        return None
+    have = [i for i in isins if i in prices.columns]
+    sub = prices.loc[win, have]
+    if rule == "worst_equity":
+        logp = np.log(sub)
+        ret = (logp.shift(-horizon) - logp).iloc[:-horizon]
+        med = ret.median(axis=1).dropna()
+        if med.empty:
+            return None
+        i0 = idx.get_loc(med.idxmin())
+    elif rule == "yen_surge":
+        sub_fx = fx.loc[win]
+        fxr = (np.log(sub_fx).shift(-horizon) - np.log(sub_fx)).iloc[:-horizon].dropna()
+        if fxr.empty:
+            return None
+        i0 = idx.get_loc(fxr.idxmin())
+    else:
+        raise ValueError(f"unknown rule {rule!r}")
+    n_have = sum(1 for i in isins if i in prices.columns and np.isfinite(prices[i].iloc[i0]) and np.isfinite(prices[i].iloc[i0 + horizon]))
+    eq, f, dy, a, b = _window_returns(prices, fx, cmt, i0, i0 + horizon, isins)
+    return dict(name=name, kind="historical", description=f"{description}: {a} to {b}", eq=eq, fx=f, dy=dy,
+               window=(a, b), n_names_with_data=n_have, n_names_total=len(isins))
+
+
 def historical_windows(prices, fx, cmt, isins, horizon=10):
     """Three real 10-business-day windows chosen by rule:
       HIST_EQUITY_CRASH   the window with the lowest median return across the book's names;
@@ -96,4 +130,30 @@ def historical_windows(prices, fx, cmt, isins, horizon=10):
                            ("HIST_YEN_SURGE", i_y, "Largest 10-day fall in USDJPY (yen surge)")):
         eq, f, dy, a, b = _window_returns(prices, fx, cmt, i0, i0 + horizon, isins)
         out.append(dict(name=name, kind="historical", description=f"{desc}: {a} to {b}", eq=eq, fx=f, dy=dy, window=(a, b)))
+    return out
+
+
+def crisis_windows(prices_ext, fx_ext, cmt, isins, horizon=10):
+    """Additional NAMED historical episodes, before the 2014 start of the
+    engine's primary price history (data/raw/backtest_prices.csv), sourced
+    from the wider public price file data/raw/backtest_prices_ext.csv
+    (2007-today, yfinance). Not every name traded that far back; a name
+    without data in the window takes the cross-sectional median return, the
+    same fallback historical_windows() uses (n_names_with_data / n_names_total
+    on the returned scenario discloses the coverage).
+
+      HIST_GFC_2008          worst 10-day equity window, Sep-Dec 2008 (Lehman and aftermath)
+      HIST_CHINA_DEVAL_2015  worst 10-day equity window, Aug-Sep 2015 (RMB devaluation, global selloff)
+
+    Returns a list of scenario dicts (an episode is skipped, not fatal, if
+    the data doesn't support it)."""
+    episodes = [
+        ("HIST_GFC_2008", "2008-09-01", "2008-12-31", "Worst 10-day equity window, 2008 financial crisis (Lehman and aftermath)"),
+        ("HIST_CHINA_DEVAL_2015", "2015-08-01", "2015-09-30", "Worst 10-day equity window, Aug 2015 RMB devaluation / global selloff"),
+    ]
+    out = []
+    for name, start, end, desc in episodes:
+        sc = historical_window_in_range(prices_ext, fx_ext, cmt, isins, start, end, name, desc, horizon=horizon)
+        if sc is not None:
+            out.append(sc)
     return out

@@ -1378,7 +1378,7 @@ def main():
            "<b>Risk-neutral drift</b>: not a real-world forecast; regulatory PFE may need physical drift. The backtest compares model quantiles with realised moves and is the check on this.",
            "<b>Model risk vs sampling risk:</b> above a few thousand scenarios the uncertainty is in the models, not the random numbers (Section 7.9).",
            "<b>Own credit and funding</b> for DVA and FVA are assumptions (BBB proxy, funding spread equal to the own spread). <b>SA-CCR</b> is unmargined, single-name equity and USD interest-rate only, with no collateral. <b>Risky bonds</b> use a bond-index proxy for the issuer curve with deterministic spreads.",
-           "<b>Stress tests</b> are instantaneous shocks to the starting state with the base model's volatilities, correlations and mean reversion; they are not a projection, and the historical replays cover 2014-2026 only (no 2008).",
+           "<b>Stress tests</b> are instantaneous shocks to the starting state with the base model's volatilities, correlations and mean reversion; they are not a projection. The 2008 and 2015 replays extend the historical price history back to 2007, but not every name traded that far back (Section 7.10 discloses coverage per scenario).",
            "<b>Backtests</b> have limited power at 99% (a few exceptions in about 240 windows) and test static positions, not the evolving book; the rates leg tests yield moves, not the book's rate exposure directly.",
            "<b>No wrong-way risk or credit dynamics of the counterparty itself</b>; this is exposure, not a loss estimate (that needs PD and LGD).",
            "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data), re-based to our reference date; acceptable for shape and level, disclosed."]))
@@ -1496,7 +1496,7 @@ def main():
              ["Greeks", "Bump-and-reprice with common random numbers; equity and FX bumps reuse paths (exact GBM rescaling, subset repricing); rate and vol bumps re-simulate", "+1% spot, +1bp rates (parallel and 8 buckets), +1% vol; N = 1,000; pathwise for equity and FX as a check", "greeks/book.py, greeks/exposure.py, greeks/pathwise.py, scripts/run_greeks.py"],
              ["Precision", "Bootstrap resampling of a large pool; 1/sqrt(N) extrapolation", "Relative SE of PFE99 about 1.0% at N = 5,000 at the worst date", "scripts/convergence_study_tail.py"],
              ["xVA and capital", "DVA and FVA from discounted EPE and ENE; SA-CCR EAD", "Own credit BBB proxy; funding spread = own spread", "exposure/xva.py, exposure/sa_ccr.py"],
-             ["Stress test", "Instantaneous shocks (8 hypothetical, 3 historical replays) followed by the full exposure simulation", "Same random numbers as the base case", "stress/scenarios.py, scripts/run_stress.py"],
+             ["Stress test", "Instantaneous shocks (8 hypothetical, 5 historical replays incl. 2008 and 2015) followed by the full exposure simulation", "Same random numbers as the base case", "stress/scenarios.py, scripts/run_stress.py"],
              ["Backtest", "Rolling out-of-sample Kupiec and Christoffersen tests, non-overlapping 10-day windows, 10 offsets", "3-year calibration window; 95% and 99%", "validation/backtest.py, scripts/run_backtest.py"],
              ["Validation", "t=0 self-check, martingale tests, delta-normal VaR, backtest, attribution, unit tests", "%d automated tests" % _ntests, "scripts/, tests/"]],
             widths=[1.2, 2.8, 2.4, 1.9], font=7.0))
