@@ -10,6 +10,8 @@ import report_new2 as RN2
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATH = os.path.join(ROOT, "data", "processed", "greeks_results.json")
+SAMPLING_EQ_PATH = os.path.join(ROOT, "data", "processed", "greeks_sampling.json")
+SAMPLING_RATES_PATH = os.path.join(ROOT, "data", "processed", "greeks_sampling_rates.json")
 ENT = ["CPTY_A", "CPTY_B", "CPTY_C", "__portfolio__"]
 
 
@@ -206,7 +208,36 @@ def section(add, doc, g, tickers, trade_meta):
     add(tbl(rows, widths=[4.6, 3.0], font=7.4))
     add(doc.figure(fig_validation(g), "Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws."))
 
-    add(P("9.6 Limitations", H2))
+    add(P("9.6 Does the sampling scheme help the Greeks?", H2))
+    add(P("Common random numbers (Section 9.5) is what makes the Greeks precise; a separate question is whether the sampling scheme used to generate those random numbers (Section 5.4 compares five schemes for the exposure measures themselves) also helps the sensitivities. We repeated the equity, FX and rate deltas at N = 256 scenarios, 4 to 6 independent seeds per scheme, and measured the standard deviation of each delta across seeds: the smaller that spread, the less noise the Greek carries at a given N."))
+    try:
+        sg = json.load(open(SAMPLING_EQ_PATH))
+        sr = json.load(open(SAMPLING_RATES_PATH))
+
+        def _sd(d, grp, c, m):
+            return {k: float(np.std([r[grp][c][m] for r in rows], ddof=1)) for k, rows in d["methods"].items()}
+
+        rows = []
+        specs = [("Equity delta, EE, CPTY_C", sg, "equity", "CPTY_C", "EE"),
+                 ("Equity delta, PFE99, CPTY_A", sg, "equity", "CPTY_A", "PFE"),
+                 ("Equity delta, PFE99, portfolio", sg, "equity", "__portfolio__", "PFE"),
+                 ("USDJPY delta, median PFE, portfolio", sg, "fx", "__portfolio__", "MED"),
+                 ("Rate DV01, EE, portfolio", sr, "rate", "__portfolio__", "EE"),
+                 ("Rate DV01, PFE99, portfolio", sr, "rate", "__portfolio__", "PFE")]
+        for label, d, grp, c, m in specs:
+            sd = _sd(d, grp, c, m)
+            base = sd.get("pseudo_random", 0.0)
+            lh = sd.get("latin_hypercube")
+            ratio = lh / base if base and lh is not None else float("nan")
+            rows.append([label, _k(base), _k(lh) if lh is not None else "n/a", "%.2fx" % ratio if ratio == ratio else "n/a"])
+        add(tbl([["Delta", "Pseudo-random sd (USD k)", "Latin Hypercube sd (USD k)", "Ratio"]] + rows, widths=[3.4, 1.6, 1.7, 1.0], font=7.4))
+        add(P("<b>Finding: mixed, not a clear win.</b> Latin Hypercube reduces the noise of the EE deltas (roughly 15-85% lower standard deviation across the cases above, both equity and rate), but it is no better, and sometimes markedly worse (up to about 4x), for the tail-quantile deltas (PFE99, median PFE). Antithetic and Sobol show the same pattern in the fuller comparison (data/processed/greeks_sampling.json, greeks_sampling_rates.json). With only 4-6 seeds per scheme these ratios carry their own sampling error, so ratios between about 0.7 and 1.4 should be read as no difference; only the larger gaps are likely real."))
+        add(P("Why the benefit fades: Latin Hypercube stratifies each of the roughly 660 dimensions of a single scenario (39 factors by 17 time steps) independently, and a tail-quantile Greek is driven by a handful of extreme scenarios among many draws, so stratifying the marginals does not concentrate coverage where the quantile lives. EE, an average over all scenarios, benefits more directly. The conclusion for the Greeks is the same as for the base exposure measures in Section 5.4: at this dimensionality, which random-number generator is used matters far less than whether the base and bumped runs share the same draws."))
+        add(P("Recommendation: keep Latin Hypercube as the default (it is never much worse for the numbers actually reported, EE and PFE99 under common random numbers), but do not rely on it to reduce sensitivity noise in the tail; increasing N or averaging repeats is the more dependable lever there."))
+    except FileNotFoundError:
+        add(P("Sampling-scheme comparison not yet run for this build; see scripts/run_greeks_sampling.py."))
+
+    add(P("9.7 Limitations", H2))
     add(B(["Sensitivities are finite differences with a 1% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.",
            "Quantile Greeks (PFE99) carry more estimation noise than EE even with common random numbers; the reported figures use %s scenarios." % format(N, ","),
            "Interest rate Greeks are for the USD curve only: the simulated JPY rate drives only the drift of JPY-listed names and USDJPY, and no trade is discounted on JPY. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).",

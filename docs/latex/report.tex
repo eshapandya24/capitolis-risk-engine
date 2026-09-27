@@ -1499,7 +1499,7 @@ PFE99 delta (equity) & 40 & 7.8\% of peak & 76.0\% of peak \\
 \toprule
 \rowcolor{navy}\textbf{\textcolor{white}{Check}} & \textbf{\textcolor{white}{Result}} \\
 \endhead
-t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 1.6e-02 \\
+t = 0 equity delta against the analytic value (shares x spot x 1\%, signed by trade direction), all 41 trade-name pairs & maximum relative error 7.1e-02 \\
 \rowcolor{gray!9}Bump-size stability of the all-equity EE delta at the peak date: 0.5\%, 1\%, 2\% bumps (USD k per +1\%) & 72, 72, 72 (spread 0.02\%) \\
 Additivity: sum of the 37 single-name EE deltas against the all-equity delta (maximum over all dates after t = 0) & 0.06\% of the peak all-equity delta \\
 \rowcolor{gray!9}The same at t = 0 itself & 0\%: at t = 0 the exposure max(V, 0) is deterministic and has a kink, and a 1\% bump of one name can cross it (CPTY\_A, CPTY\_B), so single-name and joint finite differences need not add there \\
@@ -1513,6 +1513,29 @@ Sum of single-name PFE99 deltas against the all-equity PFE99 delta at the peak d
 \includegraphics[width=\linewidth]{figures/fig43.pdf}
 \caption{Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws.}
 \end{figure}
+\subsection{Does the sampling scheme help the Greeks?}
+Common random numbers (Section 9.5) is what makes the Greeks precise; a separate question is whether the sampling scheme used to generate those random numbers (Section 5.4 compares five schemes for the exposure measures themselves) also helps the sensitivities. We repeated the equity, FX and rate deltas at N = 256 scenarios, 4 to 6 independent seeds per scheme, and measured the standard deviation of each delta across seeds: the smaller that spread, the less noise the Greek carries at a given N.
+
+{\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.4416\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2078\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2208\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.1299\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Delta}} & \textbf{\textcolor{white}{Pseudo-random sd (USD k)}} & \textbf{\textcolor{white}{Latin Hypercube sd (USD k)}} & \textbf{\textcolor{white}{Ratio}} \\
+\endhead
+Equity delta, EE, CPTY\_C & 2 & 1 & 0.69x \\
+\rowcolor{gray!9}Equity delta, PFE99, CPTY\_A & 29 & 23 & 0.80x \\
+Equity delta, PFE99, portfolio & 31 & 50 & 1.62x \\
+\rowcolor{gray!9}USDJPY delta, median PFE, portfolio & 22 & 10 & 0.44x \\
+Rate DV01, EE, portfolio & 1 & 0 & 0.13x \\
+\rowcolor{gray!9}Rate DV01, PFE99, portfolio & 4 & 15 & 3.75x \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Finding: mixed, not a clear win.} Latin Hypercube reduces the noise of the EE deltas (roughly 15-85\% lower standard deviation across the cases above, both equity and rate), but it is no better, and sometimes markedly worse (up to about 4x), for the tail-quantile deltas (PFE99, median PFE). Antithetic and Sobol show the same pattern in the fuller comparison (data/processed/greeks\_sampling.json, greeks\_sampling\_rates.json). With only 4-6 seeds per scheme these ratios carry their own sampling error, so ratios between about 0.7 and 1.4 should be read as no difference; only the larger gaps are likely real.
+
+Why the benefit fades: Latin Hypercube stratifies each of the roughly 660 dimensions of a single scenario (39 factors by 17 time steps) independently, and a tail-quantile Greek is driven by a handful of extreme scenarios among many draws, so stratifying the marginals does not concentrate coverage where the quantile lives. EE, an average over all scenarios, benefits more directly. The conclusion for the Greeks is the same as for the base exposure measures in Section 5.4: at this dimensionality, which random-number generator is used matters far less than whether the base and bumped runs share the same draws.
+
+Recommendation: keep Latin Hypercube as the default (it is never much worse for the numbers actually reported, EE and PFE99 under common random numbers), but do not rely on it to reduce sensitivity noise in the tail; increasing N or averaging repeats is the more dependable lever there.
+
 \subsection{Limitations}
 \begin{itemize}
 \item Sensitivities are finite differences with a 1\% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.
@@ -1567,7 +1590,7 @@ An independent standard method: portfolio dollar-deltas by bump-and-reprice with
 The earlier directional test (a few bumps of volatility and the curve, one paragraph of results) has been replaced by the structured programme of Sections 7.9 (one-at-a-time model perturbations) and 7.10 (stress scenarios with stated data and inputs, by netting set, by trade and along the time path), which answers what the inputs were, how sensitive the outputs are across the path, and whether all products react.
 
 \subsection{Statistical and unit tests}
-142 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures); and, added in this version, the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), the long-end volatility fit, the G2++ model (curve fit, martingale property, calibration recovery, engine integration), DVA and FVA against closed forms, SA-CCR against hand calculations, the Kupiec and Christoffersen tests and both backtests, the stress-scenario helpers, the pathwise Greeks against central bumps, and the risky-bond sample.
+146 automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures); and, added in this version, the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), the long-end volatility fit, the G2++ model (curve fit, martingale property, calibration recovery, engine integration), DVA and FVA against closed forms, SA-CCR against hand calculations, the Kupiec and Christoffersen tests and both backtests, the stress-scenario helpers, the pathwise Greeks against central bumps, and the risky-bond sample.
 
 \subsection{Greeks (sensitivities)}
 Three delta estimators were compared on a call option: pathwise, bump-and-reprice with \textbf{common random numbers} (same draws in base and bumped runs) and bump-and-reprice with independent draws.
@@ -1673,7 +1696,7 @@ Each defect was identified by checking against an independent source, a hand cal
 \end{itemize}
 \section{Conclusions and recommendations}
 \begin{itemize}
-\item The engine is validated (t=0 self-check, martingale tests including the JPY components, delta-normal VaR benchmark, Kupiec backtest, 142 automated tests) and reproducible with a single command per stage.
+\item The engine is validated (t=0 self-check, martingale tests including the JPY components, delta-normal VaR benchmark, Kupiec backtest, 146 automated tests) and reproducible with a single command per stage.
 \item On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is \$51.0M at 2026-09-20, with peak EE of \$11.6M and peak median PFE of \$8.2M (Section 7.1). The earlier version of this work reported \$45.7M before the model corrections of Section 7.3.
 \item The portfolio MPE99 is 78\% of the sum of the counterparty MPE99s: netting does not cross counterparties and the three books peak within about four weeks of each other, so there is little diversification (Section 7.2).
 \item The uncollateralized level exposure, kept as a secondary view, has peak portfolio PFE99 of \$201.9M at 2026-10-09, versus EE of \$140.1M and median PFE of \$140.3M; the spread between these three is the point of reporting all of them.
@@ -1810,7 +1833,7 @@ Greeks & Bump-and-reprice with common random numbers; equity and FX bumps reuse 
 xVA and capital & DVA and FVA from discounted EPE and ENE; SA-CCR EAD & Own credit BBB proxy; funding spread = own spread & exposure/xva.py, exposure/sa\_ccr.py \\
 \rowcolor{gray!9}Stress test & Instantaneous shocks (8 hypothetical, 3 historical replays) followed by the full exposure simulation & Same random numbers as the base case & stress/scenarios.py, scripts/run\_stress.py \\
 Backtest & Rolling out-of-sample Kupiec and Christoffersen tests, non-overlapping 10-day windows, 10 offsets & 3-year calibration window; 95\% and 99\% & validation/backtest.py, scripts/run\_backtest.py \\
-\rowcolor{gray!9}Validation & t=0 self-check, martingale tests, delta-normal VaR, backtest, attribution, unit tests & 142 automated tests & scripts/, tests/ \\
+\rowcolor{gray!9}Validation & t=0 self-check, martingale tests, delta-normal VaR, backtest, attribution, unit tests & 146 automated tests & scripts/, tests/ \\
 \bottomrule
 \end{longtable}}
 
@@ -1827,7 +1850,7 @@ simulation/ & engine (grid, paths, MPOR nodes), random\_numbers (five sampling s
 stress/, validation/ & stress/scenarios (hypothetical and historical-replay shocks, curve shift); validation/backtest (Kupiec, Christoffersen, equity and rates backtests) \\
 \rowcolor{gray!9}exposure/ & spec\_exposure (the brief's close-out exposure), aggregate (netting, level exposure), collateral (MPOR-shifted illustration), cva (regulatory CVA), xva (DVA, FVA), sa\_cva (Basel aggregation), sa\_ccr (EAD) \\
 scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_report\_data, build\_report (LaTeX), build\_exec\_deck, and the convergence, variance-reduction, VaR, martingale and stress benchmarks \\
-\rowcolor{gray!9}tests/ & 142 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA, close-out exposure, curve splice, JPY factor, G2++, xVA, SA-CCR, backtests, stress, pathwise, risky bond \\
+\rowcolor{gray!9}tests/ & 146 tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA, close-out exposure, curve splice, JPY factor, G2++, xVA, SA-CCR, backtests, stress, pathwise, risky bond \\
 \bottomrule
 \end{longtable}}
 
