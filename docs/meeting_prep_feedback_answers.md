@@ -84,6 +84,8 @@ Every number below is from the finished runs and is in the report (section numbe
 
 **Decision.** Keep the full matrix as default; the factor model stays as an explainable robustness option. It would only help if the systematic factors were drawn quasi-randomly and the noise pseudo-randomly (listed as future work).
 
+**Bonus: an Excel benchmark, for anyone who wants to sanity-check the numbers by hand.** docs/Capitolis_CCR_Parametric_Benchmarks.xlsx recomputes the calibrated vols and the simulation's own vol using nothing but plain Excel formulas on public data (yfinance closes, FRED Treasury yields): =STDEV(LN(Pt/Pt-1))*SQRT(252) for equities/FX, =STDEV(diff)*SQRT(252) for rates, and the closed-form Hull-White formula sigma*(1-EXP(-a*T))/(a*T). Every one matches the engine's number to about 0.1-2%, and the simulated one-year vol matches the analytic GBM/Hull-White formula to about 1-2%, which is inside Monte Carlo noise. Report Section 5.6.
+
 ---
 
 ## 4. Final results: equity vs rate exposure, and why the portfolio MPE is so high [Report 7.2]
