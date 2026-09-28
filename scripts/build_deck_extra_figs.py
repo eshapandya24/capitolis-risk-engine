@@ -72,7 +72,72 @@ def sampling_scheme_bar():
     print("wrote fig_sampling_greeks.pdf")
 
 
+def greeks_cost_bar():
+    g = json.load(open(os.path.join(PROC, "greeks_results.json")))
+    t = g["timing_clean"]  # clean timing on an otherwise-idle machine at N=300; see report_greeks.py
+    naive_eq_fx = t["n_bumps"] * t["base_run_s"]
+    labels = ["Base run", "%d equity/FX\nbumps (actual)" % t["n_bumps"], "%d equity/FX bumps\n(naive resim, est.)" % t["n_bumps"]]
+    vals = [t["base_run_s"], t["subset_bumps_s"], naive_eq_fx]
+    colors_ = [GREY, NAVY, ORANGE]
+    fig, ax = plt.subplots(figsize=(4.6, 2.8))
+    bars = ax.bar(labels, vals, color=colors_)
+    ax.set_ylabel("Seconds (N=%d, idle machine)" % t["n"])
+    ax.set_title("Cost: bump-and-reprice vs naive resimulation")
+    for b_, v in zip(bars, vals):
+        ax.text(b_.get_x() + b_.get_width() / 2, v, f"{v:,.0f}s", ha="center", va="bottom", fontsize=7.5)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig_greeks_cost.pdf"))
+    print("wrote fig_greeks_cost.pdf")
+
+
+def hist_scenarios_bar():
+    R = json.load(open(os.path.join(PROC, "stress_results.json")))
+    base, sc = R["base"], R["scenarios"]
+    names = ["HIST_EQUITY_CRASH", "HIST_RATES_SPIKE", "HIST_YEN_SURGE", "HIST_GFC_2008", "HIST_CHINA_DEVAL_2015"]
+    labels = ["2020\nequity crash", "2022\nrates spike", "2024\nyen surge", "2008\nGFC", "2015\nChina deval."]
+    co = [sc[n]["closeout"]["__portfolio__"]["MPE"] / base["closeout"]["__portfolio__"]["MPE"] * 100 - 100 for n in names]
+    lv = [sc[n]["level"]["__portfolio__"]["MPE"] / base["level"]["__portfolio__"]["MPE"] * 100 - 100 for n in names]
+    x = np.arange(len(names))
+    fig, ax = plt.subplots(figsize=(5.6, 2.8))
+    ax.bar(x - 0.18, co, width=0.36, color=NAVY, label="Close-out MPE99")
+    ax.bar(x + 0.18, lv, width=0.36, color=ORANGE, label="Level MPE99")
+    ax.axhline(0, color="k", lw=0.6)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=7.5)
+    ax.set_ylabel("% change vs base")
+    for lbl, c in zip(ax.get_xticklabels()[3:], [TEAL, TEAL]):
+        lbl.set_color(c)
+    ax.legend(frameon=False, fontsize=7.5)
+    ax.set_title("All 5 historical replays, including the two new ones")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig_hist_scenarios.pdf"))
+    print("wrote fig_hist_scenarios.pdf")
+
+
+def kva_compare_bar():
+    xva = json.load(open(os.path.join(PROC, "xva_results.json")))
+    convs = ["closeout", "level"]
+    cva = [xva["conventions"][c]["total"]["CVA"] for c in convs]
+    kva = [xva["conventions"][c]["kva_total"]["CoC_10%"] for c in convs]
+    x = np.arange(2)
+    fig, ax = plt.subplots(figsize=(4.6, 2.8))
+    ax.bar(x - 0.18, cva, width=0.36, color=TEAL, label="CVA")
+    ax.bar(x + 0.18, kva, width=0.36, color=NAVY, label="KVA (10% CoC)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Close-out", "Level (uncollateralized)"])
+    ax.set_ylabel("USD")
+    ax.set_yscale("log")
+    ax.legend(frameon=False)
+    ax.set_title("KVA vs CVA: KVA is larger on both conventions")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "fig_kva_compare.pdf"))
+    print("wrote fig_kva_compare.pdf")
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     dv01_comparison()
     sampling_scheme_bar()
+    greeks_cost_bar()
+    hist_scenarios_bar()
+    kva_compare_bar()
