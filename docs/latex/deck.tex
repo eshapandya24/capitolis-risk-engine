@@ -1,0 +1,259 @@
+\documentclass[9pt,aspectratio=169]{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+
+\definecolor{navy}{HTML}{1F3A5F}
+\definecolor{teal}{HTML}{2A9D8F}
+\definecolor{orange}{HTML}{E76F51}
+\definecolor{gold}{HTML}{E9C46A}
+\definecolor{grey}{HTML}{8D99AE}
+
+\usetheme{default}
+\usecolortheme{default}
+\setbeamercolor{palette primary}{bg=navy,fg=white}
+\setbeamercolor{palette secondary}{bg=navy,fg=white}
+\setbeamercolor{palette tertiary}{bg=navy,fg=white}
+\setbeamercolor{title}{fg=navy}
+\setbeamercolor{frametitle}{bg=navy,fg=white}
+\setbeamercolor{structure}{fg=navy}
+\setbeamercolor{block title}{bg=teal,fg=white}
+\setbeamercolor{block body}{bg=teal!8}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{frametitle}{series=\bfseries}
+
+\newcommand{\good}{\textcolor{teal}{\textbf{Done}}}
+
+\title{\textbf{Capitolis CCR Monte Carlo Engine}}
+\subtitle{Methods, Results, and Feedback Addressed}
+\author{Berkeley MFE Industry Project}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ---------------------------------------------------------------- overview
+\begin{frame}{What we built}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Book:} 16 trades, 3 counterparties (A/B/C) \\
+      8 equity TRS, 4 bond forwards, 4 bond TRS \\
+      37 equities (US + Tokyo) + USDJPY
+
+      \vspace{6pt}
+      \textbf{Engine:} full Monte Carlo, real data throughout
+      \begin{itemize}
+        \item Equities/FX: correlated GBM, real 3y realised vols and correlations
+        \item USD rates: one-factor Hull-White, swaption-calibrated mean reversion, realised long-end vol
+        \item JPY rates: a second Hull-White factor (real JPY OIS curve)
+        \item Latin Hypercube sampling, common random numbers throughout
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \textbf{Exposure definition (the brief):}
+      \[ \max\big(V(t{+}10\text{bd}) - V(t{-}1\text{bd}),\,0\big) \]
+      signed prior-day VM, no IM/threshold, netted per counterparty
+
+      \vspace{10pt}
+      \textbf{Deliverables:} 77-page report, this deck, an Excel parametric-benchmark workbook, 168 automated regression tests
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- headline results
+\begin{frame}{Headline results (5,000 scenarios, close-out exposure)}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{tabular}{lrr}
+        \toprule
+        & \textbf{MPE99} & \textbf{Peak EE} \\
+        \midrule
+        CPTY\_A (equity) & \$25.9M & \$4.7M \\
+        CPTY\_B & \$9.6M & \$1.8M \\
+        CPTY\_C (rates) & \$29.6M & \$5.2M \\
+        \midrule
+        \textbf{Portfolio} & \textbf{\$51.0M} & \textbf{\$11.6M} \\
+        \bottomrule
+      \end{tabular}
+
+      \vspace{8pt}
+      \small Portfolio MPE99 is 78\% of the sum of counterparties (\$65.1M): no netting across counterparties, but exposures still overlap in time and are positively dependent.
+
+      \vspace{8pt}
+      \small CVA \$11.7k (close-out) / \$247k (level); SA-CVA capital \$0.10M / \$2.23M; SA-CCR EAD \$260M.
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig25.pdf}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Close-out vs.\ level exposure}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig26.pdf}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small
+      \begin{itemize}
+        \item \textbf{Close-out} (the brief): only the 10-day move from a margined start. Small because margin already covers today's mark-to-market.
+        \item \textbf{Level} (secondary view): the whole mark-to-market at risk, no margin assumed. Portfolio MPE \$201.9M -- an order of magnitude larger, driven by CPTY\_C's bond forward.
+        \item The two numbers \emph{bracket} the truth: which one applies depends on whether the trade is actually margined.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- stress
+\begin{frame}{Stress testing: structured, not a paragraph}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig33.pdf}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \small
+      \textbf{13 scenarios}, same random numbers as the base case:
+      \begin{itemize}
+        \item 8 round-number shocks (equities $\pm$30\%, yen $\pm$15\%, rates $\pm$200bp, flight-to-quality, stagflation)
+        \item 5 historical replays: worst equity/rates/yen windows 2014--2026, \textbf{plus 2008 GFC and Aug 2015 China deval.}
+      \end{itemize}
+      \textbf{2008 finding:} close-out MPE99 $-13\%$, level $+56\%$ -- inside the range the hypothetical scenarios already covered. Not leaving out the tail.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- sampling & DV01
+\begin{frame}{Latin Hypercube: where it helps, and a genuine extension}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig_sampling_greeks.pdf}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \small
+      \textbf{Base measures (Section 5.4):} Latin Hypercube is the best of 5 schemes tested.
+
+      \textbf{Greeks noise:} mixed. LHS cuts noise on EE deltas (15--85\%) but not consistently on tail-quantile (PFE99) deltas.
+
+      \textbf{New: LHS \emph{as} the sensitivity.} In one-factor Hull-White, $r(t)=x(t)+\alpha(t)$: the simulated $x(t)$ is unchanged by a curve bump. So a rate Greek is a closed-form shift of the \emph{same} simulated paths -- no resimulation. Validated to $10^{-15}$ relative precision against a true resimulation.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{DV01 via a Jacobian: bump the curve, not just the zero rate}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig_dv01_compare.pdf}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \small
+      Old method: bump the \emph{fitted} zero curve at 8 hand-picked tenors.
+
+      New method: bump the curve's own $\sim$45 native construction pillars (SOFR futures + Bloomberg long end), grouped into the same 8 buckets -- the real par-instrument sensitivity.
+
+      \textbf{Finding:} the 30y bucket carries 82\% of portfolio DV01 (new) vs.\ 54\% (old) -- the old grid was smearing the 20--50y risk, where the 2049 bond forward actually lives, into the 10y bucket. Bucket sums match the parallel bump to within 0.1\% either way.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- CVA/xVA
+\begin{frame}{CVA, DVA, FVA, and now KVA}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig38.pdf}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \small
+      \textbf{Why we build this in detail:} the value is the sensitivity chain (CVA01, rating table, SA-CVA weighted sensitivities), not the headline number.
+
+      \textbf{New: KVA.} $K(t) = 8\%\times\text{RW}\times\alpha\times\text{EPE}(t)$, discounted, scaled by an assumed cost of capital (8/10/12\% swept, none given).
+
+      At 10\% CoC: KVA \$22.4k (close-out) / \$470k (level) -- larger than CVA (\$11.7k / \$247k) because it scales the whole EPE profile, not a small IG default probability. Explicitly illustrative.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------- excel benchmark
+\begin{frame}{Independent parametric benchmarks (Excel)}
+  \small
+  A separate, formula-only Excel workbook checks the engine against a hand calculator, using only public data:
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item \textbf{Equity/FX vol:} \texttt{=STDEV(LN(Pt/Pt-1))*SQRT(252)} on raw yfinance closes matches the calibrated model vol to $\sim$0.1\%.
+        \item \textbf{Rate vol:} same idea on FRED Treasury yields; the closed-form Hull-White formula $\sigma(1-e^{-aT})/(aT)$ lands within 5--10\% of realised at the fitted tenors.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item \textbf{Simulation cross-check:} analytic $\text{vol}\times\sqrt{T}$ vs.\ the standard deviation actually measured across 5,000 simulated scenarios: matches to 1--2\%.
+        \item \textbf{Vega bump:} bumping a USD name's vol $\pm1\%$, the Monte Carlo vega of a simple ATM position matches the closed-form (undiscounted) Black vega to $\sim$7\%.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{6pt}
+  \textcolor{grey}{\small \texttt{docs/Capitolis\_CCR\_Parametric\_Benchmarks.xlsx} -- every number is a live formula, not a pasted value.}
+\end{frame}
+
+% ---------------------------------------------------------------- feedback table 1
+\begin{frame}{Feedback addressed -- earlier meeting}
+  \small
+  \begin{tabular}{p{0.42\textwidth}p{0.5\textwidth}}
+    \toprule
+    \textbf{Feedback} & \textbf{How it was incorporated} \\
+    \midrule
+    Robust stress testing (data, inputs, sensitivity, across path/products) & \good: 13 scenarios, same random numbers, read at every date/trade/counterparty (Section 7.10) \\
+    Sensitivities: method, cost, faster alternative & \good: bump-and-reprice with CRN; pathwise for equity/FX (1000x faster, validated); adjoint noted as future work (Section 9) \\
+    PCA explainability and speed & \good: factor loadings explained; found \emph{no} speed gain as implemented, reported honestly (Section 4.4) \\
+    Final results: A=equity, C=rates, bond-equity relation, portfolio additivity & \good: sensitivity table, rank correlations, and the ``no netting across counterparties'' explanation (Section 7.2) \\
+    CVA walkthrough and set-up for next session & \good: full walkthrough, 6 open questions listed for next session (Section 8.8) \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% ---------------------------------------------------------------- feedback table 2
+\begin{frame}{Feedback addressed -- this meeting}
+  \small
+  \begin{tabular}{p{0.42\textwidth}p{0.5\textwidth}}
+    \toprule
+    \textbf{Feedback} & \textbf{How it was incorporated} \\
+    \midrule
+    Add 2008, more testing periods & \good: 2008 GFC + Aug 2015 China deval, public data back to 2007 (Section 7.10) \\
+    Use LHS to calculate sensitivities & \good: exact analytic rate-bump reusing the same simulated draws, validated to $10^{-15}$ (Section 9.9) \\
+    KVA addition & \good: parametric capital charge, CoC grid (Section 8.6) \\
+    CVA is mostly for sensitivities/Greeks & \good: reframed explicitly; sensitivity chain is the deliverable (Section 8.8) \\
+    DV01 via Jacobian, bump the curve not just zero rate & \good: par-instrument buckets from the curve's $\sim$45 native pillars (Section 9.8) \\
+    Excel parametric test: bump equity vol & \good: closed-form Black vega vs.\ Monte Carlo vega, live formulas (Section 5.6) \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% ---------------------------------------------------------------- next steps
+\begin{frame}{Open questions for next session}
+  \small
+  \begin{itemize}
+    \item Which exposure definition should price CVA in production: margined close-out, or level?
+    \item Real ratings or CDS for CPTY\_A/B/C -- the BBB proxy currently drives every credit number.
+    \item Capitolis' own credit and funding spread for DVA/FVA; is DVA recognised at all (Basel ignores it)?
+    \item A real capital methodology and cost of capital for KVA (currently swept over an assumed 8/10/12\% grid).
+    \item Wrong-way risk: independence of exposure and default is assumed -- wanted?
+    \item Adopt the two-factor rate model (G2++, compared but not default: changes portfolio MPE99 by only $-3\%$)?
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \centering
+  \vspace{2cm}
+  {\Huge \textcolor{navy}{\textbf{Thank you}}}\\[8pt]
+  {\large Questions?}
+\end{frame}
+
+\end{document}
