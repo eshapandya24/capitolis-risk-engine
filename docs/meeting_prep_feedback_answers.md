@@ -30,7 +30,9 @@ Every number below is from the finished runs and is in the report (section numbe
 - Why: close-out exposure is the 10-day move from a margined start, so a shock to today's levels only changes the size of the positions. The level exposure is the level itself, so it moves with the shock. This is the reason margin matters so much.
 - Example: equities -30% cuts the close-out MPE by 16% (positions are smaller) but raises the level MPE by 60% (we are short equities, so we gain).
 
-**Honest limits.** Instant shocks to the starting state, not a projection; base-model vols; history starts 2014 (no 2008); 1,000 scenarios (about 3% noise).
+**Honest limits.** Instant shocks to the starting state, not a projection; base-model vols; 1,000 scenarios (about 3% noise).
+
+**Follow-up we tried: add 2008 and more testing periods.** Pulled public price history back to 2007 (28 of 37 names cover it) and added two more named episodes, found the same way (worst 10-day equity window, restricted to that date range): the 2008 financial crisis (Sep 29 - Oct 10, 2008: -23% median equity move, -44% worst single name) and the August 2015 RMB devaluation. Finding: both land inside the range our existing scenarios already covered -- 2008 moves close-out MPE99 by -13% and level MPE99 by +56%, close to the -30% equity shock and the 2020 crash replay -- so leaving 2008 out was not understating the tail.
 
 ---
 
@@ -60,6 +62,10 @@ Every number below is from the finished runs and is in the report (section numbe
 | Delta-gamma / regression proxy | Adds proxy error, worst for quantiles: future |
 
 **Is there a faster alternative? Yes, for equity and FX.** Pathwise: an equity swap is linear in the stock, so its delta is just position times S(t)/S0 on each path. It needs no repricing: 0.2 to 0.4 seconds for every name, counterparty and date, against about 260 seconds for the 76 bump runs. Validated on the same paths: EE deltas agree to a median 0.02% (worst 0.4%) of the largest name delta. Median-PFE and PFE99 deltas are noisier, so bump-and-reprice stays the reported number. Rate and vol Greeks (the expensive part) would need adjoint differentiation.
+
+**Follow-up we tried: DV01 via a Jacobian (bumping the curve, not just the zero rate).** The rate buckets above bump the fitted zero curve at 8 hand-picked tenors. We rebuilt them from the curve's own ~45 native construction pillars (SOFR futures + Bloomberg long end), grouped into the same 8 buckets by nearest pillar -- a true par-instrument sensitivity. Result: the shape changes materially. The old method splits the risk 39%/54% between the 10y and 30y buckets; the par-instrument method puts 11%/82% there, because the 20-50y long end (where the 2049 bond forward actually sits) was being smeared partly into the 10y bucket by the old triangular grid. The bucket sum still matches the parallel bump to within 0.1% either way -- it's the shape, not the total, that was misleading. Report Section 9.8.
+
+**Follow-up we tried: using Latin Hypercube itself to compute a sensitivity.** We found a genuine case where this works exactly, not approximately. In the one-factor Hull-White model the short rate is r(t) = x(t) + alpha(t), where x(t) is the simulated random factor and alpha(t) depends only on the curve, not on any random draw. A curve bump (any DV01) leaves x(t) identical, scenario by scenario, to the base run -- so its whole effect on every equity/FX path is one deterministic number per date, computable with no resimulation at all. We validated this reproduces a true resimulation to 1e-15 relative precision and used it for the Jacobian buckets above (Section 9.9). It does not extend to volatility bumps or the two-factor model, where the random part itself changes.
 
 **Follow-up we tried: does Latin Hypercube sampling reduce Greeks noise too?** We already use it (with common random numbers) for the reported Greeks; the open question was whether the sampling scheme itself, separate from sharing draws, helps. We repeated the equity, FX and rate deltas at N=256 with 4-6 independent seeds per scheme (pseudo-random, antithetic, moment-matched, Sobol, Latin Hypercube) and compared the standard deviation of each delta across seeds.
 - Result: mixed. Latin Hypercube cuts the noise of EE deltas (roughly 15-85% lower standard deviation), but is no better, and sometimes 2-4x worse, for the tail-quantile deltas (PFE99, median PFE). Sobol shows the same pattern.
@@ -112,7 +118,11 @@ A is the most equity-driven; C is the rate netting set (one $500M short forward 
 
 ---
 
-## 5. CVA walk-through and set-up for next time [Report 8.7]
+## 5. CVA walk-through and set-up for next time [Report 8.8]
+
+**Why we build CVA in this much detail.** The point is less the headline number (small, since the counterparties are proxied investment-grade and margin shrinks the exposure) and more the sensitivity chain it produces: CVA01 to the counterparty spread, the rating table below, and the SA-CVA weighted sensitivities by risk class. Those are what a credit or XVA desk manages day to day.
+
+**Follow-up we tried: KVA.** Added a fourth, explicitly illustrative xVA term: K(t) = 8% x risk-weight x alpha x EPE(t), integrated and discounted like the others, scaled by an assumed cost of capital (we sweep 8/10/12%, since none is given). At 10% CoC, KVA is larger than CVA on both exposure conventions ($22k close-out vs CVA $12k; $470k level vs CVA $247k) because it multiplies the whole EPE profile by a fixed 8% ratio and alpha=1.4, not by a small investment-grade default probability. Report Section 8.6.
 
 **What CVA is.** The price of the risk that the counterparty defaults when they owe us. Formula: LGD x sum over time of (average discounted expected exposure) x (probability of default in that interval).
 

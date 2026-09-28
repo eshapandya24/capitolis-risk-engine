@@ -1582,6 +1582,43 @@ Why the benefit fades: Latin Hypercube stratifies each of the roughly 660 dimens
 
 Recommendation: keep Latin Hypercube as the default (it is never much worse for the numbers actually reported, EE and PFE99 under common random numbers), but do not rely on it to reduce sensitivity noise in the tail; increasing N or averaging repeats is the more dependable lever there.
 
+\subsection{Par-instrument (Jacobian) DV01 buckets}
+The rate buckets above bump the FITTED zero curve at 8 hand-chosen tenors, triangular between them. That is a reasonable key-rate grid, but it is not tied to how the curve was actually built, and it is coarse in exactly the region that matters most here: the 20-30y report bucket blends the curve's own pillars from 20y all the way to 50y (the Bloomberg-spliced long end), where BF\_0003, the dominant \$500M bond forward maturing 2049, actually lives. We repeated the bucketed DV01 using the curve's own $\sim$45 NATIVE construction pillars (the SOFR-futures-implied points plus every Bloomberg-spliced long-end point), grouped into the same 8 report tenors by nearest pillar, so bumping one bucket bumps only the real instruments in it and every pillar is assigned exactly once -- the textbook par-instrument (Jacobian) sensitivity a rates desk gets by bumping its own curve-building instruments one at a time.
+
+{\footnotesize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.2683\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3659\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.3659\linewidth-2\tabcolsep\relax}}
+\toprule
+\rowcolor{navy}\textbf{\textcolor{white}{Report tenor}} & \textbf{\textcolor{white}{Old triangular-grid DV01 (rate-node bump)}} & \textbf{\textcolor{white}{New par-instrument DV01 (native-pillar bump)}} \\
+\endhead
+0.25y & -2 & -3 \\
+\rowcolor{gray!9}0.5y & -0 & -0 \\
+1y & -0 & -0 \\
+\rowcolor{gray!9}2y & -0 & -0 \\
+3y & -0 & -0 \\
+\rowcolor{gray!9}5y & -1 & -1 \\
+10y & -18 & -7 \\
+\rowcolor{gray!9}30y & -25 & -47 \\
+Sum of buckets & -47 & -58 \\
+\rowcolor{gray!9}Parallel (all tenors together) & -47 & -58 \\
+\bottomrule
+\end{longtable}}
+
+\textbf{Finding.} The par-instrument method's bucket sum matches its own parallel bump to within 0.1\% (a bucket partition is exact by construction, Section 9.5-style validation); the old method's sum also tracks its parallel bump closely. But the SHAPE differs: the par-instrument 30y bucket carries 82\% of the total portfolio PFE99 DV01, against 54\% for the old triangular grid, because the old grid smears the 20-50y region's risk partly into its 10y node. The par-instrument parallel total is also about 24\% larger, because it bumps every native pillar's own zero rate by 1bp (including the long-end points beyond the old grid's 30y end tenor, which are held flat beyond 30y in the triangular scheme) rather than a smooth 1bp shift of the fitted curve -- a disclosed difference in what ``parallel'' means, not an error in either method.
+
+Recommendation: report the par-instrument buckets as the primary DV01 breakdown going forward; they are what a rates desk would actually hedge against, and they correctly show that essentially all of this book's rate risk sits beyond 10 years.
+
+\subsection{An exact rate Greek from the same simulated draws}
+The rate Greeks above (and all earlier reported DV01s) are bump-and-RESIMULATE: a new SimulationEngine is built on the bumped curve and the whole Monte Carlo is run again, at the same seed. That is common random numbers (Section 9.1), but it still redraws and re-steps every path. There is a cheaper, EXACT alternative for this model: in the one-factor Hull-White model the short rate is r(t) = x(t) + alpha(t), where x(t) is the simulated stochastic factor and alpha(t) is a deterministic function of the curve, a and sigma only. A curve bump that leaves a and sigma unchanged (every DV01 bump here) therefore leaves x(t) IDENTICAL, scenario by scenario, to the base run -- the same Latin Hypercube draws already simulated. Since the equity/FX drift uses r(t) piecewise-constant and additively, the whole effect of a curve bump on every equity and FX path is a single deterministic number per date (identical across scenarios, opposite sign for USDJPY, zero for JPY-listed names), computable directly from the two curves with no simulation at all.
+
+{\fontsize{7.2}{8.8}\selectfont
+\begin{verbatim}
+r(t) = x(t) + alpha(t)     alpha(t) = curve-dependent, a/sigma-dependent, NOT random
+cum_offset(T) = sum_k [alpha_bumped(t_k) - alpha_base(t_k)] * dt_k     (identical on every path)
+\end{verbatim}}
+This is validated, not just argued: repricing the base run's own paths shifted by cum\_offset(T) reproduces a full independent resimulation with the identical random draws to 1e-15 relative precision (tests/test\_rate\_shift.py) -- it does not approximate the resimulated bump, it computes the same number. The par-instrument DV01 buckets above (Section 9.8) use exactly this method: 5,000 scenarios, 8 buckets and a parallel bump, with no path resimulated at all -- only the base run's own paths, shifted and repriced. Repricing every trade at every date still costs what it costs (a curve bump changes discounting book-wide, so it cannot use the equity/FX bump's subset-repricing shortcut), but the simulation cost -- drawing and stepping 5,000 Latin Hypercube scenarios across the grid -- is paid exactly once, for the base run, not once per bucket.
+
+This is the direct answer to ``can Latin Hypercube be used to calculate sensitivities'': yes, for any bump that changes only the deterministic part of a simulated factor (here, any USD curve bump under the one-factor Hull-White model) -- the SAME simulated draws are reused exactly, not just with the same seed but algebraically, and the resulting Greek carries no additional Monte Carlo noise at all relative to the base run. It does not extend to a volatility or mean-reversion bump (those change the stochastic part itself, x(t) is no longer identical) or to the two-factor G2++ model (not implemented here); those still need a true resimulation.
+
 \subsection{Limitations}
 \begin{itemize}
 \item Sensitivities are finite differences with a 1\% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.

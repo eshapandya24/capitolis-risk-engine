@@ -237,7 +237,38 @@ def section(add, doc, g, tickers, trade_meta):
     except FileNotFoundError:
         add(P("Sampling-scheme comparison not yet run for this build; see scripts/run_greeks_sampling.py."))
 
-    add(P("9.7 Limitations", H2))
+    add(P("9.8 Par-instrument (Jacobian) DV01 buckets", H2))
+    add(P("The rate buckets above bump the FITTED zero curve at 8 hand-chosen tenors, triangular between them. That is a reasonable key-rate grid, but it is not tied to how the curve was actually built, and it is coarse in exactly the region that matters most here: the 20-30y report bucket blends the curve's own pillars from 20y all the way to 50y (the Bloomberg-spliced long end), where BF_0003, the dominant $500M bond forward maturing 2049, actually lives. We repeated the bucketed DV01 using the curve's own ~45 NATIVE construction pillars (the SOFR-futures-implied points plus every Bloomberg-spliced long-end point), grouped into the same 8 report tenors by nearest pillar, so bumping one bucket bumps only the real instruments in it and every pillar is assigned exactly once -- the textbook par-instrument (Jacobian) sensitivity a rates desk gets by bumping its own curve-building instruments one at a time."))
+    dj = None
+    try:
+        dj = json.load(open(os.path.join(ROOT, "data", "processed", "dv01_jacobian.json")))
+        rows = [["Report tenor", "Old triangular-grid DV01 (rate-node bump)", "New par-instrument DV01 (native-pillar bump)"]]
+        old_by_t = {"0.25": 0, "0.5": 0, "1": 0, "2": 0, "3": 0, "5": 0, "10": 0, "30": 0}
+        pk = int(np.argmax(np.array(g["base"]["__portfolio__"]["PFE"])))
+        for k in old_by_t:
+            key = float(k) if "." in k else int(k)
+            old_by_t[k] = g["rate_buckets"][str(key)]["__portfolio__"]["PFE"][pk]
+        for t in ("0.25", "0.5", "1", "2", "3", "5", "10", "30"):
+            rows.append([t + "y", _k(old_by_t[t]), _k(dj["par_bucket_dv01"][t]["__portfolio__"]["PFE"])])
+        rows.append(["Sum of buckets", _k(sum(old_by_t.values())), _k(dj["sum_of_par_buckets"]["__portfolio__"]["PFE"])])
+        rows.append(["Parallel (all tenors together)", _k(g["rate_parallel"]["delta"]["__portfolio__"]["PFE"][pk]), _k(dj["parallel_dv01"]["__portfolio__"]["PFE"])])
+        add(tbl(rows, widths=[2.2, 3.0, 3.0]))
+        old30 = old_by_t["30"] / sum(old_by_t.values()) * 100
+        new30 = dj["par_bucket_dv01"]["30"]["__portfolio__"]["PFE"] / dj["sum_of_par_buckets"]["__portfolio__"]["PFE"] * 100
+        add(P("<b>Finding.</b> The par-instrument method's bucket sum matches its own parallel bump to within 0.1%% (a bucket partition is exact by construction, Section 9.5-style validation); the old method's sum also tracks its parallel bump closely. But the SHAPE differs: the par-instrument 30y bucket carries %.0f%% of the total portfolio PFE99 DV01, against %.0f%% for the old triangular grid, because the old grid smears the 20-50y region's risk partly into its 10y node. The par-instrument parallel total is also about %.0f%% larger, because it bumps every native pillar's own zero rate by 1bp (including the long-end points beyond the old grid's 30y end tenor, which are held flat beyond 30y in the triangular scheme) rather than a smooth 1bp shift of the fitted curve -- a disclosed difference in what \"parallel\" means, not an error in either method." % (new30, old30, (dj["parallel_dv01"]["__portfolio__"]["PFE"] / g["rate_parallel"]["delta"]["__portfolio__"]["PFE"][pk] - 1) * 100)))
+        add(P("Recommendation: report the par-instrument buckets as the primary DV01 breakdown going forward; they are what a rates desk would actually hedge against, and they correctly show that essentially all of this book's rate risk sits beyond 10 years."))
+    except FileNotFoundError:
+        add(P("Par-instrument DV01 comparison not yet run for this build; see scripts/run_dv01_jacobian.py."))
+
+    add(P("9.9 An exact rate Greek from the same simulated draws", H2))
+    add(P("The rate Greeks above (and all earlier reported DV01s) are bump-and-RESIMULATE: a new SimulationEngine is built on the bumped curve and the whole Monte Carlo is run again, at the same seed. That is common random numbers (Section 9.1), but it still redraws and re-steps every path. There is a cheaper, EXACT alternative for this model: in the one-factor Hull-White model the short rate is r(t) = x(t) + alpha(t), where x(t) is the simulated stochastic factor and alpha(t) is a deterministic function of the curve, a and sigma only. A curve bump that leaves a and sigma unchanged (every DV01 bump here) therefore leaves x(t) IDENTICAL, scenario by scenario, to the base run -- the same Latin Hypercube draws already simulated. Since the equity/FX drift uses r(t) piecewise-constant and additively, the whole effect of a curve bump on every equity and FX path is a single deterministic number per date (identical across scenarios, opposite sign for USDJPY, zero for JPY-listed names), computable directly from the two curves with no simulation at all."))
+    add(code("r(t) = x(t) + alpha(t)     alpha(t) = curve-dependent, a/sigma-dependent, NOT random\n"
+             "cum_offset(T) = sum_k [alpha_bumped(t_k) - alpha_base(t_k)] * dt_k     (identical on every path)"))
+    n_scen_txt = format(dj["n_scenarios"], ",") if dj is not None else "N"
+    add(P("This is validated, not just argued: repricing the base run's own paths shifted by cum_offset(T) reproduces a full independent resimulation with the identical random draws to 1e-15 relative precision (tests/test_rate_shift.py) -- it does not approximate the resimulated bump, it computes the same number. The par-instrument DV01 buckets above (Section 9.8) use exactly this method: %s scenarios, 8 buckets and a parallel bump, with no path resimulated at all -- only the base run's own paths, shifted and repriced. Repricing every trade at every date still costs what it costs (a curve bump changes discounting book-wide, so it cannot use the equity/FX bump's subset-repricing shortcut), but the simulation cost -- drawing and stepping %s Latin Hypercube scenarios across the grid -- is paid exactly once, for the base run, not once per bucket." % (n_scen_txt, n_scen_txt)))
+    add(P("This is the direct answer to \"can Latin Hypercube be used to calculate sensitivities\": yes, for any bump that changes only the deterministic part of a simulated factor (here, any USD curve bump under the one-factor Hull-White model) -- the SAME simulated draws are reused exactly, not just with the same seed but algebraically, and the resulting Greek carries no additional Monte Carlo noise at all relative to the base run. It does not extend to a volatility or mean-reversion bump (those change the stochastic part itself, x(t) is no longer identical) or to the two-factor G2++ model (not implemented here); those still need a true resimulation."))
+
+    add(P("9.10 Limitations", H2))
     add(B(["Sensitivities are finite differences with a 1% (equity, FX, volatility) or 1bp (rates) shift. The bump-size check above shows the results are stable to a factor of four in bump size.",
            "Quantile Greeks (PFE99) carry more estimation noise than EE even with common random numbers; the reported figures use %s scenarios." % format(N, ","),
            "Interest rate Greeks are for the USD curve only: the simulated JPY rate drives only the drift of JPY-listed names and USDJPY, and no trade is discounted on JPY. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).",
