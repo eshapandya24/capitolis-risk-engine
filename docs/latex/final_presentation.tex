@@ -1,4 +1,4 @@
-\documentclass[9pt,aspectratio=169]{beamer}
+\documentclass[8pt,aspectratio=169]{beamer}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
@@ -7,7 +7,6 @@
 \usepackage{array}
 \usepackage{xcolor}
 \usepackage{ragged2e}
-\usepackage{appendixnumberbeamer}
 
 \definecolor{navy}{HTML}{1F3A5F}
 \definecolor{teal}{HTML}{2A9D8F}
@@ -36,7 +35,7 @@
 \newcommand{\bad}{\textcolor{grey}{rejected}}
 
 \title{\textbf{Counterparty Credit Risk Engine}}
-\subtitle{Final Presentation: Methods, Trade-offs, and Results}
+\subtitle{Final Presentation: Data, Methods, Trade-offs, and Results}
 \author{Berkeley MFE Industry Project -- Capitolis}
 \date{\today}
 
@@ -51,34 +50,29 @@
 \end{frame}
 
 % ================================================================ SECTION 0
-\section{Project at a Glance}
+\section{Project Overview}
 
-\begin{frame}{The book, and what we built}
+\begin{frame}{The book, and the objective}
   \begin{columns}[T]
     \begin{column}{0.55\textwidth}
       \textbf{16 trades, 3 counterparties}
       \begin{itemize}
-        \item 8 equity total-return swaps
+        \item 8 equity total-return swaps (incl.\ 2 JPY-compo)
         \item 4 bond forwards, 4 bond total-return swaps
         \item 37 equities (US + Tokyo) + USDJPY
+        \item Capitolis is strictly the seller on every trade
       \end{itemize}
       \vspace{6pt}
-      \textbf{A full Monte Carlo engine, built from scratch}
+      \textbf{Objective (from the kickoff brief)}
       \begin{itemize}
-        \item Joint stochastic simulation of every risk factor
-        \item Exposure, Greeks, stress, CVA/DVA/FVA/KVA, SA-CVA, SA-CCR
-        \item 168 automated regression tests
+        \item Build a modular Monte Carlo CCR engine from scratch
+        \item Stochastic models $\to$ pricer integration $\to$ exposure \& Greeks $\to$ performance
+        \item Extra credit: xVA; risky bonds + CDS
       \end{itemize}
     \end{column}
     \begin{column}{0.45\textwidth}
-      \textbf{Every input is real, sourced data}
-      \begin{itemize}
-        \item Equities/dividends: Yahoo Finance
-        \item USD curve: real Databento SOFR futures
-        \item Treasury yields: FRED
-        \item Long end + vol cube: licensed Bloomberg data
-        \item JPY curve: real JPY OIS history
-      \end{itemize}
+      \includegraphics[width=\linewidth]{figures/fig04.pdf}
+      \small Trade life spans: nearly all exposure disappears within 4 months; only 2 trades run past mid-2027.
     \end{column}
   \end{columns}
 \end{frame}
@@ -86,36 +80,102 @@
 \begin{frame}{Exposure definition, and why two numbers}
   \[ \text{Close-out: } \max\big(V(t{+}10\text{bd}) - V(t{-}1\text{bd}),\,0\big) \qquad \text{Level: } \max(V(t),0) \]
   \begin{itemize}
-    \item \textbf{Close-out} (the brief's definition, primary): the 10-day move from an already-margined start
-    \item \textbf{Level} (secondary): whole mark-to-market, no margin assumed -- a no-margin upper bound
+    \item \textbf{Close-out} (the brief's definition, primary): signed prior-day variation margin, no IM/threshold, the 10-day move from an already-margined start, netted per counterparty
+    \item \textbf{Level} (secondary): whole mark-to-market, no margin at all -- a no-margin upper bound
     \item Real answer sits between the two; the actual CSA's threshold/MTA/IM were not supplied
   \end{itemize}
-  \vspace{6pt}
   \centering
-  \includegraphics[width=0.55\linewidth]{figures/fig26.pdf}
+  \includegraphics[width=0.5\linewidth]{figures/fig26.pdf}
 \end{frame}
 
-% ================================================================ SECTION 1
+% ================================================================ SECTION 1: DATA
+\section{Data: Sources, Uses, and Why Real Data Matters}
+
+\begin{frame}{Data philosophy}
+  \begin{itemize}
+    \item \textbf{Every number in this project traces to a disclosed, real source} -- no synthetic placeholders for calibration inputs
+    \item \textbf{Benefit:} results are reproducible, auditable, and defensible in front of a risk committee; every assumption is a named simplification, not a silent one
+    \item Two tiers: \textbf{public} (Yahoo Finance, FRED, Databento) and \textbf{licensed} (Bloomberg, used and cross-checked but never redistributed as raw series)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Data source 1: USD discount curve (Databento SOFR futures)}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \begin{itemize}
+        \item \textbf{Source:} real Databento CME SOFR futures settlement prices (SR3), bootstrapped ourselves
+        \item \textbf{Used for:} every USD discount factor; the base for the Hull-White short-rate model
+        \item \textbf{Extension:} Bloomberg long-end quotes spliced in beyond futures coverage (out to 50y), since SOFR futures alone only cover the front few years
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \small
+      \textbf{Benefit of real data:} a genuine market-implied curve, not an assumed flat extrapolation. In the correction-by-correction attribution (see Model Validation section), splicing the real Bloomberg long end onto the previously-flat curve moved the portfolio MPE99 from \$52.7M to \$52.1M ($-1.1\%$) -- a modest, disclosed effect, not a large one, but a genuinely measured one rather than an assumption
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Data source 2: Treasury yields (FRED) and swaption vols (Bloomberg)}
+  \small
+  \begin{tabular}{p{0.19\textwidth}p{0.34\textwidth}p{0.34\textwidth}}
+    \toprule
+    \textbf{Source} & \textbf{Used for} & \textbf{Benefit of using it} \\
+    \midrule
+    FRED Treasury CMT yields (3mo--30y, public, daily since 1981) & Realised long-end yield volatility, used to fit Hull-White $\sigma$ (0.96\%); Kupiec backtest of the rate model & Directly measures the volatility of the yields this book's bond positions actually depend on, not a proxy \\
+    Bloomberg ATM normal swaption vol cube & Mean-reversion $a$ (0.0167, $R^2$=0.84), via the decay of vol with tenor & Textbook calibration route for $a$; genuinely implied, forward-looking \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Data source 3: equities, FX, JPY curve}
+  \small
+  \begin{tabular}{p{0.19\textwidth}p{0.34\textwidth}p{0.34\textwidth}}
+    \toprule
+    \textbf{Source} & \textbf{Used for} & \textbf{Benefit of using it} \\
+    \midrule
+    Yahoo Finance: 37 equity closes + dividends, 3y history & Equity spots, dividend yields, realised volatility, the 39$\times$39 correlation matrix & Public, free, long enough history (2014--today, extended to 2007 for stress) to estimate realised statistics reliably \\
+    Yahoo Finance: USDJPY spot, 3y history & FX spot, realised FX volatility, FX--equity correlation & Same realised-statistics benefit, consistent methodology across all factors \\
+    Real JPY OIS curve (public JPY market data) & JPY Hull-White factor's base curve & Lets JPY rates move independently and go negative, matching the real BOJ history \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Data source 4: credit spreads, and the licensed Bloomberg data}
+  \small
+  \begin{tabular}{p{0.19\textwidth}p{0.34\textwidth}p{0.34\textwidth}}
+    \toprule
+    \textbf{Source} & \textbf{Used for} & \textbf{Benefit of using it} \\
+    \midrule
+    ICE BofA bond-index OAS by rating (FRED, public) & Counterparty and issuer credit spread proxy (CVA, DVA, risky-bond pricing) & No CDS available; this is the Basel MAR50.32(3)-sanctioned fallback -- real market spreads by credit quality, not an assumed flat number \\
+    Bloomberg (licensed): long-end curve, USD/JPY swaption vol cubes, FX vol surface & USD/JPY curve splice, mean-reversion fit, model-risk cross-checks & The only source for genuine long-dated market data beyond what's public; used internally and only derived numbers are ever reported (never raw series), per the license \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  \textbf{Benefit, summarised:} every model parameter is either directly measured or transparently proxied from real data, so every number in this deck can be traced back to a named, dated market source.
+\end{frame}
+
+% ================================================================ SECTION 2
 \section{Engine Architecture}
 
 \begin{frame}{The simulation pipeline}
   \begin{enumerate}
-    \item \textbf{Draw:} Latin Hypercube random numbers $\to$ correlated shocks (Cholesky)
-    \item \textbf{Simulate:} step every risk factor jointly across the full time grid
-    \item \textbf{Reprice:} feed simulated market states into the provided pricers, every trade, every date, every scenario
-    \item \textbf{Aggregate:} net by counterparty $\to$ EE / median PFE / PFE99 / MPE
-    \item \textbf{Downstream:} Greeks, stress, CVA/DVA/FVA/KVA, SA-CVA, SA-CCR -- all on the same simulated paths
+    \item \textbf{Calibrate:} pull real data $\to$ fit every model parameter (previous section)
+    \item \textbf{Draw:} Latin Hypercube random numbers $\to$ correlated shocks (Cholesky decomposition of the real 39$\times$39 matrix)
+    \item \textbf{Simulate:} step every risk factor jointly across the full time grid (equities, FX, USD rate, JPY rate)
+    \item \textbf{Reprice:} feed simulated market states into the provided pricers -- every trade, every date, every scenario
+    \item \textbf{Aggregate:} net by counterparty $\to$ EE / median PFE / PFE99 / MPE, on both exposure conventions
+    \item \textbf{Downstream:} Greeks, stress, CVA/DVA/FVA/KVA, SA-CVA, SA-CCR -- all reusing the same simulated paths
   \end{enumerate}
-  \vspace{8pt}
-  \textbf{Risk factors simulated jointly, every scenario:}
-  \begin{itemize}
-    \item 37 equities + USDJPY: correlated geometric Brownian motion
-    \item USD short rate: one-factor Hull-White
-    \item JPY short rate: a second, independent Hull-White factor
-  \end{itemize}
 \end{frame}
 
-\begin{frame}{What the simulated paths look like}
+\begin{frame}{Simulation grid design: dense near term, sparse far term}
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/fig20.pdf}
+
+  \footnotesize The pillar grid (12 dates) plus forced trade-event dates (42 total) is more compact than a plain monthly grid (18 dates) and hits every real cash-flow date exactly -- fewer nodes to reprice, no loss of precision at the dates that matter.
+\end{frame}
+
+\begin{frame}{What the simulated paths actually look like}
   \begin{columns}[T]
     \begin{column}{0.5\textwidth}
       \includegraphics[width=\linewidth]{figures/fig11.pdf}
@@ -124,11 +184,85 @@
       \includegraphics[width=\linewidth]{figures/fig12.pdf}
     \end{column}
   \end{columns}
-  \small\centering Left: simulated USD short rate (median tracks today's forward curve, since the model is fitted to it). Right: simulated USDJPY and two equities with percentile bands.
+  \small\centering Left: simulated USD short rate (median tracks today's forward curve, since the model is calibrated to reproduce it exactly). Right: simulated USDJPY and two equities with 1--99\% and 25--75\% percentile bands.
 \end{frame}
 
-% ================================================================ SECTION 2
-\section{Stochastic Model Choices}
+% ================================================================ SECTION 3
+\section{Risk-Factor Models and Calibration}
+
+\begin{frame}{Equity and FX: correlated geometric Brownian motion}
+  \begin{columns}[T]
+    \begin{column}{0.4\textwidth}
+      \begin{itemize}
+        \item Standard lognormal diffusion, risk-neutral drift ($r-q$), correlated via the real 39$\times$39 matrix
+        \item JPY-quoted names carry a quanto correction; USDJPY drift enforces the martingale condition on the JPY money-market account valued in USD
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig13.pdf}
+    \end{column}
+  \end{columns}
+  \small\centering Cholesky demonstration on the most correlated real pair (corr 0.82): independent draws (left) become correlated (right) after multiplying by $L$.
+\end{frame}
+
+\begin{frame}{Correlation: full Cholesky matrix vs.\ PCA factor model}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig14.pdf}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \small
+      \begin{tabular}{p{0.24\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.2\textwidth}}
+        \toprule
+        & \textbf{Full} & \textbf{PCA k=5} & \textbf{PCA k=10} \\
+        \midrule
+        Step time (5,000 scen.) & 1.91s & 2.08s & 2.29s \\
+        Variance explained & 100\% & 47\% & 62\% \\
+        Netting-set vol vs.\ full & -- & B $+1.7\%$ & B $+1.5\%$ \\
+        \bottomrule
+      \end{tabular}
+      \vspace{4pt}
+      \good\ full matrix: PCA is \emph{slower}, not faster, at $n{=}39$ (draws $k$ systematic + $n$ idiosyncratic random numbers, no dimensionality win). \textbf{Loss of using PCA instead:} no speed gain, and up to 1.7\% extra sampling error -- a pure loss here. Kept only as an explainability tool: factor 1 (20\% of variance) is a broad market mode, factor 2 (8.9\%) is Japan vs.\ US.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{USD rates: calibrating mean reversion ($a$) -- two real routes compared}
+  \small
+  \begin{tabular}{p{0.2\textwidth}p{0.27\textwidth}p{0.08\textwidth}p{0.08\textwidth}p{0.15\textwidth}}
+    \toprule
+    \textbf{Route} & \textbf{Data} & \textbf{$a$} & \textbf{$R^2$} & \textbf{Verdict} \\
+    \midrule
+    Swaption cube (preferred) & Bloomberg ATM normal vol, 1M expiry, 1--15Y tenors & 0.0167 & 0.845 & \good\ used \\
+    SOFR-futures vol decay & $\sim$2y Databento history, 8 contracts & 0.0458 & 0.820 & cross-check only \\
+    \bottomrule
+  \end{tabular}
+  \vspace{8pt}
+  Both real-data routes give sensible, positive values with similar fit quality; the swaption route is the textbook standard (implied, not realised) and was preferred. The two disagree because they use different instruments (implied option vol vs.\ realised futures moves) and different tenor ranges -- a real, disclosed source of model uncertainty, quantified directly in the model-risk study ($a\times3$ moves the headline number by $-5\%$).
+\end{frame}
+
+\begin{frame}{USD rates: calibrating volatility ($\sigma$) -- realised, and which window}
+  \small
+  \begin{itemize}
+    \item \textbf{Original source:} realised volatility of the overnight SOFR fixing itself, 0.63\%
+    \item \textbf{Problem:} overnight fixings move in discrete steps on Fed days -- understates how far the \emph{long-dated} yields this book depends on actually move (realised 10-day change of the 20y yield: $\sim$15bp std dev, vs.\ $\sim$11bp implied by the overnight sigma)
+    \item \textbf{\good\ Changed to:} realised volatility of 2y--30y Treasury yield changes directly, 0.96\%
+  \end{itemize}
+  \vspace{8pt}
+  \textbf{Validated by Kupiec backtest (99\% VaR, rate moves, 161 ten-day windows, 3 tenors):}
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    \textbf{Tenor} & \textbf{Overnight-SOFR $\sigma$: up/down exc.} & \textbf{Long-end $\sigma$: up/down exc.} & \textbf{Expected} & \textbf{Both pass?} \\
+    \midrule
+    5y & 1 / 1 & 4 / 3 & 1.6 & yes (p$>$0.05) \\
+    10y & 1 / 0 & 3 / 2 & 1.6 & yes \\
+    20y & 1 / 1 & 3 / 1 & 1.6 & yes \\
+    \bottomrule
+  \end{tabular}
+  \vspace{4pt}
+  Both sigma choices pass Kupiec at this sample size; the switch to long-end realised vol is motivated by the direct realised-move comparison above, which is the more targeted diagnostic for this book's long-dated exposure.
+\end{frame}
 
 \begin{frame}{USD rates: one-factor vs.\ two-factor Hull-White}
   \begin{columns}[T]
@@ -137,109 +271,106 @@
     \end{column}
     \begin{column}{0.52\textwidth}
       \small
-      \begin{tabular}{p{0.44\textwidth}p{0.2\textwidth}p{0.24\textwidth}}
+      \begin{tabular}{p{0.32\textwidth}p{0.22\textwidth}p{0.3\textwidth}}
         \toprule
         & \textbf{1-factor} & \textbf{2-factor (G2++)} \\
         \midrule
-        Fit to realised yield covariance & -- & 16.1\% error \\
-        Parameter at a bound & no & $b=1.5$, $\rho{=}{-}0.95$ \\
-        Effect on portfolio MPE99 & baseline & $-3\%$ \\
+        Fit to realised yield covariance & -- & 16.1\% relative error \\
+        Parameters & $a{=}0.0167$ & $\sigma{=}1.21\%$, $a{=}0.039$, $\eta{=}1.44\%$, $b{=}1.5$ (at bound), $\rho{=}{-}0.95$ \\
+        Effect on portfolio MPE99 & baseline \$51.5M & $-3.0\%$ (A $-1\%$, B $-3\%$, C $-0\%$) \\
         \bottomrule
       \end{tabular}
       \vspace{6pt}
-      \good: the two-factor fit strains to match a hump it can't represent, and moves the headline number by only 3\%. The book's rate risk is one big level bet (a single long bond), not a curve-shape bet.
+      \textbf{Benefit of 2-factor:} lets the curve twist, not just shift -- matters if exposure spans many maturities. \textbf{Cost:} a parameter pinned at its bound, 16\% fit error, and a 3\% move that doesn't justify the complexity here.
+      \vspace{4pt}
+      \good: one-factor. The book's rate risk is one large single-maturity bond forward -- a level bet, not a curve-shape bet.
     \end{column}
   \end{columns}
 \end{frame}
 
 \begin{frame}{JPY rates: a dedicated factor vs.\ a constant differential}
   \begin{columns}[T]
-    \begin{column}{0.45\textwidth}
+    \begin{column}{0.42\textwidth}
       \includegraphics[width=\linewidth]{figures/fig16.pdf}
     \end{column}
-    \begin{column}{0.55\textwidth}
+    \begin{column}{0.58\textwidth}
       \small
-      \textbf{Alternative rejected:} JPY names/USDJPY drift off one constant USD--JPY rate differential -- cheap, but cannot represent JPY rates moving independently, or negative.
-      \vspace{4pt}
-      \textbf{\good:} a second, real, simulated Hull-White factor from the JPY OIS curve.
-      \begin{itemize}
-        \item TONA has been negative or near-zero for most of 25 years -- a floored model can't represent this
-        \item Day-to-day USD/JPY rate changes are uncorrelated ($-0.04$) despite yield \emph{levels} moving together ($\sim$0.38)
-        \item Moved portfolio MPE99 attribution from \$52.1M to \$51.5M -- real, disclosed, not noise
-      \end{itemize}
-    \end{column}
-  \end{columns}
-\end{frame}
+      \textbf{Alternative \bad:} JPY names/USDJPY drift off one constant USD--JPY rate differential -- cheap, but cannot represent JPY rates moving independently, or negative.
 
-\begin{frame}{Equity/FX correlation: full matrix vs.\ PCA factor model}
-  \begin{columns}[T]
-    \begin{column}{0.55\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig14.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
+      \textbf{\good:} a second, real, simulated Hull-White factor from the JPY OIS curve. TONA has been negative or near-zero for most of 25 years -- a floored model cannot represent this.
+      \vspace{6pt}
+      \textbf{Mean-reversion calibration -- all 3 real routes tried, all invalid:}
       \small
-      \begin{tabular}{p{0.32\textwidth}p{0.2\textwidth}p{0.2\textwidth}}
+      \begin{tabular}{lr}
         \toprule
-        & \textbf{Full} & \textbf{PCA k=5} \\
+        Route & Fitted $a$ \\
         \midrule
-        Step time & 1.91s & 2.08s \\
-        Variance explained & 100\% & 47\% \\
+        JPY OIS history & $-0.0261$ \\
+        Swaption cube & $-0.0374$ \\
+        JGB yield history & $-0.0203$ \\
         \bottomrule
       \end{tabular}
-      \vspace{6pt}
-      \good\ full matrix: PCA is \emph{slower}, not faster, at $n{=}39$ (draws $k$ systematic + $n$ idiosyncratic, no dimensionality win). PCA kept as an explainability tool only -- factor 1 is a broad market factor, factor 2 is Japan vs.\ US.
+      \vspace{2pt}
+      All negative: JPY vol genuinely \emph{rises} with tenor. Used the lowest admissible value ($a{=}0.001$, Ho-Lee limit) rather than an invalid fit.
+      \vspace{4pt}
+      \textbf{Result:} moved portfolio MPE99 attribution \$52.1M $\to$ \$51.5M -- real, disclosed, not noise.
     \end{column}
   \end{columns}
-\end{frame}
-
-\begin{frame}{Calibration: mean reversion, and implied vs.\ realised vol}
-  \small
-  \begin{tabular}{p{0.2\textwidth}p{0.33\textwidth}p{0.35\textwidth}}
-    \toprule
-    \textbf{Parameter} & \textbf{Source used} & \textbf{Why} \\
-    \midrule
-    Rate mean reversion ($a$) & Real USD swaption cube (implied), $a{=}0.0167$ & Standard route; decay shape is what implied vol reveals. Futures-decay cross-check gives 0.0458 (different instrument/tenor range) \\
-    Rate volatility ($\sigma$) & Realised long-end Treasury vol, 0.96\% & Overnight-SOFR vol (0.63\%) understates long-end moves this book depends on; confirmed by Kupiec backtest \\
-    Equity/FX volatility & Realised, 3y history & No implied-vol source available; disclosed proxy \\
-    JPY mean reversion & Lowest admissible ($a{=}0.001$) & All 3 real routes (swaption, JGB, OIS) give a \emph{negative} $a$ -- JPY vol rises with tenor \\
-    \bottomrule
-  \end{tabular}
-\end{frame}
-
-% ================================================================ SECTION 3
-\section{Simulation Methodology}
-
-\begin{frame}{Sampling scheme: five methods compared}
-  \begin{columns}[T]
-    \begin{column}{0.55\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig21.pdf}
-    \end{column}
-    \begin{column}{0.45\textwidth}
-      \small
-      Tested: pseudo-random, antithetic, moment-matching, Sobol, Latin Hypercube -- on a controlled Black-Scholes benchmark and the real 663-dimensional engine.
-      \vspace{6pt}
-      \good\ Latin Hypercube: $\sim$51x lower error on the controlled test, and the only method better than pseudo-random on \emph{both} real-engine statistics (PFE99 and median PFE), at negligible extra cost.
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Scenario count vs.\ precision}
-  \small
-  \begin{tabular}{p{0.08\textwidth}p{0.2\textwidth}p{0.18\textwidth}p{0.38\textwidth}}
-    \toprule
-    \textbf{$N$} & \textbf{Rel.\ SE, PFE99} & \textbf{Time (8 cores)} & \textbf{Use} \\
-    \midrule
-    1,000 & higher & $\sim$2 min & Iteration / what-if \\
-    5,000 & moderate & $\sim$8 min & \good\ Standard reporting \\
-    10,000 & lower & $\sim$15 min & Limit sign-off \\
-    15,000+ & diminishing returns & -- & Not recommended \\
-    \bottomrule
-  \end{tabular}
-  \vspace{8pt}
-  Beyond $\sim$15,000 scenarios, remaining sampling error is an order of magnitude smaller than model-risk sensitivities (Section 7) -- more scenarios stop being the binding constraint on precision well before that.
 \end{frame}
 
 % ================================================================ SECTION 4
+\section{Simulation Methodology}
+
+\begin{frame}{Sampling scheme: five methods, exact benchmark numbers}
+  \small
+  \textbf{Controlled test (European call, known Black-Scholes truth = 41.077):}
+  \begin{tabular}{lrrr}
+    \toprule
+    \textbf{Method} & \textbf{RMSE} & \textbf{vs.\ pseudo-random} & \textbf{ms/trial} \\
+    \midrule
+    Pseudo-random & 1.456 & 1.0x (baseline) & 0.30 \\
+    Antithetic & 1.079 & 1.3x better & 0.31 \\
+    Moment-matched & 0.232 & 6.3x better & 0.55 \\
+    Sobol & 0.051 & 28.8x better & 1.65 \\
+    \textbf{Latin Hypercube} & \textbf{0.029} & \textbf{50.6x better} & 0.98 \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  \textbf{Real 663-dimensional engine check (std.\ dev.\ of PFE / median, across repeats):} no method wins both -- Sobol has the lowest PFE std (2.72M vs.\ 4.29M pseudo-random), but moment-matched has the lowest median std (0.40M vs.\ 0.76M pseudo-random); Latin Hypercube is competitive on both (3.73M / 0.48M) without being worst on either.
+  \vspace{4pt}
+  \good\ Latin Hypercube: best on the controlled test, competitive (never worst) on both real-engine statistics, negligible extra cost.
+\end{frame}
+
+\begin{frame}{Scenario count: exact convergence results}
+  \small
+  \textbf{Close-out MPE99, relative standard error by bootstrap (peak date 2026-09-20):}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Netting set} & \textbf{N=250} & \textbf{N=500} & \textbf{N=1,000} & \textbf{N=2,000} & \textbf{N=3,000} \\
+    \midrule
+    CPTY\_A & 6.3\% & 5.1\% & 3.2\% & 2.6\% & 2.5\% \\
+    CPTY\_B & 5.1\% & 4.7\% & 3.8\% & 3.5\% & 3.5\% \\
+    CPTY\_C & 5.9\% & 4.8\% & 3.8\% & 3.1\% & 3.1\% \\
+    \textbf{Portfolio} & 7.1\% & 4.9\% & 3.3\% & 2.2\% & 2.2\% \\
+    \bottomrule
+  \end{tabular}
+  \vspace{4pt}
+  Portfolio relative SE at $N{=}2{,}000$ is 2.2\%, extrapolating ($1/\sqrt{N}$) to $\sim$1.4\% at $N{=}5{,}000$ and $\sim$1.0\% at $N{=}10{,}000$.
+  \vspace{8pt}
+  \textbf{Independent 30,000-scenario pool study (1y-node PFE99, level exposure):}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{N} & 1,000 & 5,000 & 10,000 & 20,000 & 30,000 (pool) \\
+    \midrule
+    Rel.\ SE & 0.66\% & 0.29\% & 0.21\% & 0.09\% & 0 (reference) \\
+    Est.\ time (8 cores) & 119s & 479s & 929s & 1,829s & 2,729s \\
+    \bottomrule
+  \end{tabular}
+  \vspace{4pt}
+  \good: $N{=}5{,}000$ for standard reporting (good precision, $\sim$8 min); $N{=}10{,}000$ for sign-off ($\sim$15 min); beyond $\sim$20,000, marginal SE improvement per extra 5,000-scenario batch falls below 30\% while cost keeps scaling linearly -- diminishing returns, and remaining error is already smaller than model-risk sensitivities (later section).
+\end{frame}
+
+% ================================================================ SECTION 5
 \section{Headline Results}
 
 \begin{frame}{Headline results (5,000 scenarios, close-out exposure)}
@@ -263,6 +394,7 @@
         \item SA-CVA capital \$0.10M / \$2.23M
         \item SA-CCR EAD \$260M
         \item KVA (10\% CoC) \$22.4k / \$470k
+        \item Level exposure MPE99: \$201.9M
       \end{itemize}
     \end{column}
     \begin{column}{0.6\textwidth}
@@ -271,17 +403,17 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{What drives each counterparty, and why the portfolio is close to additive}
+\begin{frame}{What drives each counterparty}
   \begin{columns}[T]
     \begin{column}{0.55\textwidth}
       \small
-      \begin{tabular}{lrr}
+      \begin{tabular}{lrrr}
         \toprule
-        & \textbf{Equity $\Delta$/+1\%} & \textbf{DV01/+1bp} \\
+        & \textbf{Equity $\Delta$/+1\%} & \textbf{FX $\Delta$/+1\%} & \textbf{DV01/+1bp} \\
         \midrule
-        CPTY\_A & -\$2.25M & \$31k \\
-        CPTY\_B & -\$0.96M & -\$4k \\
-        CPTY\_C & -\$1.24M & \textbf{\$594k} \\
+        CPTY\_A & -\$2.25M & \$0 & \$31k \\
+        CPTY\_B & -\$0.96M & +\$0.42M & -\$4k \\
+        CPTY\_C & -\$1.24M & \$0 & \textbf{\$594k} \\
         \bottomrule
       \end{tabular}
       \vspace{6pt}
@@ -290,104 +422,160 @@
     \begin{column}{0.45\textwidth}
       \small
       \begin{itemize}
-        \item A is most equity-driven; C is the rate netting set (one \$500M short forward on a 2049 Treasury)
+        \item A is most equity-driven; C is the rate netting set (one \$500M short forward on a 2049 Treasury) -- but C also carries meaningful equity delta
+        \item B is the only netting set with material FX delta (holds the 2 JPY-compo swaps)
         \item Yield-equity correlation $\approx$0.00 in our data -- no reliable offset
-        \item Nothing nets \emph{across} counterparties by construction, and all three peak in the same weeks
-        \item Portfolio MPE99 (\$51.0M) $\approx$ A+C (\$54.4M)
       \end{itemize}
     \end{column}
   \end{columns}
 \end{frame}
 
-% ================================================================ SECTION 5
-\section{Sensitivities (Greeks)}
-
-\begin{frame}{Method, and the cost of a naive approach}
+\begin{frame}{Why the portfolio is close to additive across counterparties}
   \begin{columns}[T]
-    \begin{column}{0.45\textwidth}
+    \begin{column}{0.5\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig28.pdf}
+    \end{column}
+    \begin{column}{0.5\textwidth}
       \small
       \begin{itemize}
-        \item Bump-and-reprice with \textbf{common random numbers}: same draws base/bumped $\to$ noise \$245k $\to$ \$1k (\textbf{282x lower})
-        \item Equity/FX bumps rescale simulated GBM paths exactly -- no resimulation
-        \item Rate/vol bumps need a genuine resimulation
+        \item Nothing nets \emph{across} counterparties by construction -- portfolio MPE99 is a sum of three separate netting sets
+        \item All three counterparties reach their own peak exposure in the same few weeks (before the largest equity baskets mature) -- no timing diversification
+        \item Positive rank correlation (0.12--0.34) between netting sets, since every book holds pay-equity swaps
+        \item Result: Portfolio MPE99 (\$51.0M) $\approx$ A+C (\$54.4M), 78\% of the simple sum of all three (\$65.1M)
       \end{itemize}
-    \end{column}
-    \begin{column}{0.55\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig_greeks_cost.pdf}
     \end{column}
   \end{columns}
 \end{frame}
 
-\begin{frame}{Bump-and-reprice vs.\ pathwise vs.\ adjoint}
+\begin{frame}{Additional exposure diagnostics}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig30.pdf}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \includegraphics[width=\linewidth]{figures/fig31.pdf}
+    \end{column}
+  \end{columns}
+  \small\centering Left: expected NPV by trade -- BF\_0003 dominates and disappears at its Dec 2026 settlement. Right: peak PFE99 under a hypothetical full-VM CSA, for comparison against the brief's own definition.
+\end{frame}
+
+% ================================================================ SECTION 6
+\section{Sensitivities (Greeks)}
+
+\begin{frame}{Method: common random numbers, and what they buy}
   \small
-  \begin{tabular}{p{0.22\textwidth}p{0.22\textwidth}p{0.42\textwidth}}
+  \begin{itemize}
+    \item Bumping a risk factor and repricing with \textbf{independent} random draws: estimator std.\ dev.\ \$245k -- too noisy to use
+    \item Reusing the \textbf{identical} draws in the base and bumped run (common random numbers, CRN): std.\ dev.\ \$1k
+    \item \textbf{282x noise reduction} -- this, not the sampling scheme, is what actually controls Greeks precision
+  \end{itemize}
+  \vspace{6pt}
+  \centering
+  \includegraphics[width=0.6\linewidth]{figures/fig_greeks_cost.pdf}
+  \small\vspace{2pt} Equity/FX spot bumps rescale simulated GBM paths exactly (no resimulation): 78 bumps at N=300 cost 88s actual vs.\ $\sim$8,166s estimated naive resimulation -- \textbf{93x cheaper}.
+\end{frame}
+
+\begin{frame}{Method comparison: bump-and-reprice vs.\ pathwise vs.\ adjoint}
+  \small
+  \begin{tabular}{p{0.2\textwidth}p{0.22\textwidth}p{0.42\textwidth}}
     \toprule
     \textbf{Method} & \textbf{Cost} & \textbf{Verdict} \\
     \midrule
-    Bump, independent draws & baseline, very noisy & \bad: noise swamps the signal \\
-    Bump, common random numbers & $\sim$260s (equity EE) & \good: works on black-box pricers, works for quantiles \\
-    Pathwise (closed form) & 0.2--0.4s & \good\ for equity/FX only: $\sim$1000x faster, validated to median 0.02\%/worst 0.4\% vs.\ bump-and-reprice \\
-    Adjoint differentiation & would price all Greeks for $\sim$3-5 valuations & \bad: needs pricers rewritten in differentiable form -- out of scope \\
+    Bump, independent draws & baseline, \$245k noise & \bad: noise swamps the signal \\
+    Bump, CRN (used for all reported Greeks) & $\sim$260s (equity EE, N=300) & \good: works on black-box pricers, works for quantiles \\
+    Pathwise (closed form, equity/FX only) & 0.2--0.4s & \good\ as fast cross-check: $\sim$1000x faster, agrees to median 0.02\% / worst 0.4\% vs.\ bump-and-reprice EE \\
+    Adjoint differentiation & would price all Greeks for $\sim$3--5 valuations & \bad: needs pricers rewritten in differentiable form -- out of scope, listed as future work \\
     \bottomrule
   \end{tabular}
+  \vspace{6pt}
+  \textbf{Rate/vol Greeks} (13 needed: parallel up/down, 8 buckets, 3 vega) still require a genuine resimulation at $\sim$109s each (N=300, idle machine) -- unless the exact analytic method below applies.
 \end{frame}
 
-\begin{frame}{Rate DV01: zero-grid bump vs.\ par-instrument Jacobian}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig_dv01_compare.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \small
-      \textbf{Old:} bump the \emph{fitted} zero curve at 8 hand-picked tenors, triangular interpolation.
+\begin{frame}{Rate DV01: zero-grid bump vs.\ par-instrument Jacobian -- full breakdown}
+  \small
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Tenor bucket} & \textbf{Old (zero-grid), USD} & \textbf{New (par-instrument), USD} \\
+    \midrule
+    0.25y & -2,182 & -2,892 \\
+    0.5y & -46 & -1 \\
+    1y & -44 & -14 \\
+    2y & -131 & -205 \\
+    3y & -96 & -105 \\
+    5y & -770 & -713 \\
+    10y & -18,324 (39\%) & -6,592 (11\%) \\
+    30y & -24,988 (54\%) & \textbf{-47,191 (82\%)} \\
+    \midrule
+    Sum of buckets & -46,580 & -57,713 \\
+    Independent parallel bump & -46,605 & -57,705 \\
+    \bottomrule
+  \end{tabular}
+  \vspace{4pt}
+  \centering
+  \includegraphics[width=0.45\linewidth]{figures/fig_dv01_compare.pdf}
+\end{frame}
 
-      \textbf{\good\ New:} bump the curve's own $\sim$45 native construction pillars (real SOFR futures + Bloomberg points), grouped into the same 8 buckets -- the genuine par-instrument (Jacobian) sensitivity.
-      \vspace{4pt}
-      \begin{itemize}
-        \item 30y bucket: \textbf{82\%} of DV01 (new) vs.\ 54\% (old)
-        \item Old grid smeared the 20--50y risk, where the 2049 bond forward lives, into the 10y bucket
-        \item Both sum to the independent parallel bump within 0.1\%
-      \end{itemize}
-    \end{column}
-  \end{columns}
+\begin{frame}{Rate DV01: why the new method, and what changed}
+  \small
+  \textbf{Old:} bump the \emph{fitted} zero curve at 8 hand-picked tenors, triangular interpolation -- disconnected from how the curve was actually built.
+
+  \textbf{\good\ New:} bump the curve's own $\sim$45 native construction pillars (real SOFR-futures-implied points + every Bloomberg-spliced long-end point), grouped into the same 8 report buckets by nearest pillar -- the genuine par-instrument (Jacobian) sensitivity a rates desk would actually compute.
+  \vspace{8pt}
+  \textbf{Material benefit:} the old grid was smearing the book's real 20--50y rate risk (where BF\_0003, the dominant \$500M bond forward maturing 2049, actually sits) partly into the 10y bucket. The new method correctly shows \textbf{82\% of portfolio DV01 in the 30y bucket}, not 54\%. Both methods sum to the same total (internal consistency check, within 0.1\%) -- the total risk was always right, only the attribution across tenor was wrong.
 \end{frame}
 
 \begin{frame}{An exact rate Greek, reusing the same simulated draws}
   \small
-  In one-factor Hull-White, $r(t)=x(t)+\alpha(t)$: $x(t)$ is the simulated random factor; $\alpha(t)$ is deterministic, depends only on the curve. A curve bump (fixed $a,\sigma$) leaves $x(t)$ \textbf{identical} to the base run.
+  In one-factor Hull-White, $r(t)=x(t)+\alpha(t)$: $x(t)$ is the simulated random factor (depends only on random draws, $a$, $\sigma$); $\alpha(t)$ is deterministic (depends only on the curve). A curve bump that leaves $a,\sigma$ fixed -- every DV01 bump here -- leaves $x(t)$ \textbf{identical} to the base run.
   \begin{itemize}
     \item The whole bump effect is one closed-form number per date, added to the base run's own paths
     \item \textbf{No resimulation. No new random draws.}
-    \item Validated against a true independent resimulation: agreement to $\mathbf{10^{-15}}$ relative precision
+    \item Validated against a true independent resimulation: agreement to $\mathbf{10^{-15}}$ relative precision -- not an approximation, the same calculation
   \end{itemize}
   \vspace{6pt}
-  \textbf{Separately: does Latin Hypercube itself reduce Greeks noise?} Tested directly -- mixed result:
+  \textbf{Separately: does Latin Hypercube itself reduce Greeks noise?} Tested directly -- mixed, 15--85\% less noise on EE deltas, no consistent benefit on PFE99 deltas:
   \centering
-  \includegraphics[width=0.55\linewidth]{figures/fig_sampling_greeks.pdf}
+  \includegraphics[width=0.5\linewidth]{figures/fig_sampling_greeks.pdf}
 \end{frame}
 
-% ================================================================ SECTION 6
+% ================================================================ SECTION 7
 \section{Stress Testing}
 
 \begin{frame}{Design: 13 fixed scenarios, same random draws as base}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig33.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \small
-      \begin{itemize}
-        \item 8 hypothetical: equities $\pm$30\%, yen $\pm$15\%, rates $\pm$200bp, flight-to-quality, stagflation
-        \item 5 historical replays, chosen by an objective worst-window rule, not by hand
-        \item Read at every date, every trade, every counterparty
-      \end{itemize}
-      \vspace{6pt}
-      Close-out MPE99 moves at most $-24\%$ to $+23\%$; level moves up to $+89\%$ -- margin is why. Equity swaps react only to equity/FX; bond trades react only to rates.
-    \end{column}
-  \end{columns}
+  \small
+  \begin{tabular}{p{0.16\textwidth}p{0.22\textwidth}p{0.55\textwidth}}
+    \toprule
+    \textbf{Family} & \textbf{Scenarios} & \textbf{Shock} \\
+    \midrule
+    Hypothetical (8) & EQ\_DOWN/UP\_30, JPY\_STRONG/WEAK\_15, RATES\_UP/DOWN\_200, FLIGHT\_TO\_QUALITY, STAGFLATION & Round-number shocks to equities, USDJPY, USD curve \\
+    Historical (5) & HIST\_EQUITY\_CRASH, HIST\_RATES\_SPIKE, HIST\_YEN\_SURGE, HIST\_GFC\_2008, HIST\_CHINA\_DEVAL\_2015 & Actual moves over a real 10-day window, chosen by worst-window rule \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  \centering
+  \includegraphics[width=0.55\linewidth]{figures/fig33.pdf}
 \end{frame}
 
-\begin{frame}{Extending the history: 2008 and 2015}
+\begin{frame}{Results: how far each scenario moves the headline number}
+  \small
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Scenario} & \textbf{Close-out MPE99} & \textbf{Level MPE99} \\
+    \midrule
+    EQ\_DOWN\_30 & $-15.3\%$ & $+62.3\%$ \\
+    RATES\_DOWN\_200 & $+22.0\%$ & $-69.0\%$ \\
+    STAGFLATION & $-24.1\%$ & $+89.1\%$ (largest level move) \\
+    FLIGHT\_TO\_QUALITY & $-2.0\%$ & $+19.6\%$ \\
+    HIST\_EQUITY\_CRASH (2020) & $-15.4\%$ & $+54.8\%$ \\
+    HIST\_GFC\_2008 & $-12.7\%$ & $+55.6\%$ \\
+    HIST\_CHINA\_DEVAL\_2015 & $-4.9\%$ & $+15.6\%$ \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  Close-out exposure is far less sensitive to instantaneous level shocks than level exposure (margin is why). Equity-driven trades react only to equity/FX shocks; bond trades react only to rate shocks, confirming trade structure, not coincidence.
+\end{frame}
+
+\begin{frame}{Extending the history: 2008 and 2015, and why it matters}
   \begin{columns}[T]
     \begin{column}{0.5\textwidth}
       \includegraphics[width=\linewidth]{figures/fig_hist_scenarios.pdf}
@@ -396,71 +584,93 @@
       \small
       Extended public price history back to 2007 (28 of 37 names covered), found the worst 10-day window inside two named crises:
       \begin{itemize}
-        \item \textbf{2008 GFC:} Sep 29 -- Oct 10, 2008; $-23\%$ median / $-44\%$ worst single-name
+        \item \textbf{2008 GFC:} Sep 29 -- Oct 10, 2008; $-23\%$ median / $-44\%$ worst single-name return
         \item \textbf{2015 China deval.:} Aug 2015, $-6.8\%$ median
       \end{itemize}
       \vspace{6pt}
-      \textbf{Result:} both land \emph{inside} the range the existing scenarios already covered -- a validation finding, not just more coverage.
+      \textbf{Result:} both land \emph{inside} the range the existing scenarios already covered -- a validation finding, not just more coverage: the pre-existing suite was not blind to the worst episode on record.
     \end{column}
   \end{columns}
 \end{frame}
 
-% ================================================================ SECTION 7
+\begin{frame}{Per-trade sensitivity: does every product react as expected}
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/fig34.pdf}
+\end{frame}
+
+% ================================================================ SECTION 8
 \section{Model Validation and Model Risk}
 
 \begin{frame}{Four independent validation checks}
   \small
-  \begin{tabular}{p{0.19\textwidth}p{0.28\textwidth}p{0.4\textwidth}}
+  \begin{tabular}{p{0.19\textwidth}p{0.28\textwidth}p{0.42\textwidth}}
     \toprule
     \textbf{Check} & \textbf{Method} & \textbf{Result} \\
     \midrule
-    Martingale test & Discounted paths average to today's price & Pass \\
-    Parametric VaR benchmark & Delta-normal VaR vs.\ full MC P\&L & \$11.4M vs.\ \$11.7M (ratio 0.98) \\
-    Kupiec backtest (99\%) & Historical exceedances vs.\ prediction & 4/6/2 exceptions vs.\ 2.4 expected -- all pass \\
-    Excel parametric checks & Independent spreadsheet formulas, public data & 0.1--7\% agreement across 4 checks \\
+    Martingale test & Discounted asset paths should average to today's market price & Pass -- no drift or discretisation bug \\
+    Parametric VaR benchmark & Delta-normal VaR (bump-and-reprice deltas $\times$ real covariance) vs.\ full MC P\&L, 99\% & Parametric \$11.4M vs.\ MC \$11.7M -- ratio 0.98 (expected range 0.3--1.3) \\
+    Kupiec backtest, equity (99\%, 242 ten-day windows) & Historical exceedances vs.\ 5,000-scenario prediction & A: 4/2.4, B: 6/2.4, C: 2/2.4 expected -- all pass ($p>0.05$) \\
+    Kupiec backtest, rates (99\%, 161 windows, 3 tenors) & Same, for the rate factor under both vol sources & 0--4 exceedances vs.\ 1.6 expected at every tenor -- all pass \\
+    Excel parametric checks & Independent spreadsheet formulas on public data & 0.1\% (vol calibration), 1--2\% (simulated vs.\ analytic vol), 5--10\% (rate vol fit), 7\% (equity vega) \\
     \bottomrule
   \end{tabular}
-  \vspace{10pt}
-  The Excel workbook recomputes calibrated vols live (\texttt{=STDEV(LN(Pt/Pt-1))*SQRT(252)}), the simulated vol against the closed-form $\text{vol}\times\sqrt{T}$, and a Monte Carlo vega against the closed-form Black vega under a $\pm1\%$ bump -- every number a live formula on public data, no code trust required.
 \end{frame}
 
-\begin{frame}{Model risk: what actually moves the headline number}
+\begin{frame}{Model risk: every input perturbed, one at a time}
   \small
   \begin{tabular}{lr}
     \toprule
-    \textbf{Perturbation (base portfolio MPE99 = \$51.5M)} & \textbf{Change} \\
+    \textbf{Perturbation (base portfolio MPE99 = \$51.5M, N=2,000)} & \textbf{Change} \\
     \midrule
-    Equity/FX vol $\times2$ & $+71\%$ \\
-    Equity correlations, 30\% toward 1 & $+22\%$ \\
-    Equity/FX vol $\times1.25$ & $+19\%$ \\
-    Rate--equity dependence, both fall together & $+18\%$ \\
-    Rate volatility $\times1.25$ & $+9\%$ \\
-    Rate--equity dependence, offsetting & $-15\%$ \\
-    Mean reversion $a\times3$ & $-5\%$ \\
-    Two-factor rate model (G2++) instead of one-factor & $-3\%$ \\
+    Equity/FX vol $\times2$ & $+71.3\%$ \\
+    Equity correlations, 30\% toward 1 & $+21.8\%$ \\
+    Equity/FX vol $\times1.25$ & $+19.3\%$ \\
+    Rate--equity dependence, both fall together & $+18.2\%$ \\
+    Rate volatility $\times1.25$ & $+9.4\%$ \\
+    Rate--equity dependence, offsetting & $-15.3\%$ \\
+    Mean reversion $a\times3$ & $-4.8\%$ \\
+    Two-factor rate model (G2++) instead of one-factor & $-3.0\%$ \\
     \bottomrule
   \end{tabular}
   \vspace{8pt}
-  \textbf{Conclusion:} equity volatility, correlation, and the data-unresolvable rate-equity dependence dominate. The one- vs.\ two-factor rate-model choice explored in depth is, by comparison, one of the \emph{smallest} levers -- the strongest argument for the simpler model.
+  \textbf{Conclusion:} equity volatility, correlation, and the data-unresolvable rate--equity dependence dominate model risk. The one- vs.\ two-factor rate-model choice explored at length is, by comparison, one of the \emph{smallest} levers -- the strongest argument for keeping the simpler model as the default.
 \end{frame}
 
-% ================================================================ SECTION 8
+\begin{frame}{Attribution: every correction, one at a time}
+  \small
+  \begin{tabular}{p{0.78\textwidth}p{0.14\textwidth}}
+    \toprule
+    \textbf{Step} & \textbf{Portfolio MPE99} \\
+    \midrule
+    Earlier version (flat curve beyond 6.5y, SOFR-overnight $\sigma$, no JPY factor, USDJPY drift sign error) & \$45.7M \\
+    + Corrected USDJPY drift sign & \$47.8M \\
+    + Long-end volatility fit and 10y-yield correlations & \$52.7M \\
+    + Bloomberg long end spliced onto the USD curve & \$52.1M \\
+    + JPY Hull-White factor (final model) & \$51.5M \\
+    \bottomrule
+  \end{tabular}
+  \vspace{6pt}
+  No single correction dominates; each is individually disclosed and traceable -- the model-risk study above, not any one fix, is the right lens for ``how much could the headline number still move.''
+\end{frame}
+
+% ================================================================ SECTION 9
 \section{Credit and Capital: xVA}
 
 \begin{frame}{CVA: methodology and results}
   \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
+    \begin{column}{0.48\textwidth}
       \includegraphics[width=\linewidth]{figures/fig36.pdf}
     \end{column}
-    \begin{column}{0.5\textwidth}
+    \begin{column}{0.52\textwidth}
       \small
       \begin{itemize}
-        \item No CDS available $\to$ ICE BofA bond-index OAS proxy by rating (Basel MAR50.32(3)-compliant)
-        \item Credit-triangle hazard-rate survival model: $\text{hazard} \approx \text{spread}/(1{-}\text{recovery})$
-        \item LGD 60\%; all three counterparties proxied at BBB
+        \item No CDS available $\to$ ICE BofA bond-index OAS proxy by rating (Basel MAR50.32(3)-compliant); all 3 counterparties proxied at BBB
+        \item Credit-triangle hazard-rate survival model: $\text{hazard} \approx \text{spread}/(1{-}\text{recovery})$, LGD 60\%
+        \item CPTY\_C close-out CVA \$7.9k; A \$2.4k; B \$1.4k; \textbf{total \$11.7k}
+        \item Rating sensitivity: AAA \$5.0k, AA \$7.0k, A \$8.0k, BBB \$11.7k, BB \$18.1k, B \$32.8k
       \end{itemize}
-      \vspace{6pt}
-      \textbf{Value delivered:} the sensitivity chain -- CVA01, the rating table (AAA \$5.0k $\to$ B \$32.8k), SA-CVA weighted sensitivities by risk class -- matters more than the point-in-time number itself.
+      \vspace{4pt}
+      \textbf{Value delivered:} the sensitivity chain (CVA01, the rating table, SA-CVA weighted sensitivities) matters more than the point-in-time number, which is small by construction here.
     \end{column}
   \end{columns}
 \end{frame}
@@ -479,13 +689,15 @@
         KVA (10\% CoC) & \$22.4k & \$470k \\
         \bottomrule
       \end{tabular}
+      \vspace{6pt}
+      \small On close-out, positive/negative exposure are nearly symmetric (both 10-day moves from a margined start) so CVA/DVA nearly cancel; on level, the book is net in Capitolis' favour, so CVA/FCA dominate.
     \end{column}
     \begin{column}{0.55\textwidth}
       \includegraphics[width=\linewidth]{figures/fig_kva_compare.pdf}
     \end{column}
   \end{columns}
   \small\vspace{4pt}
-  KVA: $K(t)=8\%\times\text{RW}\times\alpha\times\text{EPE}(t)$, cost-of-capital swept 8/10/12\% (none given). Exceeds CVA because it scales the whole EPE profile by a fixed ratio, not a small IG default probability -- explicitly illustrative.
+  KVA: $K(t)=8\%\times\text{RW}\times\alpha\times\text{EPE}(t)$, cost-of-capital swept 8/10/12\% (none given). Exceeds CVA on both conventions because it scales the whole EPE profile by a fixed ratio, not a small IG default probability -- explicitly illustrative.
 \end{frame}
 
 \begin{frame}{Regulatory capital: SA-CVA and SA-CCR}
@@ -497,7 +709,7 @@
       \small
       \begin{itemize}
         \item SA-CVA capital: \$0.10M close-out / \$2.23M level (RWA \$1.2M / \$27.8M)
-        \item Dominated by counterparty credit-spread risk in both conventions
+        \item Dominated by counterparty credit-spread risk on both conventions (5\% risk weight on a proxy spread)
         \item SA-CCR exposure at default: \$260M, dominated by the replacement cost of BF\_0003
       \end{itemize}
     \end{column}
@@ -516,137 +728,10 @@
   \textbf{Limitation, disclosed:} no real CDS quotes were obtainable for a hypothetical issuer, so the issuer curve is a bond-index proxy, not actual CDS -- delivered in spirit, not the full ask.
 \end{frame}
 
-% ================================================================ SECTION 9
-\section{Conclusions}
+% ================================================================ SECTION 10
+\section{Feedback Addressed}
 
-\begin{frame}{Recap: every trade-off, one line each}
-  \scriptsize
-  \begin{tabular}{p{0.3\textwidth}p{0.62\textwidth}}
-    \toprule
-    \textbf{Decision} & \textbf{Why} \\
-    \midrule
-    One-factor Hull-White, not two-factor & Two-factor moves MPE99 by only $-3\%$; 16\% fit error; book is a level bet \\
-    Dedicated JPY Hull-White factor & Real, independent JPY rate risk incl.\ negative rates; moved MPE99 \$52.1M$\to$\$51.5M \\
-    Full correlation matrix, not PCA & PCA is slower at $n{=}39$, no accuracy gain; kept as explainability tool only \\
-    Latin Hypercube sampling & Best of 5 schemes on controlled \& real-engine tests; no consistent Greeks-noise edge \\
-    Close-out exposure primary, level secondary & The brief's definition; level is an honest no-margin upper bound \\
-    Bump-and-reprice with CRN, pathwise cross-check & 282x noise reduction; pathwise 1000x faster for linear risk \\
-    Par-instrument DV01 buckets & Corrected real mis-attribution: 82\% vs.\ 54\% of risk in the 30y bucket \\
-    Exact LHS-reuse rate Greek & Eliminates resimulation cost for curve-only bumps, $10^{-15}$ validated \\
-    Rating-proxy CVA/DVA/FVA/KVA & No CDS/real ratings available; Basel-compliant proxy, fully disclosed \\
-    \bottomrule
-  \end{tabular}
-\end{frame}
-
-\begin{frame}{Recommendations for production}
-  \begin{itemize}
-    \item Keep the one-factor Hull-White rate model; revisit only if curve-shape risk grows materially
-    \item Keep the full correlation matrix; retain PCA as an explainability exhibit
-    \item Keep Latin Hypercube as the default sampling scheme
-    \item Adopt the par-instrument DV01 buckets as the primary rate-risk breakdown
-    \item Treat CVA/DVA/FVA/KVA as sensitivity-generating tools first, point estimates second
-  \end{itemize}
-  \vspace{10pt}
-  \textbf{Open items for the next phase:} real counterparty ratings or CDS, Capitolis' own credit/funding spread, a real capital methodology and cost of capital for KVA, a decision on wrong-way risk, and the true CSA terms (threshold, MTA, IM).
-\end{frame}
-
-\begin{frame}
-  \centering
-  \vspace{2cm}
-  {\Huge \textcolor{navy}{\textbf{Thank you}}}\\[8pt]
-  {\large Questions and discussion}
-\end{frame}
-
-% ================================================================ APPENDIX
-\appendix
-\begin{frame}
-  \centering
-  \vspace{2cm}
-  {\Huge \textcolor{navy}{\textbf{Appendix}}}\\[8pt]
-  {\large Backup detail}
-\end{frame}
-
-\begin{frame}{Appendix: correction attribution, one at a time}
-  \small
-  \begin{tabular}{p{0.78\textwidth}p{0.14\textwidth}}
-    \toprule
-    \textbf{Step} & \textbf{Portfolio MPE99} \\
-    \midrule
-    Earlier version (flat curve beyond 6.5y, SOFR-overnight $\sigma$, no JPY factor, USDJPY drift sign error) & \$45.7M \\
-    + Corrected USDJPY drift sign & \$47.8M \\
-    + Long-end volatility fit and 10y-yield correlations & \$52.7M \\
-    + Bloomberg long end spliced onto the USD curve & \$52.1M \\
-    + JPY Hull-White factor (final model) & \$51.5M \\
-    \bottomrule
-  \end{tabular}
-\end{frame}
-
-\begin{frame}{Appendix: JPY mean-reversion calibration routes}
-  \small
-  All three real-data routes for JPY give a negative $a$ (vol rises with tenor, the reverse of what Hull-White assumes), so the Ho-Lee lower bound ($a{=}0.001$) is used instead of an invalid fit.
-  \centering
-  \includegraphics[width=0.6\linewidth]{figures/fig24.pdf}
-\end{frame}
-
-\begin{frame}{Appendix: negative-rate capability, synthetic demonstration}
-  \small
-  Our only real JPY curve snapshot (Aug 2026) is positive after BOJ hikes, so the negative case is demonstrated synthetically: Hull-White started from a synthetic $-0.10\%$ flat curve.
-  \centering
-  \includegraphics[width=0.55\linewidth]{figures/fig17.pdf}
-\end{frame}
-
-\begin{frame}{Appendix: exposure diagnostics}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig28.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig30.pdf}
-    \end{column}
-  \end{columns}
-  \small\centering Left: probability of positive exposure by counterparty. Right: expected NPV by trade -- BF\_0003 dominates and disappears at its Dec 2026 settlement.
-\end{frame}
-
-\begin{frame}{Appendix: full-VM comparison and PCA exposure cross-check}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig31.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig32.pdf}
-    \end{column}
-  \end{columns}
-  \small\centering Left: peak PFE99 under a hypothetical full-VM CSA. Right: level exposure under the full correlation matrix vs.\ a $k$-factor PCA model -- curves coincide closely from $k{=}5$.
-\end{frame}
-
-\begin{frame}{Appendix: per-trade stress sensitivity heat map}
-  \centering
-  \includegraphics[width=0.85\linewidth]{figures/fig34.pdf}
-\end{frame}
-
-\begin{frame}{Appendix: xVA components and discounted exposure}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig38.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig39.pdf}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Appendix: correlation matrix and factor loadings}
-  \begin{columns}[T]
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig10.pdf}
-    \end{column}
-    \begin{column}{0.5\textwidth}
-      \includegraphics[width=\linewidth]{figures/fig15.pdf}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Appendix: feedback tracker (both rounds)}
+\begin{frame}{Feedback tracker: both rounds, all 11 items}
   \scriptsize
   \textbf{Earlier meeting} \hfill \textbf{This meeting}
   \begin{columns}[T]
@@ -670,14 +755,64 @@
       \end{enumerate}
     \end{column}
   \end{columns}
+  \vspace{6pt}
+  \centering\small Detail and results for every item are in the sections above (Data, Models, Methodology, Sensitivities, Stress, Validation, Credit \& Capital).
 \end{frame}
 
-\begin{frame}{Appendix: simulation grid design}
-  \small
-  \centering
-  \includegraphics[width=0.75\linewidth]{figures/fig20.pdf}
+% ================================================================ SECTION 11
+\section{Conclusions}
 
-  \footnotesize The pillar grid (12 dates) plus forced trade-event dates (42 total) is more compact than a plain monthly grid (18) and hits every real cash-flow date exactly.
+\begin{frame}{Recap: every trade-off, one line each}
+  \scriptsize
+  \begin{tabular}{p{0.3\textwidth}p{0.62\textwidth}}
+    \toprule
+    \textbf{Decision} & \textbf{Why (benefit of the choice, cost of the alternative)} \\
+    \midrule
+    One-factor Hull-White, not two-factor & Two-factor moves MPE99 by only $-3.0\%$; 16.1\% fit error; a parameter at its bound; book is a level bet \\
+    Dedicated JPY Hull-White factor & Real, independent JPY rate risk incl.\ negative rates; moved MPE99 \$52.1M$\to$\$51.5M; all 3 real mean-reversion routes invalid, so $a{=}0.001$ used \\
+    Full correlation matrix, not PCA & PCA is slower (2.08s vs.\ 1.91s) at $n{=}39$ with up to 1.7\% extra error; kept as explainability tool only \\
+    Latin Hypercube sampling & 50.6x lower RMSE than pseudo-random on the controlled test; no consistent Greeks-noise edge on PFE99 \\
+    Realised long-end vol, not overnight SOFR vol & Matches the actual 10-day long-yield moves this book depends on (15bp vs.\ 11bp implied); both pass Kupiec \\
+    Close-out exposure primary, level secondary & The brief's definition; level is an honest no-margin upper bound (4x larger) \\
+    Bump-and-reprice with CRN, pathwise cross-check & 282x noise reduction; pathwise 1000x faster for linear risk, validated to 0.02--0.4\% \\
+    Par-instrument DV01 buckets & Corrected real mis-attribution: 82\% vs.\ 54\% of risk correctly placed in the 30y bucket \\
+    Exact LHS-reuse rate Greek & Eliminates resimulation cost for curve-only bumps, $10^{-15}$ validated \\
+    Rating-proxy CVA/DVA/FVA/KVA & No CDS/real ratings available; Basel-compliant proxy, fully disclosed, swept over a CoC grid for KVA \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Recommendations for production, and open items}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Keep as production default}
+      \begin{itemize}
+        \item One-factor Hull-White rate model
+        \item Full correlation matrix (not PCA)
+        \item Latin Hypercube sampling, $N{=}5{,}000$ standard / $10{,}000$ sign-off
+        \item Par-instrument DV01 buckets as the primary rate-risk breakdown
+        \item CVA/DVA/FVA/KVA as sensitivity-generating tools first, point estimates second
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Open items for the next phase}
+      \begin{itemize}
+        \item Real counterparty ratings or CDS
+        \item Capitolis' own credit and funding spread
+        \item A real capital methodology and cost of capital for KVA
+        \item A decision on wrong-way risk
+        \item The true CSA terms (threshold, MTA, IM)
+        \item Sector-specific (not just rating-based) credit-spread proxy
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}
+  \centering
+  \vspace{2cm}
+  {\Huge \textcolor{navy}{\textbf{Thank you}}}\\[8pt]
+  {\large Questions and discussion}
 \end{frame}
 
 \end{document}
