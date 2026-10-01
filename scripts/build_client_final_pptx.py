@@ -951,9 +951,13 @@ set_notes(s,
    "Beyond ~15-20k scenarios, returns diminish sharply while cost keeps scaling linearly -- and the remaining sampling error is an order of magnitude smaller than the model sensitivities in Section 7.9"],
   "1.5 min")
 cats = ["1,000","5,000","10,000","20,000"]
-bar_chart(s, Inches(0.5), Inches(1.5), Inches(7.3), Inches(4.0), cats,
+bar_chart(s, Inches(0.5), Inches(1.5), Inches(7.3), Inches(3.75), cats,
     {"Rel. SE of PFE99 (%)": [0.66, 0.29, 0.21, 0.09]}, number_format='0.00',
     title="Relative standard error of PFE99 falls as 1/sqrt(N)", color_list=[ACCENT])
+add_text(s, Inches(0.5), Inches(5.32), Inches(7.3), Inches(0.75),
+         "\"Limit sign-off\" = the formal approval of a counterparty's exposure limit (not routine reporting) -- because a "
+         "mis-set limit has real consequences, it gets the highest-precision run (N=10,000) rather than the standard N=5,000 used for day-to-day reporting.",
+         size=10, italic=True, color=GREY, font=FONT_BODY, line_spacing=1.1)
 rows = [["N","Rel. SE","Est. time (8 cores)","Verdict"],
         ["1,000","0.66%","119s","Iteration / what-if"],
         ["5,000","0.29%","479s","SELECTED: standard reporting"],
@@ -964,7 +968,7 @@ why_box(s, Inches(8.1), Inches(4.5), Inches(4.7), Inches(2.6), "5,000 / 10,000",
     "Cost grows linearly; error falls only as 1/sqrt(N) -- diminishing returns past ~15-20k",
     "Remaining sampling error (<0.4%) is an order of magnitude smaller than the model-risk sensitivities (Section 7.9)",
     "N=5,000 keeps a full reporting run to ~8 minutes on 8 cores -- practical for routine, repeated use, not just a one-off",
-    "Three tiers (1k/5k/10k) match three real use cases -- iteration, standard reporting, limit sign-off -- rather than one setting for everything",
+    "Limit sign-off (N=10,000) is the highest-stakes use case -- formally approving a counterparty's exposure limit -- so it gets the tightest estimate, not the fastest one",
 ], size=9.5)
 
 s = content_slide(5, "Two-Factor Rates (G2++) Changes the Portfolio MPE99 by Only -3%")
@@ -1040,21 +1044,24 @@ set_notes(s,
    "Pathwise is validated and used as a free cross-check for equity/FX (0.2-0.4s vs ~260s) but cannot reach rates without differentiating the pricers",
    "Adjoint differentiation is the asymptotically fastest method but needs a differentiable port of the supplied black-box pricers -- listed as future work, not adopted"],
   "1.5 min")
-add_text(s, Inches(0.5), Inches(1.5), Inches(7.1), Inches(0.3),
+add_text(s, Inches(0.5), Inches(1.45), Inches(7.1), Inches(0.3),
          "Validated on a European call against the known Black-Scholes answer (Section 11.6):",
          size=11.5, bold=True, color=NAVY, font=FONT_BODY)
-rows = [["Estimator","Bias","Std of estimate","Time/trial"],
-        ["Pathwise","+0.000085","0.003771","0.470 ms"],
-        ["Bump, common random numbers (used)","+0.000033","0.003742","0.327 ms"],
-        ["Bump, independent random numbers","-0.003502","0.096885","0.850 ms"]]
-simple_table(s, Inches(0.5), Inches(1.9), Inches(7.1), Inches(1.5), rows,
-             col_widths=[3.0,1.4,1.7,1.5], font_size=9.8, header_size=10.2)
-add_text(s, Inches(0.5), Inches(3.5), Inches(7.1), Inches(0.3),
+rows = [["Estimator","Bias","Std of estimate","Time/trial","Verdict"],
+        ["Pathwise","+0.000085","0.003771","0.470 ms","Cross-check only; can't reach rates"],
+        ["Bump, CRN (used)","+0.000033","0.003742","0.327 ms","Adopted: matches pathwise, any pricer"],
+        ["Bump, independent","-0.003502","0.096885","0.850 ms","Rejected: 26x noisier than CRN"]]
+simple_table(s, Inches(0.5), Inches(1.78), Inches(7.1), Inches(1.6), rows,
+             col_widths=[1.7,1.0,1.25,1.0,2.15], font_size=8.6, header_size=9.2)
+add_text(s, Inches(0.5), Inches(3.42), Inches(7.1), Inches(0.38),
+         "Bias = average estimator error vs. the true Black-Scholes value (closer to 0 is better); Std of estimate = how much the estimate varies run to run (lower is more precise, i.e. less noisy).",
+         size=8.8, italic=True, color=GREY, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(3.84), Inches(7.1), Inches(0.26),
          "CRN is statistically indistinguishable from pathwise (26x lower std than independent draws) -- and works on any pricer.",
          size=9.5, italic=True, color=GREY, font=FONT_BODY)
-add_text(s, Inches(0.5), Inches(4.0), Inches(7.1), Inches(0.3), "All 5 Greeks methods considered:",
+add_text(s, Inches(0.5), Inches(4.15), Inches(7.1), Inches(0.27), "All 5 Greeks methods considered:",
          size=12.5, bold=True, color=NAVY, font=FONT_HEAD)
-add_bullets(s, Inches(0.5), Inches(4.4), Inches(7.1), Inches(2.9), [
+add_bullets(s, Inches(0.5), Inches(4.48), Inches(7.1), Inches(2.5), [
     ("Bump, independent draws -- unbiased, but noise swamps the signal on the real book (282x higher std): rejected", "", 0),
     ("Bump, common random numbers (used) -- same draws in base and bumped runs; works as a black box for every measure including PFE99, which has no pathwise derivative", "", 0),
     ("Pathwise (infinitesimal perturbation) -- differentiates the payoff along each path, no repricing; exact for linear equity/FX deltas, but can't reach rates without differentiating the pricers: used as a free cross-check only", "", 0),
