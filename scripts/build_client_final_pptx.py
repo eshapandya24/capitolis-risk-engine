@@ -702,6 +702,30 @@ rows = [["Bottleneck","Fix","Before","After"],
 simple_table(s, Inches(0.5), Inches(4.75), Inches(12.3), Inches(2.0), rows,
              col_widths=[3.6,3.8,2.1,2.8], font_size=10.3, header_size=10.8)
 
+s = content_slide(3, "Simulation Dates: Pillar Tenors Plus Every Trade's Own Event Date")
+set_notes(s,
+  "Explain the date-grid design choice: not a plain monthly grid, but market pillar dates with every trade's own cash-flow date forced in.",
+  ["Monthly steps are simple but blunt -- they spend nodes evenly when risk actually changes fastest near-term, and a trade's own reset or maturity rarely falls on a month-end",
+   "Following Capitolis' guidance, we adopt pillar dates: the same standard market curve tenors used to build the SOFR curve (O/N, T/N, 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y...) -- dense short-term, sparse long-term, mirroring production CCR practice",
+   "Every trade's own reset/settlement/maturity date is forced onto the grid in addition, so exposure jumps at real cash-flow dates are captured exactly, not smoothed over"],
+  "1.5 min")
+s.shapes.add_picture(f"{PNG}/fig20.png", Inches(0.5), Inches(1.5), width=Inches(7.6))
+add_text(s, Inches(0.5), Inches(5.8), Inches(7.6), Inches(0.5),
+         "Four candidate grids for this book: dense near-term, sparse far-term, with event dates forced in.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+rows = [["Grid","Node count","What it does"],
+        ["Monthly","18","Simple, but spends nodes evenly and rarely lands on a trade's own dates"],
+        ["Pillar dates only","12","Standard market tenors (O/N..10Y); dense short-term, sparse long-term"],
+        ["Pillar + trade event dates (used)","42","Pillar tenors plus every trade's reset/settlement/maturity forced in"],
+        ["Trade event dates only","33","Exact on cash flows, but no systematic curve-tenor coverage"]]
+simple_table(s, Inches(8.3), Inches(1.5), Inches(4.5), Inches(2.6), rows,
+             col_widths=[2.3,1.0,4.3], font_size=8.8, header_size=9.3)
+why_box(s, Inches(8.3), Inches(4.3), Inches(4.5), Inches(2.5), "Pillar + Trade Event Dates", [
+    "Industry convention (pillar tenors) plus exactness on this book's own cash flows -- neither alone is enough",
+    "Dense near-term, where the close-out window and most trade maturities sit, matches where risk actually changes fastest",
+    "A trade settling inside a close-out window is excluded from both legs of that window -- forcing its date onto the grid is what makes that exclusion possible",
+], size=9.3)
+
 def step_row(slide, y, num, title, desc, modules):
     add_rect(slide, Inches(0.5), y, Inches(0.5), Inches(0.5), ACCENT)
     add_text(slide, Inches(0.5), y, Inches(0.5), Inches(0.5), str(num), size=18, bold=True, color=WHITE,
@@ -876,13 +900,17 @@ set_notes(s,
    "LHS is the only method that is both best on the controlled test AND better than pseudo-random on both real-engine statistics -- that consistency is why it was selected over Sobol, the controlled-test runner-up"],
   "2 min")
 matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.5),
-    ["Call RMSE vs PR","PFE99 rel.std","Median PFE rel.std","Verdict"],
+    ["Call RMSE (Test 1)","PFE99 noise (Test 2)","Median noise (Test 2)","Verdict"],
     ["Pseudo-random","Antithetic","Moment-matched","Sobol","Latin Hypercube"],
     [["1.0x (baseline)","2.60%","0.66%","Baseline"],
      ["1.4x better","1.98%","0.39%","Modest, real engine"],
      ["6.3x better","2.49%","0.35%","Median only, no PFE99 gain"],
      ["28.7x better","1.64%","0.70%","Best PFE99, no median gain"],
-     ["50.6x better","2.25%","0.42%","Best on both"]], font_size=9.5)
+     ["50.6x better","2.25%","0.42%","Best on both"]], font_size=8.8)
+add_text(s, Inches(0.5), Inches(4.05), Inches(7.6), Inches(0.35),
+         "Test 1: European call price vs. Black-Scholes, RMSE relative to pseudo-random. Test 2: relative "
+         "standard deviation of the real 663-dim engine's estimator across 8 repeats (% of reference value).",
+         size=9, italic=True, color=GREY, font=FONT_BODY)
 badge_chosen(s, Inches(8.4), Inches(1.95))
 why_box(s, Inches(8.4), Inches(2.3), Inches(4.4), Inches(2.0), "Latin Hypercube", [
     "Best controlled-test error, 50.6x vs pseudo-random",
@@ -890,11 +918,11 @@ why_box(s, Inches(8.4), Inches(2.3), Inches(4.4), Inches(2.0), "Latin Hypercube"
     "Negligible extra cost over pseudo-random -- ~40 factors is cheap next to repricing",
     "Stratifies every marginal so tails are sampled, unlike Sobol's joint-distribution assumptions",
 ], size=9.5)
-s.shapes.add_picture(f"{PNG}/fig_sampling_greeks.png", Inches(0.75), Inches(4.4), width=Inches(7.0))
-add_text(s, Inches(0.75), Inches(6.95), Inches(7.0), Inches(0.3),
+s.shapes.add_picture(f"{PNG}/fig_sampling_greeks.png", Inches(0.75), Inches(4.5), width=Inches(7.0))
+add_text(s, Inches(0.75), Inches(7.05), Inches(7.0), Inches(0.3),
          "Left: 51x lower RMSE vs Black-Scholes. Right: real-engine estimator noise by method.",
          size=10, italic=True, color=GREY, font=FONT_BODY)
-add_bullets(s, Inches(8.4), Inches(4.4), Inches(4.4), Inches(2.5), [
+add_bullets(s, Inches(8.4), Inches(4.5), Inches(4.4), Inches(2.5), [
     ("On the real 663-dimensional engine, advantages compress -- no single method wins both PFE99 and the median", "", 0),
     ("Sobol is the controlled-test runner-up (28.7x) but loses its edge on the median PFE and is less robust at this dimensionality", "", 0),
 ], size=11, space_after=8)
