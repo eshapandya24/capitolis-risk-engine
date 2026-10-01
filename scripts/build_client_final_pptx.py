@@ -935,54 +935,38 @@ why_box(s, Inches(6.5), Inches(5.6), Inches(6.3), Inches(1.75), "Hull-White 1F O
 
 s = content_slide(5, "Full-Rank Correlation Kept: PCA Factor Model Adds No Speed, No Consistent Accuracy")
 set_notes(s,
-  "A second genuine alternative we built and measured, and rejected as the default on evidence, not intuition.",
+  "A second genuine alternative we built and measured, and rejected as the default on evidence, not intuition. Also show what the factors themselves mean economically -- that's what 'explainability' requires.",
   ["A 5-factor PCA model explains only 47% of variance and understates netting-set vol by up to 3.9% -- it approximates, does not replicate, the empirical matrix",
    "Counter to the usual argument for factor models: correlated-shock timing shows PCA is NOT faster (2.08s for 5 factors vs 1.91s full) because it trades a 39x39 matrix product for more random draws",
+   "Factor 1 (20% of variance) is a broad market mode; factor 2 (8.9%) cleanly separates Japan from US listings -- the factors are economically readable, not just statistical artifacts",
    "Kept as a documented robustness option (corr_mode='factor'), not the default"],
-  "1.5 min")
+  "2 min")
 rows = [["Factors k","Var. explained","CPTY_A vol","CPTY_B vol","CPTY_C vol","Shock-step time"],
         ["Full (39)","100%","$52.9M (ref)","$19.6M (ref)","$25.4M (ref)","1.91s"],
         ["10","62%","$53.5M (+1.1%)","$19.9M (+1.5%)","$25.8M (+1.7%)","2.29s"],
         ["5","47%","$52.9M (+0.0%)","$19.9M (+1.7%)","$26.4M (+3.9%)","2.08s"],
         ["3","37%","$53.2M (+0.6%)","$20.0M (+2.1%)","$26.3M (+3.4%)","n/a"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(1.95), rows,
-             col_widths=[1.3,1.7,1.9,1.9,1.9,1.9], font_size=9.8, header_size=10.3)
-badge_chosen(s, Inches(0.5), Inches(3.65))
-add_text(s, Inches(1.85), Inches(3.7), Inches(3.0), Inches(0.3), "Full-rank Cholesky (default)", size=11, bold=True, color=NAVY, font=FONT_BODY)
-s.shapes.add_picture(f"{PNG}/fig14.png", Inches(0.5), Inches(4.15), width=Inches(5.5))
-add_text(s, Inches(0.5), Inches(6.68), Inches(6.6), Inches(0.3),
-         "5 factors explain 47% of variance, 10 explain 62% -- PCA approximates, not replicates, the matrix.",
-         size=10, italic=True, color=GREY, font=FONT_BODY)
-add_bullets(s, Inches(7.4), Inches(4.15), Inches(5.4), Inches(2.6), [
-    ("Sampling error is not consistently lower for PCA either: across 3/5/10 factors its std of PFE99 ranges 2.6%-6.2% of reference vs 4.5-4.9% for full rank -- no stable advantage", "", 0),
-    ("Explainable: factor 1 (20% of variance) is a broad market mode; factor 2 (8.9%) separates Japan from US listings", "", 0),
-    ("Would become useful only if systematic factors were drawn quasi-randomly and idiosyncratic noise pseudo-randomly -- listed as future work", "", 0),
-], size=11.5, space_after=8)
-
-s = content_slide(5, "What the PCA Factors Actually Are: a Market Mode, Then Japan vs US")
-set_notes(s,
-  "Make the PCA factors concrete and economically interpretable -- this is what 'explainability' means in practice.",
-  ["Factor 1 alone explains 20% of total variance and loads positively on every single name, both regions -- a textbook broad market factor",
-   "Factor 2 cleanly separates Tokyo-listed names from US names -- the Japan-vs-US split the book structurally cares about (JPY compo trades)",
-   "Factors 3-5 pick out smaller groupings (defensive staples vs growth/tech, energy/rate-sensitive names) -- they are statistical, not economic, factors, but their loadings can be read off the real data"],
-  "1.5 min")
-rows = [["Factor","Var. share","Highest loadings","Lowest loadings","Reading"],
-        ["1","20.0%","NXPI +0.25, BAC +0.25, JPM +0.24","4503.T -0.02, KO -0.00","Market factor: every name, both regions"],
-        ["2","8.9%","6902.T +0.43, 5108.T +0.43, 7751.T +0.42","NXPI -0.09, KLAC -0.07","Japan vs US"],
-        ["3","8.5%","KO +0.40, PG +0.35, BRK.B +0.32","KLAC -0.21, VST -0.16","Defensive staples vs growth tech/power"],
-        ["4","5.3%","MPC +0.44, XOM +0.43, RATE_USD +0.34","HDB -0.28, IBN -0.28","Energy / rate-sensitive group"],
-        ["5","4.0%","CEG +0.39, NFLX +0.39, VST +0.37","WBS -0.25, NXPI -0.22","Growth and financial names"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(2.8), rows,
-             col_widths=[0.8,1.3,3.3,3.0,3.9], font_size=9.8, header_size=10.3)
-s.shapes.add_picture(f"{PNG}/fig14.png", Inches(2.9), Inches(4.3), width=Inches(6.0))
-add_text(s, Inches(2.9), Inches(7.03), Inches(6.0), Inches(0.3),
-         "Eigenvalue scree, cumulative variance explained, and reconstruction error vs. k factors.",
+simple_table(s, Inches(0.5), Inches(1.45), Inches(12.3), Inches(1.6), rows,
+             col_widths=[1.3,1.7,1.9,1.9,1.9,1.9], font_size=9.3, header_size=9.8)
+badge_chosen(s, Inches(0.5), Inches(3.15))
+add_text(s, Inches(1.85), Inches(3.19), Inches(3.3), Inches(0.3), "Full-rank Cholesky (default)", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(3.62), Inches(12.3), Inches(0.3),
+         "What the PCA factors actually are, economically:", size=12, bold=True, color=NAVY, font=FONT_HEAD)
+rows2 = [["Factor","Var.","Reading"],
+         ["1","20.0%","Market factor: every name, both regions (NXPI/BAC/JPM highest)"],
+         ["2","8.9%","Japan vs US (6902.T/5108.T/7751.T highest; NXPI/KLAC lowest)"],
+         ["3","8.5%","Defensive staples vs growth tech (KO/PG/BRK.B vs KLAC/VST)"],
+         ["4","5.3%","Energy / rate-sensitive (MPC/XOM/RATE_USD vs HDB/IBN)"],
+         ["5","4.0%","Growth and financial names (CEG/NFLX/VST vs WBS/NXPI)"]]
+simple_table(s, Inches(0.5), Inches(4.0), Inches(6.5), Inches(2.6), rows2,
+             col_widths=[0.7,0.8,5.0], font_size=9, header_size=9.5)
+s.shapes.add_picture(f"{PNG}/fig14.png", Inches(7.2), Inches(3.95), width=Inches(5.6))
+add_text(s, Inches(7.2), Inches(6.5), Inches(5.6), Inches(0.5),
+         "Eigenvalue scree, cumulative variance explained, reconstruction error vs. k.",
+         size=9, italic=True, color=GREY, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(6.75), Inches(6.5), Inches(0.6),
+         "These are statistical factors, but their loadings read off the real data -- a risk reviewer can sanity-check each one.",
          size=9.5, italic=True, color=GREY, font=FONT_BODY)
-add_text(s, Inches(0.5), Inches(4.3), Inches(2.2), Inches(0.35),
-         "Why this matters:", size=11, bold=True, color=ACCENT_DK, font=FONT_BODY)
-add_text(s, Inches(0.5), Inches(4.7), Inches(2.2), Inches(2.0),
-         "A factor model is only useful to a risk reviewer if the factors mean something -- these do.",
-         size=10, color=GREY, font=FONT_BODY, line_spacing=1.1)
 
 s = content_slide(5, "Common Random Numbers Make Bump-and-Reprice 282x Less Noisy Than Independent Draws")
 set_notes(s,
