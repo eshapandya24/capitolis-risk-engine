@@ -403,6 +403,12 @@ add_text(s, Inches(1.0), Inches(4.2), Inches(11.0), Inches(0.4),
 add_text(s, Inches(1.0), Inches(6.6), Inches(11.0), Inches(0.35),
          "Valuation date 2026-08-28  |  September 2026", size=11, color=RGBColor(0x9A,0xA2,0xB0), font=FONT_BODY)
 _slide_counter[0] += 1
+set_notes(s,
+  "Open with who we are and what this readout covers -- a validated Monte Carlo CCR engine built end to end for the ESF derivatives book.",
+  ["Berkeley MFE industry project for Capitolis Risk, Quant & Technology -- final client readout, not a status update",
+   "Valuation date 2026-08-28; everything in this deck is reproducible from that single date's market data",
+   "Housekeeping: ~45-50 min including Q&A; happy to take questions as we go on anything that needs more depth"],
+  "30 sec")
 
 # --- Slide 2: Executive summary ---
 s = content_slide(0, "Portfolio MPE99 of $51.0M on the Brief's Close-Out Definition")
@@ -1444,6 +1450,39 @@ add_bullets(s, Inches(7.1), Inches(3.75), Inches(5.7), Inches(3.3), [
     ("SA-CVA requirement dominated by ccs delta (88% of the total) -- a 5% risk weight on credit spreads is large relative to a ~100bp spread level", "", 0),
 ], size=11.5, space_after=8)
 
+s = content_slide(7, "CVA Sensitivity Numbers: Credit Spread Delta Is 18x the Rate Delta",
+                   feedback_tag="Feedback-driven")
+set_notes(s,
+  "This is the raw sensitivity data behind the previous slide's chart and capital table -- the actual CVA01/CS01-style numbers, not just the aggregated capital.",
+  ["These are the Basel bucket-level deltas (pre risk-weight) that feed directly into the SA-CVA capital calc on the previous slide -- apply the 5% credit-spread risk weight and bucket correlation and $1.99M becomes the $85.2k close-out capital shown there",
+   "Credit spread delta dominates rate delta by about 18x, and within credit spread delta, 95% sits in the 0.5y and 1y buckets because CPTY_C's $121M bond forward matures inside a year",
+   "This directly answers feedback item 9: CVA is for understanding sensitivities, not just a single number -- these are the per-tenor, per-counterparty building blocks"],
+  "1.5 min")
+add_text(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(0.55),
+         "CVA01-style sensitivities: change in close-out CVA per +1bp move, before Basel risk-weighting. These are the exact inputs aggregated into the SA-CVA capital on the previous slide.",
+         size=12, color=NAVY, font=FONT_BODY, line_spacing=1.1)
+rows = [["USD rate tenor","0.5y","1y","3y","5y","10y","Total"],
+        ["CVA delta per +1bp","-$14,421","-$101","-$1,410","-$40,272","-$56,010","-$112,214"]]
+simple_table(s, Inches(0.5), Inches(2.05), Inches(12.3), Inches(0.85), rows,
+             col_widths=[2.3,1.6,1.6,1.6,1.6,1.6,2.0], font_size=10.5, header_size=10.5)
+add_text(s, Inches(0.5), Inches(2.95), Inches(12.3), Inches(0.3),
+         "CVA sensitivity to a parallel +1bp move in the USD discount curve, by SA-CVA tenor bucket.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+rows2 = [["Counterparty","0.5y","1y","3y","5y","10y","Total"],
+         ["CPTY_A","$408,880","$1,524","$218","$0","$0","$410,622"],
+         ["CPTY_B","$239,174","$535","$0","$0","$0","$239,709"],
+         ["CPTY_C","$1,056,184","$280,791","$0","$0","$0","$1,336,975"],
+         ["Total","$1,704,238","$282,850","$218","$0","$0","$1,987,307"]]
+simple_table(s, Inches(0.5), Inches(3.35), Inches(12.3), Inches(1.85), rows2,
+             col_widths=[2.3,1.9,1.7,1.5,1.3,1.3,2.3], font_size=10.5, header_size=10.5)
+add_text(s, Inches(0.5), Inches(5.25), Inches(12.3), Inches(0.3),
+         "CVA sensitivity to a +1bp widening of each counterparty's own credit spread, by tenor bucket.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+why_box(s, Inches(0.5), Inches(5.65), Inches(12.3), Inches(1.3),
+        "Why Credit Spread Dominates, Concretely",
+        ["$1.99M total credit-spread delta vs $112k total rate delta (both pre risk-weight) -- credit spread risk is about 18x larger",
+         "Almost all of CPTY_C's $1.34M sits at the 0.5y/1y buckets, where BF_0003 (maturing 2026-12-06) lives -- short-tenor credit risk, not long-tenor"], size=10.5)
+
 print("Section 8d (Results pt4) done")
 
 
@@ -1497,6 +1536,12 @@ add_text(s, Inches(0.9), Inches(4.15), Inches(11.0), Inches(0.5), "Questions and
 add_text(s, Inches(0.9), Inches(6.6), Inches(11.0), Inches(0.35),
          "Berkeley MFE Industry Project  |  Monte Carlo Counterparty Credit Risk Engine", size=11, color=RGBColor(0x9A,0xA2,0xB0), font=FONT_BODY)
 _slide_counter[0] += 1
+set_notes(s,
+  "Close and open the floor -- the headline number and the one open question (margin terms) are worth repeating before questions start.",
+  ["Headline: portfolio MPE99 $51.0M on the brief's close-out definition, validated to 0.0000% self-consistency, 142 automated tests passing",
+   "The single highest-priority follow-up is confirming margin terms -- it moves CPTY_C's MPE99 by up to 82%",
+   "Appendix slides are available if anyone wants to go deeper on a specific topic -- decision register, data lineage, G2++/PCA detail, or the reproduction commands"],
+  "open for questions")
 
 print("Section 9 (Conclusions) done")
 
@@ -1508,6 +1553,11 @@ add_rect(s, 0, Inches(3.1), Inches(0.9), Pt(4), ACCENT)
 add_text(s, Inches(0.9), Inches(3.25), Inches(11.0), Inches(0.9), "Appendix", size=34, bold=True, color=NAVY, font=FONT_HEAD)
 add_text(s, Inches(0.9), Inches(4.1), Inches(11.0), Inches(0.5), "Backup material for Q&A -- not presented", size=15, color=GREY, font=FONT_BODY)
 _slide_counter[0] += 1
+set_notes(s,
+  "Transition slide only -- skip past this unless a question calls for one of the backup slides.",
+  ["10 appendix slides: full decision register, data lineage, 2008/2015 stress detail, per-trade stress heatmap, DV01 bucket detail, G2++ calibration, PCA loadings, backtest rates detail, code map, reproduction commands",
+   "Not walked through live -- jump to the relevant one only if a question needs it"],
+  "skip unless asked")
 
 def appendix_slide(title):
     s = add_slide()
@@ -1521,6 +1571,11 @@ def appendix_slide(title):
 
 # A1: Full decision register
 s = appendix_slide("A1. The Full Decision Register (Report Section 10)")
+set_notes(s,
+  "One-slide index of every modelling choice in the deck and what else was considered -- useful if asked 'did you consider X'.",
+  ["Every row maps to a trade-off slide already presented in Section 6 -- this is the compact summary, not new material",
+   "Use this to answer 'why didn't you use X' questions by pointing at the specific row"],
+  "if asked")
 rows = [["Topic","Choice","Alternatives considered"],
         ["Measure","Risk-neutral","Real-world drifts (needs unobservable risk premia)"],
         ["Exposure","Brief's close-out definition","Level max(V,0) only; same-day full-VM MPOR shift"],
@@ -1536,6 +1591,11 @@ simple_table(s, Inches(0.5), Inches(1.6), Inches(12.3), Inches(5.2), rows,
 
 # A2: Data lineage
 s = appendix_slide("A2. Full Data Lineage (Report Appendix B)")
+set_notes(s,
+  "Full source-by-source data inventory -- use if asked exactly where a specific number came from.",
+  ["Every input is either live/public (reproducible by anyone) or licensed Bloomberg/project-team data (derived numbers only, never redistributed raw)",
+   "This is the detailed version of the summary already shown in Section 3"],
+  "if asked")
 rows = [["Input","Source","Status"],
         ["Trades (16) and underlyings","Capitolis trade_data/*.csv","Given"],
         ["Pricing library","Capitolis capitolis_pricers","Given, independently reviewed"],
@@ -1565,10 +1625,20 @@ add_bullets(s, Inches(6.8), Inches(1.6), Inches(6.0), Inches(4.5), [
 
 # A4: Per-trade stress heatmap
 s = appendix_slide("A4. Per-Trade Stress Sensitivity Heat Map (Report Figure 34)")
+set_notes(s,
+  "Visual drill-down of the portfolio stress table (Section 8.1) to the individual-trade level -- which trades move the most under which scenario.",
+  ["Darker cells are larger percentage moves in that trade's exposure under that scenario -- BF_0003 and the equity TRS names are the hottest rows, consistent with the concentration story told throughout the deck",
+   "Use this if asked which specific trade drives a given scenario's portfolio-level number"],
+  "if asked")
 s.shapes.add_picture(f"{PNG}/fig34.png", Inches(2.9), Inches(1.5), height=Inches(5.4))
 
 # A5: DV01 bucket detail
 s = appendix_slide("A5. DV01 Bucket Detail: Old Zero-Grid vs New Par-Instrument Jacobian")
+set_notes(s,
+  "Full numeric backup for the DV01 Jacobian slide already presented in Section 7 -- same table, in case someone wants to check the arithmetic live.",
+  ["Both methods' bucket sums match their own parallel-bump check to within 0.05% -- the correction was about attribution across tenor, not total risk",
+   "Point to the 10y/30y rows specifically if asked to justify the hedging consequence described in Section 7"],
+  "if asked")
 rows = [["Tenor bucket","Old (zero-grid)","New (par-instrument)"],
         ["0.25y","-2,182","-2,892"],["0.5y","-46","-1"],["1y","-44","-14"],["2y","-131","-205"],
         ["3y","-96","-105"],["5y","-770","-713"],["10y","-18,324 (39%)","-6,592 (11%)"],
@@ -1582,6 +1652,11 @@ add_bullets(s, Inches(7.8), Inches(1.6), Inches(5.0), Inches(3.5), [
 
 # A6: G2++ parameters
 s = appendix_slide("A6. G2++ Two-Factor Rate Model: Full Calibration")
+set_notes(s,
+  "Full calibration detail for the G2++ alternative referenced in Section 6 -- have this ready if asked for the actual fitted parameters.",
+  ["16% Frobenius fit error is the headline number to repeat -- it's why G2++ isn't the default despite matching level and slope",
+   "rho = -0.95 (strongly negative) is what lets two positively-mean-reverting factors combine into a curve with both a level and a slope component"],
+  "if asked")
 add_text(s, Inches(0.5), Inches(1.6), Inches(12.0), Inches(0.6),
     "r(t) = x(t) + y(t) + phi(t);  dx = -a x dt + sigma dW1;  dy = -b y dt + eta dW2;  corr(dW1,dW2) = rho",
     size=13.5, color=NAVY, font="Courier New")
@@ -1595,6 +1670,11 @@ add_bullets(s, Inches(6.0), Inches(2.5), Inches(6.8), Inches(3.5), [
 
 # A7: PCA factor loadings
 s = appendix_slide("A7. PCA Factor Loadings: What the Factors Actually Are")
+set_notes(s,
+  "The economic reading behind the PCA trade-off slide in Section 6 -- have this ready if asked what the statistical factors actually represent.",
+  ["Factor 1 (20% of variance) is a broad market factor across both US and Japan names -- the usual first PCA factor in any equity book",
+   "Factor 2 is cleanly a Japan-vs-US split, which is reassuring: a statistical factor lining up with an economic grouping is a sanity check that the PCA is picking up real structure, not noise"],
+  "if asked")
 rows = [["Factor","Var. share","Highest loadings","Reading"],
         ["1","20.0%","NXPI +0.25, BAC +0.25, JPM +0.24","Market factor: all names, both regions"],
         ["2","8.9%","6902.T +0.43, 5108.T +0.43, 7751.T +0.42","Japan vs US"],
@@ -1607,6 +1687,11 @@ s.shapes.add_picture(f"{PNG}/fig14.png", Inches(2.5), Inches(4.8), height=Inches
 
 # A8: Kupiec rates-leg detail
 s = appendix_slide("A8. Backtest: Rates Leg Detail (10-Day Yield-Change Quantiles)")
+set_notes(s,
+  "Backup for the backtest slide in Section 8 -- the rates-only quantile comparison behind the two sigma calibrations discussed there.",
+  ["This is why the long-end fit sigma (0.96%) was chosen over the raw overnight-SOFR sigma for the headline run -- its exception rates are closer to nominal across all three tenors",
+   "Use this if asked to justify the sigma calibration choice with the actual exception counts rather than just the summary statistic"],
+  "if asked")
 rows = [["Tenor","Sigma calibration","99% up exceptions","99% up mean rate","95% up mean rate"],
         ["5y","Overnight SOFR vol","1 of 161","1.0%","3.7%"],
         ["5y","Long-end fit","4 of 161","1.9%","5.7%"],
@@ -1622,6 +1707,11 @@ add_text(s, Inches(0.5), Inches(5.3), Inches(12.3), Inches(0.8),
 
 # A9: Code map
 s = appendix_slide("A9. Code Map (Report Appendix D)")
+set_notes(s,
+  "Codebase orientation for a technical reviewer -- use if asked how the engine is organized or where a specific piece of logic lives.",
+  ["Modular by design: each package has one job (market data, models, simulation, Greeks, stress/validation, exposure) and is independently testable",
+   "142 tests target these modules directly, not just end-to-end -- that's what makes the 'validated' claim in the conclusions credible"],
+  "if asked")
 rows = [["Package","Contents"],
         ["market/","sofr, equities, fx, vols, correlations; boj, mof_jgb, bloomberg (JPY); credit_spreads, equity_buckets"],
         ["models/","rates (Hull-White), g2pp, equity_fx (GBM+JPY drift), calibration, equity_factor_model (PCA), credit"],
@@ -1634,6 +1724,11 @@ simple_table(s, Inches(0.5), Inches(1.6), Inches(12.3), Inches(4.8), rows, col_w
 
 # A10: Reproducing results
 s = appendix_slide("A10. Reproducing Every Result (Report Appendix E)")
+set_notes(s,
+  "Closing technical-credibility slide -- every number in this deck comes from one of these nine commands, nothing is hand-tuned or one-off.",
+  ["Each script maps to one deliverable: simulation profiles, Greeks, CVA/SA-CVA, xVA/SA-CCR, stress, backtest, and the full test suite",
+   "Offer this as the answer to 'how do we know these numbers are real' -- anyone with the repo and the data can regenerate every figure in the report"],
+  "if asked")
 add_text(s, Inches(0.5), Inches(1.6), Inches(12.3), Inches(4.5),
     "python scripts/generate_report_data.py --scenarios 3000   # simulation + figure arrays\n"
     "python scripts/run_simulation.py --scenarios 3000          # EE/PFE99/MPE profiles\n"
