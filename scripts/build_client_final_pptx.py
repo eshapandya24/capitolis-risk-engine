@@ -601,10 +601,12 @@ s.shapes.add_picture(f"{PNG}/fig07.png", Inches(6.7), Inches(1.5), width=Inches(
 add_text(s, Inches(6.7), Inches(4.58), Inches(6.1), Inches(0.5),
          "Zero curve before (flat) and after the Bloomberg long-end splice. Identical inside the futures range.",
          size=10, italic=True, color=GREY, font=FONT_BODY)
-why_box(s, Inches(0.5), Inches(5.15), Inches(12.3), Inches(1.6), "Splicing, Not Extrapolating Flat", [
+why_box(s, Inches(0.5), Inches(5.1), Inches(12.3), Inches(1.9), "Splicing, Not Extrapolating Flat", [
     "A 22-year bond has duration ~13 -- a flat long end understates discounting of exactly the trade (BF_0003) that dominates the book",
     "The splice is joined continuously at the last futures pillar: nothing inside the live futures range changes, only the part we had no market data for",
-], size=11.5)
+    "Validated independently: BF_0003's NPV on the spliced curve ($121.3M) lands within 0.4% of repricing it directly on Bloomberg's own zero curve",
+    "Licensed Bloomberg data is used only to extend the shape beyond the live futures range -- we never redistribute the raw licensed numbers, only this derived splice",
+], size=10.5)
 
 s = content_slide(2, "Volatility: 3-Year Realised, Fitted to Where the Book's Risk Actually Lives")
 set_notes(s,
@@ -621,10 +623,12 @@ s.shapes.add_picture(f"{PNG}/fig09.png", Inches(6.4), Inches(1.5), width=Inches(
 add_text(s, Inches(6.4), Inches(4.37), Inches(6.3), Inches(0.5),
          "Realised Treasury yield vol by tenor vs. the Hull-White implied shape for both sigma choices.",
          size=9.5, italic=True, color=GREY, font=FONT_BODY)
-why_box(s, Inches(0.5), Inches(4.95), Inches(12.2), Inches(1.4), "No Options Data Available", [
-    "Implied vol is the pricing-industry norm, but we had no single-name options data (Bloomberg export has only SPX/TOPIX index vols)",
-    "3-year realised is a reproducible, documented proxy; its backward-looking limitation is disclosed and stress-tested (vols x1.25/x2 in Section 7.9)",
-], size=11)
+why_box(s, Inches(0.5), Inches(4.95), Inches(12.2), Inches(1.75), "No Options Data Available", [
+    "Implied vol is the pricing-industry norm, but we had no single-name options data (Bloomberg export has only SPX/TOPIX index vols, which would need a per-name basis assumption)",
+    "3-year realised is a reproducible, documented proxy; its backward-looking limitation is disclosed and stress-tested directly (vols x1.25/x2 in Section 7.9)",
+    "3 years balances responsiveness against noise: long enough to average out idiosyncratic single-day jumps, short enough to reflect the current vol regime rather than a decade-old one",
+    "The same convention is applied to every one of the 37 names, so the cross-section stays comparable rather than mixing proxy quality name by name",
+], size=10.5)
 
 s = content_slide(2, "Correlation: One Static 39x39 Matrix From 616 Aligned Trading Days")
 set_notes(s,
@@ -718,9 +722,11 @@ step_row(s, Inches(2.55), 2, "Market data assembly", "Bootstrap the USD curve, c
 step_row(s, Inches(3.55), 3, "Risk-factor models", "Implement Hull-White 1F (+G2++), correlated GBM for equity/FX, the JPY Hull-White factor, PCA factor model", "models/\n  rates, g2pp, equity_fx,\n  equity_factor_model, credit")
 step_row(s, Inches(4.55), 4, "Calibration", "Fit sigma/a to swaption cube and realised yield vol; fit JPY factor to the real OIS history; least-squares G2++", "models/\n  calibration, hw_calibration")
 step_row(s, Inches(5.55), 5, "Simulation engine", "Build the date grid (pillars + trade events + MPOR nodes), draw correlated shocks, step every factor jointly", "simulation/\n  engine, random_numbers,\n  parallel")
-why_box(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.65), "Design Principle: Modularity", [
-    "Each package has one job and is independently testable -- the 142 automated tests target these modules directly, not just end-to-end output",
-], size=10.5)
+add_rect(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.42), LIGHTBG)
+add_rect(s, Inches(0.5), Inches(6.55), Pt(3.5), Inches(0.42), ACCENT)
+add_text(s, Inches(0.72), Inches(6.62), Inches(12.0), Inches(0.3),
+         "Design principle -- modularity: each package has one job and is independently testable (the 142 tests target these modules directly).",
+         size=10.5, color=NAVY, font=FONT_BODY)
 
 s = content_slide(3, "Building the Engine, Steps 5-8: Pricing Through to Validation")
 set_notes(s,
@@ -734,9 +740,11 @@ step_row(s, Inches(2.55), 7, "Aggregation & exposure", "Net by counterparty, app
 step_row(s, Inches(3.55), 8, "Greeks", "Bump-and-reprice with common random numbers; pathwise cross-check for equity/FX; exact analytic rate Greek", "greeks/\n  book, exposure, pathwise,\n  bumps")
 step_row(s, Inches(4.55), 9, "Credit risk & capital", "CVA/DVA/FVA/KVA on the same paths; Basel SA-CVA capital; SA-CCR EAD; the risky-bond extra-credit trade", "exposure/\n  cva, xva, sa_cva, sa_ccr")
 step_row(s, Inches(5.55), 10, "Stress, backtest & tests", "13 stress scenarios; Kupiec/Christoffersen backtests against realised history; 142 automated unit/statistical tests", "stress/scenarios.py\nvalidation/backtest.py\ntests/  (142 tests)")
-why_box(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.65), "Design Principle: Reproducibility", [
-    "Every number in this deck regenerates from one command per stage (Appendix A10) -- nothing here is a one-off, hand-tuned result",
-], size=10.5)
+add_rect(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.42), LIGHTBG)
+add_rect(s, Inches(0.5), Inches(6.55), Pt(3.5), Inches(0.42), ACCENT)
+add_text(s, Inches(0.72), Inches(6.62), Inches(12.0), Inches(0.3),
+         "Design principle -- reproducibility: every number regenerates from one command per stage (Appendix A10), nothing is one-off or hand-tuned.",
+         size=10.5, color=NAVY, font=FONT_BODY)
 
 print("Section 4 (Pipeline) done")
 
@@ -759,12 +767,14 @@ rows = [["Parameter","Value","Source"],
         ["a (mean reversion)","0.0167","USD swaption cube (1M expiry, 1Y-15Y tenors)"],
         ["r(0)","3.69%","Bootstrapped SOFR futures curve"]]
 simple_table(s, Inches(0.5), Inches(2.45), Inches(6.0), Inches(1.5), rows, col_widths=[2.0,1.4,3.5], font_size=10.3, header_size=10.8)
-why_box(s, Inches(0.5), Inches(4.15), Inches(6.0), Inches(2.6), "Why Hull-White 1F", [
+why_box(s, Inches(0.5), Inches(4.15), Inches(6.0), Inches(3.0), "Why Hull-White 1F", [
     "Reproduces today's curve to 1e-9, so discounting is exact at t=0",
     "Analytic bond price at every node -- 10x faster than a curve object",
     "Gaussian: supports negative rates, essential for JPY",
-    "Rejected: CIR/BK (floored at zero, invalid for JPY); LMM/HJM (too many parameters for our data); constant rate (ignores funding-leg and bond-forward rate risk)",
-])
+    "Only 2 parameters (a, sigma) to fit and defend -- fewer than the data (a few years of swaption/yield history) can comfortably support",
+    "Industry-standard and well understood, which lowers the model-validation burden for a reviewer",
+    "Rejected: CIR/BK (floored at zero, invalid for JPY); LMM/HJM (too many parameters for our data and slower); constant rate (ignores funding-leg and bond-forward rate risk)",
+], size=10)
 s.shapes.add_picture(f"{PNG}/fig11.png", Inches(6.9), Inches(1.5), width=Inches(5.9))
 add_text(s, Inches(6.9), Inches(4.85), Inches(5.9), Inches(0.35),
          "Simulated USD short rate fan (3,000 scenarios); median tracks today's forward curve.",
@@ -784,15 +794,17 @@ add_text(s, Inches(0.5), Inches(1.45), Inches(6.0), Inches(0.95),
          "dS_i/S_i = (r_USD - q_i) dt + sigma_i dW_i\n"
          "dX/X = (r_JPY - r_USD + sigma_X^2) dt + sigma_X dW_X",
          size=12.5, color=NAVY, font="Courier New")
-why_box(s, Inches(0.5), Inches(2.5), Inches(6.0), Inches(2.1), "GBM + Cholesky", [
-    "Matches the lognormal vol convention we measure; needs only one vol per name",
-    "Drifts derived from the martingale condition, not assumed -- verified by martingale tests",
+why_box(s, Inches(0.5), Inches(2.5), Inches(6.0), Inches(2.9), "GBM + Cholesky", [
+    "Matches the lognormal vol convention we measure and the market default for equity CCR; needs only one vol per name",
+    "Drifts derived from the martingale condition, not assumed -- verified independently by martingale tests",
+    "No unobservable parameters beyond that single vol -- Heston (vol-of-vol), SABR (beta, rho) and jump models all need inputs we don't have",
+    "Keeps paths exactly rescalable under a spot bump, which is what later makes equity/FX Greeks ~100x cheaper than naive resimulation (Section 6)",
     "Rejected: Heston/SABR (no option surfaces available); jump models (unobservable parameters) -- both disclosed as understating fat tails",
-], size=11)
-add_bullets(s, Inches(0.5), Inches(4.75), Inches(6.0), Inches(2.1), [
+], size=9.8)
+add_bullets(s, Inches(0.5), Inches(5.55), Inches(6.0), Inches(1.4), [
     ("741 pairwise correlations, mean 0.14; first PCA factor (a 'market' mode) explains 20% of variance alone", "", 0),
     ("37 equities span an order of magnitude in vol (a few names at 50-76%), dominating tail exposure of the trades referencing them", "", 0),
-], size=11.5, space_after=7)
+], size=10.5, space_after=6)
 s.shapes.add_picture(f"{PNG}/fig12.png", Inches(6.9), Inches(1.45), width=Inches(5.9))
 add_text(s, Inches(6.9), Inches(3.98), Inches(5.9), Inches(0.35),
          "Simulated USDJPY and two equities (low-vol vs. highest-vol name), 1-99% and 25-75% bands.",
@@ -815,11 +827,14 @@ rows = [["Parameter","Value","Source / status"],
         ["a (mean reversion)","0.0010 (lower bound)","All 3 real JPY calibration routes gave a negative a"],
         ["USD-JPY rate correlation","-0.040","Real SOFR vs TONA daily changes (n=1983); statistically zero"]]
 simple_table(s, Inches(0.5), Inches(1.5), Inches(6.2), Inches(1.9), rows, col_widths=[1.9,1.7,2.6], font_size=9.8, header_size=10.3)
-why_box(s, Inches(0.5), Inches(3.6), Inches(6.2), Inches(3.3), "the Lower-Bound Mean Reversion", [
+why_box(s, Inches(0.5), Inches(3.6), Inches(6.2), Inches(3.6), "the Lower-Bound Mean Reversion", [
     "For two decades the BOJ pinned the short end (zero / negative policy, YCC), so long tenors moved more freely than short -- the reverse of what a mean-reverting factor assumes",
-    "A single Gaussian factor cannot produce that shape; a=0.001 (the Ho-Lee limit, flat vol across tenors) is the closest fit available",
+    "Confirmed by three independent real data sources (daily OIS history, 52 years of JGB yields, a 2026 swaption cube), every one giving a negative fitted a -- not a one-off artifact of noisy data",
+    "A negative a was rejected outright: it would make the simulated short rate diverge over the horizon, which is both numerically unstable and economically meaningless",
+    "A single Gaussian factor cannot produce the observed shape; a=0.001 (the Ho-Lee limit, flat vol across tenors) is the closest a one-factor model can get",
+    "The lower bound keeps the model fully analytic and negative-rate capable, so no other part of the engine needs to change to accommodate it",
     "Rejected: constant USD-rate differential (cannot represent JPY's own dynamics); a two-factor or regime-dependent model would match the shape but is listed as future work",
-], size=11)
+], size=9.3)
 s.shapes.add_picture(f"{PNG}/fig16.png", Inches(7.0), Inches(1.5), width=Inches(5.8))
 add_text(s, Inches(7.0), Inches(4.05), Inches(5.8), Inches(0.6),
          "Real Bank of Japan TONA, 1998-2026: at or below zero for most of 25 years -- a model with a floor could not represent this.",
@@ -869,18 +884,20 @@ matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.5),
      ["28.7x better","1.64%","0.70%","Best PFE99, no median gain"],
      ["50.6x better","2.25%","0.42%","Best on both"]], font_size=9.5)
 badge_chosen(s, Inches(8.4), Inches(1.95))
-why_box(s, Inches(8.4), Inches(2.35), Inches(4.4), Inches(1.65), "Latin Hypercube", [
+why_box(s, Inches(8.4), Inches(2.3), Inches(4.4), Inches(2.0), "Latin Hypercube", [
     "Best controlled-test error, 50.6x vs pseudo-random",
-    "Only method better than pseudo-random on BOTH real-engine statistics -- that consistency is the deciding factor",
-], size=11)
-s.shapes.add_picture(f"{PNG}/fig_sampling_greeks.png", Inches(0.75), Inches(4.3), width=Inches(7.0))
-add_text(s, Inches(0.75), Inches(6.85), Inches(7.0), Inches(0.3),
+    "Only method better than pseudo-random on BOTH real-engine statistics -- the deciding factor",
+    "Negligible extra cost over pseudo-random -- ~40 factors is cheap next to repricing",
+    "Stratifies every marginal so tails are sampled, unlike Sobol's joint-distribution assumptions",
+], size=9.5)
+s.shapes.add_picture(f"{PNG}/fig_sampling_greeks.png", Inches(0.75), Inches(4.4), width=Inches(7.0))
+add_text(s, Inches(0.75), Inches(6.95), Inches(7.0), Inches(0.3),
          "Left: 51x lower RMSE vs Black-Scholes. Right: real-engine estimator noise by method.",
          size=10, italic=True, color=GREY, font=FONT_BODY)
-add_bullets(s, Inches(8.4), Inches(4.3), Inches(4.4), Inches(2.6), [
+add_bullets(s, Inches(8.4), Inches(4.4), Inches(4.4), Inches(2.5), [
     ("On the real 663-dimensional engine, advantages compress -- no single method wins both PFE99 and the median", "", 0),
     ("Sobol is the controlled-test runner-up (28.7x) but loses its edge on the median PFE and is less robust at this dimensionality", "", 0),
-], size=11.5, space_after=8)
+], size=11, space_after=8)
 
 s = content_slide(5, "Scenario Count: N=5,000 for Reporting, N=10,000 for Limit Sign-Off")
 set_notes(s,
@@ -899,10 +916,12 @@ rows = [["N","Rel. SE","Est. time (8 cores)","Verdict"],
         ["10,000","0.21%","929s","SELECTED: limit sign-off"],
         ["20,000+","0.09%","1,829s+","Diminishing returns"]]
 simple_table(s, Inches(8.1), Inches(1.6), Inches(4.7), Inches(2.6), rows, col_widths=[1.0,1.3,1.6,3.0], font_size=9.3, header_size=9.8)
-why_box(s, Inches(8.1), Inches(4.5), Inches(4.7), Inches(2.3), "5,000 / 10,000", [
+why_box(s, Inches(8.1), Inches(4.5), Inches(4.7), Inches(2.6), "5,000 / 10,000", [
     "Cost grows linearly; error falls only as 1/sqrt(N) -- diminishing returns past ~15-20k",
     "Remaining sampling error (<0.4%) is an order of magnitude smaller than the model-risk sensitivities (Section 7.9)",
-], size=10.5)
+    "N=5,000 keeps a full reporting run to ~8 minutes on 8 cores -- practical for routine, repeated use, not just a one-off",
+    "Three tiers (1k/5k/10k) match three real use cases -- iteration, standard reporting, limit sign-off -- rather than one setting for everything",
+], size=9.5)
 
 s = content_slide(5, "Two-Factor Rates (G2++) Changes the Portfolio MPE99 by Only -3%")
 set_notes(s,
@@ -911,27 +930,29 @@ set_notes(s,
    "The effect on the headline number is small: -3% on portfolio MPE99, -1% to -3% by counterparty",
    "One-factor Hull-White retained as the default: materially simpler, calibrates cleanly to the swaption cube, and the model-risk study (Section 7.9) shows equity volatility and rate-equity dependence matter far more than this choice"],
   "1.5 min")
-matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.5), Inches(1.6),
+matrix_table(s, Inches(0.5), Inches(1.5), Inches(6.9), Inches(1.4),
     ["Curve fit","Negative rates","Calibration error","Params"],
     ["Hull-White 1F","G2++ (2-factor)"],
     [["Exact","Yes","N/A (level only)","2 (a, sigma)"],
      ["Exact","Yes","16% (Frobenius, yield covariance)","5 (a,b,sigma,eta,rho)"]], font_size=9.8)
-badge_chosen(s, Inches(8.25), Inches(1.75))
-add_text(s, Inches(9.55), Inches(1.8), Inches(3.2), Inches(0.3), "Hull-White 1F (default)", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
-s.shapes.add_picture(f"{PNG}/fig19.png", Inches(0.5), Inches(3.3), width=Inches(5.0))
-add_text(s, Inches(0.5), Inches(5.85), Inches(5.6), Inches(0.5),
+badge_chosen(s, Inches(0.5), Inches(3.05))
+add_text(s, Inches(1.85), Inches(3.09), Inches(3.3), Inches(0.3), "Hull-White 1F (default)", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig19.png", Inches(0.5), Inches(3.55), width=Inches(5.0))
+add_text(s, Inches(0.5), Inches(6.13), Inches(6.0), Inches(0.5),
          "G2++ fit to realised yield-change vol by tenor: matches level/slope, not the 5y hump.",
          size=10.5, italic=True, color=GREY, font=FONT_BODY)
 rows = [["Netting set","MPE99 1F","MPE99 2F","Change"],
         ["CPTY_A","$26.2M","$26.0M","-1%"],["CPTY_B","$9.5M","$9.3M","-3%"],
         ["CPTY_C","$28.9M","$28.9M","-0%"],["Portfolio","$51.5M","$50.0M","-3%"]]
-simple_table(s, Inches(6.5), Inches(3.35), Inches(6.3), Inches(2.1), rows, col_widths=[1.9,1.5,1.5,1.4], font_size=10.5, header_size=11)
-why_box(s, Inches(6.5), Inches(5.6), Inches(6.3), Inches(1.75), "Hull-White 1F Over G2++", [
-    "-3% on the headline doesn't justify 3 extra parameters (2 vs 5) here -- no demonstrable accuracy gain for the added complexity",
-    "G2++'s own calibration carries a 16% fit error -- it trades one uncertainty (1F's missing slope factor) for another (2F's imperfect covariance fit), not a clear improvement",
-    "HW1F calibrates to the swaption cube, a forward-looking market instrument; G2++ calibrates to realised covariance only, a backward-looking proxy, with only 616 days to fit 5 parameters",
-    "Both are Gaussian and support negative rates and analytic bond pricing -- no capability is lost by staying 1F; simpler models are easier to validate and govern",
-], size=10)
+simple_table(s, Inches(7.1), Inches(1.5), Inches(5.7), Inches(1.6), rows, col_widths=[1.7,1.4,1.4,1.2], font_size=10, header_size=10.5)
+why_box(s, Inches(7.1), Inches(3.25), Inches(5.7), Inches(4.05), "Hull-White 1F Over G2++", [
+    "-3% on the headline doesn't justify 3 extra parameters (2 vs 5) -- no demonstrable accuracy gain for the added complexity",
+    "G2++'s own calibration carries a 16% fit error -- it trades one uncertainty (1F's missing slope factor) for another (2F's imperfect fit), not a clear improvement",
+    "HW1F calibrates to the forward-looking swaption cube; G2++ fits realised covariance only, with just 616 days of data to pin down 5 parameters",
+    "Both are Gaussian and support negative rates and analytic bond pricing -- no capability is lost by staying 1F; fewer parameters means less to validate and govern",
+    "Model risk here is dominated by equity volatility and rate-equity dependence, not rate-model choice (Section 7.9)",
+    "G2++ is already implemented, calibrated and left selectable (rates_model='g2pp') -- defaulting to 1F is a reversible choice, not a one-way door",
+], size=10.5)
 
 s = content_slide(5, "Full-Rank Correlation Kept: PCA Factor Model Adds No Speed, No Consistent Accuracy")
 set_notes(s,
@@ -984,9 +1005,11 @@ matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.1),
      ["cross","mid","3-5x one valuation -- needs differentiable pricers"]], font_size=9.5)
 badge_chosen(s, Inches(8.3), Inches(1.85))
 add_text(s, Inches(9.6), Inches(1.9), Inches(3.2), Inches(0.3), "CRN bump-and-reprice", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
-why_box(s, Inches(8.3), Inches(2.3), Inches(4.5), Inches(1.4), "CRN", [
+why_box(s, Inches(8.3), Inches(2.3), Inches(4.5), Inches(1.9), "CRN", [
     "Works on any pricer as a black box, for every measure including PFE99, which has no pathwise derivative",
-], size=11)
+    "282x lower estimator noise at zero extra simulation cost -- same number of paths, just reused random numbers",
+    "Generalises automatically to every new risk factor (e.g. the JPY factor) without new Greeks code",
+], size=9.3)
 s.shapes.add_picture(f"{PNG}/fig_greeks_cost.png", Inches(0.9), Inches(3.9), width=Inches(4.3))
 add_text(s, Inches(0.9), Inches(6.55), Inches(5.6), Inches(0.5),
          "Cost per Greeks method, measured at N=300, 8 cores.",
@@ -1061,11 +1084,13 @@ rows = [["Tenor bucket","Old (zero-grid)","New (par-instrument Jacobian)"],
         ["3y","-96","-105"],["5y","-770","-713"],["10y","-18,324 (39%)","-6,592 (11%)"],
         ["30y","-24,988 (54%)","-47,191 (82%)"],["Sum","-46,580","-57,713"],["Parallel bump (check)","-46,605","-57,705"]]
 simple_table(s, Inches(0.5), Inches(2.6), Inches(5.9), Inches(4.5), rows, col_widths=[2.0,1.6,2.3], font_size=10, header_size=10.5)
-why_box(s, Inches(6.6), Inches(2.6), Inches(6.2), Inches(2.5), "The Benefit, Concretely", [
+why_box(s, Inches(6.6), Inches(2.6), Inches(6.2), Inches(2.55), "The Benefit, Concretely", [
     "Correct tenor attribution means a hedge actually offsets the risk that exists -- old grid would have left the real 30y exposure open while 'hedging' a bucket with little real risk",
     "Total portfolio DV01 itself moves from $46.6k to $57.7k/bp -- the par-instrument method captures curvature the old linear zero-rate interpolation missed, not just a reallocation",
     "Each method is internally consistent (bucket sum matches its own parallel-shift check to within 0.05%) -- the two totals differ because they measure genuinely different things",
-], size=10.5)
+    "The par-instrument pillars are the curve's own construction instruments (SOFR futures + Bloomberg long end) -- bumping them is the sensitivity a trader would actually hedge against",
+    "SA-CVA interest-rate delta uses the same tenor bucketing -- the old grid would have misallocated regulatory capital by tenor in exactly the same way",
+], size=9.3)
 s.shapes.add_picture(f"{PNG}/fig_dv01_compare.png", Inches(7.4), Inches(5.2), width=Inches(4.4))
 add_text(s, Inches(6.6), Inches(7.22), Inches(6.1), Inches(0.25),
          "Bucketed DV01, old vs new method.", size=9, italic=True, color=GREY, font=FONT_BODY)
