@@ -423,6 +423,42 @@ add_bullets(s, Inches(0.55), Inches(3.35), Inches(11.9), Inches(3.2), [
     ("Key conclusion: risk is short-dated (~4 months) and concentrated in one $500M bond forward (BF_0003) at CPTY_C -- a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report", "", 0),
 ], size=13.5, space_after=10)
 
+# --- Slide 2b: The trade book itself ---
+s = content_slide(0, "The Book: 16 Trades, Dominated in Size by One $500M Bond Forward")
+set_notes(s,
+  "Show the actual book before anything else -- every number in this deck traces back to these 16 rows.",
+  ["BF_0003 ($121.3M NPV) is more than 20x the next-largest position -- this single trade is why CPTY_C dominates concentration throughout the deck",
+   "8 Equity TRS, 4 Bond Forwards, 4 Bond TRS; maturities cluster in late 2026, with BTRS_0001 and EQTRS_0008 running into 2027/2028",
+   "This table is Section 2.1 of the report -- supplied by Capitolis in trade_data/, unmodified by us"],
+  "1.5 min")
+rows = [["Trade","Type","Cpty","Ends","NPV today"],
+        ["EQTRS_0001","Equity TRS","A","2026-10-14","-$5,547,056"],
+        ["EQTRS_0002","Equity TRS","A","2026-10-09","-$1,076,056"],
+        ["EQTRS_0003","Equity TRS","A","2026-10-16","$9,921,581"],
+        ["EQTRS_0004","Equity TRS","B","2026-11-02","-$873,451"],
+        ["EQTRS_0005","Equity TRS","B","2026-10-09","$148,605"],
+        ["EQTRS_0006","Equity TRS","B","2026-10-30","$1,629,065"],
+        ["EQTRS_0007","Equity TRS","C","2026-10-23","-$373,630"],
+        ["EQTRS_0008","Equity TRS","C","2027-07-22","$2,217,998"],
+        ["BF_0001","Bond Forward","A","2026-10-30","$512,531"],
+        ["BF_0002","Bond Forward","A","2026-11-08","-$357,505"],
+        ["BF_0003","Bond Forward","C","2026-12-06","$121,262,854"],
+        ["BF_0004","Bond Forward","C","2026-10-25","$1,973,388"],
+        ["BTRS_0001","Bond TRS","A","2028-01-15","$119,460"],
+        ["BTRS_0002","Bond TRS","B","2027-01-15","$210,278"],
+        ["BTRS_0003","Bond TRS","B","2027-04-09","$28,844"],
+        ["BTRS_0004","Bond TRS","C","2026-11-04","$36,376"]]
+simple_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(5.3), rows,
+             col_widths=[1.7,1.9,0.8,1.5,2.1], font_size=9.5, header_size=10)
+s.shapes.add_picture(f"{PNG}/fig04.png", Inches(8.3), Inches(1.5), width=Inches(4.5))
+add_text(s, Inches(8.3), Inches(4.02), Inches(4.5), Inches(0.55),
+         "Life span of every trade: nearly all exposure disappears within 4 months.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+why_box(s, Inches(8.3), Inches(4.6), Inches(4.5), Inches(2.2), "One Trade Dominates", [
+    "BF_0003: 500M notional short forward on a 2.88% 2049 Treasury, struck at 100, trading ~25pts below par",
+    "This single position is why CPTY_C drives concentration, SA-CCR EAD and CVA throughout the results",
+], size=11)
+
 # --- Slide 3: Agenda & scope ---
 s = content_slide(0, "16 Trades, 3 Counterparties, 37 Equities and USDJPY, One Engine")
 set_notes(s,
@@ -550,6 +586,80 @@ add_bullets(s, Inches(0.5), Inches(5.1), Inches(12.3), Inches(1.6), [
     ("Assumptions disclosed, not hidden: counterparty rating BBB, LGD 60%, static correlation, JPY mean reversion at its lower bound (every real calibration route gave a negative value)", "", 0),
 ], size=12, space_after=7)
 
+s = content_slide(2, "The USD Curve: 33 Live Futures Bootstrapped, Spliced at the Long End")
+set_notes(s,
+  "Show the actual curve-construction process -- this curve discounts every trade and drives the Hull-White fit.",
+  ["Each 3-month SOFR future gives an implied forward rate for its reference quarter; chaining consecutive quarters multiplies discount factors",
+   "Futures end at about 6.5 years; beyond that the curve follows the forward structure of Bloomberg's own zero curve, joined continuously -- not flat extrapolation",
+   "The splice matters in dollars: BF_0003's NPV moves from $101.4M (flat) to $121.3M (spliced), within 0.4% of repricing on Bloomberg's own curve directly"],
+  "1.5 min")
+s.shapes.add_picture(f"{PNG}/fig06.png", Inches(0.5), Inches(1.5), width=Inches(6.0))
+add_text(s, Inches(0.5), Inches(4.52), Inches(6.0), Inches(0.5),
+         "Bootstrapped USD SOFR curve: zero rate and instantaneous forward, 0-6.5y.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig07.png", Inches(6.7), Inches(1.5), width=Inches(6.1))
+add_text(s, Inches(6.7), Inches(4.58), Inches(6.1), Inches(0.5),
+         "Zero curve before (flat) and after the Bloomberg long-end splice. Identical inside the futures range.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+why_box(s, Inches(0.5), Inches(5.15), Inches(12.3), Inches(1.6), "Splicing, Not Extrapolating Flat", [
+    "A 22-year bond has duration ~13 -- a flat long end understates discounting of exactly the trade (BF_0003) that dominates the book",
+    "The splice is joined continuously at the last futures pillar: nothing inside the live futures range changes, only the part we had no market data for",
+], size=11.5)
+
+s = content_slide(2, "Volatility: 3-Year Realised, Fitted to Where the Book's Risk Actually Lives")
+set_notes(s,
+  "Volatility is the key diffusion input for every risk factor; show both the equity cross-section and the rate-vol fitting decision.",
+  ["37 equities span an order of magnitude in realised vol (a handful of names at 50-76%) -- these dominate tail exposure wherever they appear",
+   "USD Hull-White sigma is fitted to realised 2y-30y Treasury yield vol (96bp), not the overnight SOFR fixing (63bp) -- the overnight rate moves in discrete Fed-date steps and says little about the long end the book actually depends on",
+   "This fix (Section 3.2) was itself one of the defects corrected: the original overnight-SOFR calibration understated 10-day 20y-yield moves (11bp modelled vs 15bp realised)"],
+  "1.5 min")
+s.shapes.add_picture(f"{PNG}/fig08.png", Inches(0.5), Inches(1.5), width=Inches(5.6))
+add_text(s, Inches(0.5), Inches(4.23), Inches(5.6), Inches(0.5),
+         "3-year realised lognormal volatility per equity (orange = JPY-quoted).",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig09.png", Inches(6.4), Inches(1.5), width=Inches(5.3))
+add_text(s, Inches(6.4), Inches(4.37), Inches(6.3), Inches(0.5),
+         "Realised Treasury yield vol by tenor vs. the Hull-White implied shape for both sigma choices.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+why_box(s, Inches(0.5), Inches(4.95), Inches(12.2), Inches(1.4), "No Options Data Available", [
+    "Implied vol is the pricing-industry norm, but we had no single-name options data (Bloomberg export has only SPX/TOPIX index vols)",
+    "3-year realised is a reproducible, documented proxy; its backward-looking limitation is disclosed and stress-tested (vols x1.25/x2 in Section 7.9)",
+], size=11)
+
+s = content_slide(2, "Correlation: One Static 39x39 Matrix From 616 Aligned Trading Days")
+set_notes(s,
+  "Explain how the correlation matrix was actually built, including the cross-market calendar-join subtlety.",
+  ["US and Tokyo trade on different calendars, so series are joined by calendar date, not timestamp -- an earlier version joined by timestamp and silently emptied ~70% of the table (defect #4)",
+   "741 pairwise correlations center on 0.14 -- a broad positive market block, not a few isolated pairs",
+   "The USD rate row uses 10-year Treasury yield changes, not the overnight SOFR fixing, because the fixing moves in Fed-date steps and correlates with nothing"],
+  "1.5 min")
+s.shapes.add_picture(f"{PNG}/fig10.png", Inches(3.0), Inches(1.5), width=Inches(7.3))
+add_text(s, Inches(3.0), Inches(5.26), Inches(7.3), Inches(0.4),
+         "Left: 39x39 matrix reordered by first principal component. Right: distribution of the 741 pairwise correlations.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(0.5), Inches(5.75), Inches(12.3), Inches(1.4), [
+    ("Assumed constant over the one-year simulation horizon -- correlations tend to rise in stress; this is stressed directly in the model-risk study (Section 7.9: +30% toward 1 moves portfolio MPE99 by +22%)", "", 0),
+    ("A tiny eigenvalue clip guards against CSV round-off making the matrix numerically non-positive-semi-definite before Cholesky factorisation", "", 0),
+], size=12, space_after=7)
+
+s = content_slide(2, "Every Assumption Not Sourced From Data, Stated Explicitly")
+set_notes(s,
+  "A single consolidated slide of every number in the engine that is an assumption, not a measurement -- full transparency in one place.",
+  ["None of these are hidden inside a formula -- each is named here and its sensitivity is shown somewhere else in this deck",
+   "The two biggest-impact assumptions are the counterparty credit rating (drives every CVA/SA-CVA number) and whether the book is margined at all (drives the choice of exposure convention)",
+   "Every other input in the engine -- curves, vols, correlations, trade terms -- is measured from real data, not assumed"],
+  "1.5 min")
+rows = [["Assumption","Value used","Where it matters","Sensitivity shown"],
+        ["Counterparty credit rating","BBB (proxy, all 3 counterparties)","CVA, DVA, FVA, SA-CVA capital","AAA $5.0k to B $32.8k (2.6x AA-BB range)"],
+        ["Loss given default (LGD)","60% (40% recovery)","CVA, DVA default-probability triangle","Market-consensus value for senior unsecured"],
+        ["Margin period of risk (MPOR)","10 business days","Close-out exposure window","Per the brief; not varied"],
+        ["Collateral / CSA terms","None (uncollateralized)","Headline vs. level exposure choice","MPOR illustration: CPTY_C moves 82% if margined"],
+        ["Correlation structure","Static over 1-year horizon","All joint simulation","+30% toward 1: portfolio MPE99 +22%"],
+        ["JPY mean reversion","0.001 (lower bound)","JPY factor dynamics","Every real calibration route gave a negative value"],
+        ["Own credit / funding spread","= BBB counterparty proxy curve","DVA, FVA","Shown across AA to BB in Section 8.5"]]
+simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(5.3), rows,
+             col_widths=[2.3,2.5,3.0,4.5], font_size=10, header_size=10.5)
+
 print("Section 3 (Data) done")
 
 
@@ -587,6 +697,46 @@ rows = [["Bottleneck","Fix","Before","After"],
         ["Combined, 2,000 scenarios x 16 trades","Both fixes together","~12 min projected","93s (7.7x)"]]
 simple_table(s, Inches(0.5), Inches(4.75), Inches(12.3), Inches(2.0), rows,
              col_widths=[3.6,3.8,2.1,2.8], font_size=10.3, header_size=10.8)
+
+def step_row(slide, y, num, title, desc, modules):
+    add_rect(slide, Inches(0.5), y, Inches(0.5), Inches(0.5), ACCENT)
+    add_text(slide, Inches(0.5), y, Inches(0.5), Inches(0.5), str(num), size=18, bold=True, color=WHITE,
+              align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+    add_text(slide, Inches(1.2), y - Inches(0.03), Inches(4.6), Inches(0.5), title, size=13, bold=True, color=NAVY, font=FONT_HEAD)
+    add_text(slide, Inches(1.2), y + Inches(0.42), Inches(7.6), Inches(0.5), desc, size=10.5, color=NAVY, font=FONT_BODY, line_spacing=1.05)
+    add_text(slide, Inches(8.9), y - Inches(0.03), Inches(3.9), Inches(0.9), modules, size=9.5, color=GREY, font="Courier New", line_spacing=1.1)
+
+s = content_slide(3, "Building the Engine, Steps 1-4: From Raw Data to Calibrated Models")
+set_notes(s,
+  "Walk the actual build order: repo and data layer first, then the risk-factor models, then calibration, then the simulation engine that ties them together.",
+  ["Each step maps to a real Python package in the repository -- this isn't a conceptual diagram, it's the literal module structure",
+   "Steps 1-2 are almost entirely about getting real market data right; steps 3-4 turn that data into calibrated, simulatable models",
+   "The next slide covers steps 5-8: pricing integration through to validation and testing"],
+  "2 min")
+step_row(s, Inches(1.55), 1, "Repository & data layer", "Ingest Capitolis-supplied trades/pricers; pull SOFR futures, equity/FX spots, Treasury/JPY/BOJ/MOF history", "market/\n  sofr, equities, fx, vols,\n  correlations, boj, mof_jgb,\n  bloomberg, credit_spreads")
+step_row(s, Inches(2.55), 2, "Market data assembly", "Bootstrap the USD curve, compute realised vols, build the 39x39 correlation matrix, proxy credit spreads", "market/sofr.py\nmarket/equities.py\nmarket/credit_spreads.py")
+step_row(s, Inches(3.55), 3, "Risk-factor models", "Implement Hull-White 1F (+G2++), correlated GBM for equity/FX, the JPY Hull-White factor, PCA factor model", "models/\n  rates, g2pp, equity_fx,\n  equity_factor_model, credit")
+step_row(s, Inches(4.55), 4, "Calibration", "Fit sigma/a to swaption cube and realised yield vol; fit JPY factor to the real OIS history; least-squares G2++", "models/\n  calibration, hw_calibration")
+step_row(s, Inches(5.55), 5, "Simulation engine", "Build the date grid (pillars + trade events + MPOR nodes), draw correlated shocks, step every factor jointly", "simulation/\n  engine, random_numbers,\n  parallel")
+why_box(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.65), "Design Principle: Modularity", [
+    "Each package has one job and is independently testable -- the 142 automated tests target these modules directly, not just end-to-end output",
+], size=10.5)
+
+s = content_slide(3, "Building the Engine, Steps 5-8: Pricing Through to Validation")
+set_notes(s,
+  "Second half of the build: integrate the given pricing library, compute Greeks, layer on credit risk and capital, then validate everything independently.",
+  ["Step 6 (pricing) deliberately reuses the Capitolis-supplied library unmodified -- a MarketState is built from simulated factors and handed to pricer.npv()",
+   "Steps 7-8 (Greeks, exposure/credit) are built on the same simulated paths as step 5 -- not separate re-simulations, so every output is mutually consistent",
+   "Step 9 (validation) closes the loop with checks that are independent of the engine's own outputs -- martingale tests, a parametric VaR benchmark, and a historical backtest"],
+  "2 min")
+step_row(s, Inches(1.55), 6, "Pricing integration", "At every (scenario, node): build a MarketState from simulated rates/spots/FX, call the unmodified pricer library", "capitolis_pricers\n  (given, independently\n   reviewed, never modified)")
+step_row(s, Inches(2.55), 7, "Aggregation & exposure", "Net by counterparty, apply the close-out/level exposure definitions, compute EE/median PFE/PFE99/MPE", "exposure/\n  spec_exposure, aggregate,\n  collateral")
+step_row(s, Inches(3.55), 8, "Greeks", "Bump-and-reprice with common random numbers; pathwise cross-check for equity/FX; exact analytic rate Greek", "greeks/\n  book, exposure, pathwise,\n  bumps")
+step_row(s, Inches(4.55), 9, "Credit risk & capital", "CVA/DVA/FVA/KVA on the same paths; Basel SA-CVA capital; SA-CCR EAD; the risky-bond extra-credit trade", "exposure/\n  cva, xva, sa_cva, sa_ccr")
+step_row(s, Inches(5.55), 10, "Stress, backtest & tests", "13 stress scenarios; Kupiec/Christoffersen backtests against realised history; 142 automated unit/statistical tests", "stress/scenarios.py\nvalidation/backtest.py\ntests/  (142 tests)")
+why_box(s, Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.65), "Design Principle: Reproducibility", [
+    "Every number in this deck regenerates from one command per stage (Appendix A10) -- nothing here is a one-off, hand-tuned result",
+], size=10.5)
 
 print("Section 4 (Pipeline) done")
 
@@ -776,9 +926,12 @@ rows = [["Netting set","MPE99 1F","MPE99 2F","Change"],
         ["CPTY_A","$26.2M","$26.0M","-1%"],["CPTY_B","$9.5M","$9.3M","-3%"],
         ["CPTY_C","$28.9M","$28.9M","-0%"],["Portfolio","$51.5M","$50.0M","-3%"]]
 simple_table(s, Inches(6.5), Inches(3.35), Inches(6.3), Inches(2.1), rows, col_widths=[1.9,1.5,1.5,1.4], font_size=10.5, header_size=11)
-why_box(s, Inches(6.5), Inches(5.65), Inches(6.3), Inches(1.45), "Hull-White 1F", [
-    "-3% on the headline is not worth 3 extra parameters here; the bigger uncertainty is equity vol and rate-equity dependence (Section 7.9)",
-], size=11)
+why_box(s, Inches(6.5), Inches(5.6), Inches(6.3), Inches(1.75), "Hull-White 1F Over G2++", [
+    "-3% on the headline doesn't justify 3 extra parameters (2 vs 5) here -- no demonstrable accuracy gain for the added complexity",
+    "G2++'s own calibration carries a 16% fit error -- it trades one uncertainty (1F's missing slope factor) for another (2F's imperfect covariance fit), not a clear improvement",
+    "HW1F calibrates to the swaption cube, a forward-looking market instrument; G2++ calibrates to realised covariance only, a backward-looking proxy, with only 616 days to fit 5 parameters",
+    "Both are Gaussian and support negative rates and analytic bond pricing -- no capability is lost by staying 1F; simpler models are easier to validate and govern",
+], size=10)
 
 s = content_slide(5, "Full-Rank Correlation Kept: PCA Factor Model Adds No Speed, No Consistent Accuracy")
 set_notes(s,
@@ -805,6 +958,31 @@ add_bullets(s, Inches(7.4), Inches(4.15), Inches(5.4), Inches(2.6), [
     ("Explainable: factor 1 (20% of variance) is a broad market mode; factor 2 (8.9%) separates Japan from US listings", "", 0),
     ("Would become useful only if systematic factors were drawn quasi-randomly and idiosyncratic noise pseudo-randomly -- listed as future work", "", 0),
 ], size=11.5, space_after=8)
+
+s = content_slide(5, "What the PCA Factors Actually Are: a Market Mode, Then Japan vs US")
+set_notes(s,
+  "Make the PCA factors concrete and economically interpretable -- this is what 'explainability' means in practice.",
+  ["Factor 1 alone explains 20% of total variance and loads positively on every single name, both regions -- a textbook broad market factor",
+   "Factor 2 cleanly separates Tokyo-listed names from US names -- the Japan-vs-US split the book structurally cares about (JPY compo trades)",
+   "Factors 3-5 pick out smaller groupings (defensive staples vs growth/tech, energy/rate-sensitive names) -- they are statistical, not economic, factors, but their loadings can be read off the real data"],
+  "1.5 min")
+rows = [["Factor","Var. share","Highest loadings","Lowest loadings","Reading"],
+        ["1","20.0%","NXPI +0.25, BAC +0.25, JPM +0.24","4503.T -0.02, KO -0.00","Market factor: every name, both regions"],
+        ["2","8.9%","6902.T +0.43, 5108.T +0.43, 7751.T +0.42","NXPI -0.09, KLAC -0.07","Japan vs US"],
+        ["3","8.5%","KO +0.40, PG +0.35, BRK.B +0.32","KLAC -0.21, VST -0.16","Defensive staples vs growth tech/power"],
+        ["4","5.3%","MPC +0.44, XOM +0.43, RATE_USD +0.34","HDB -0.28, IBN -0.28","Energy / rate-sensitive group"],
+        ["5","4.0%","CEG +0.39, NFLX +0.39, VST +0.37","WBS -0.25, NXPI -0.22","Growth and financial names"]]
+simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(2.8), rows,
+             col_widths=[0.8,1.3,3.3,3.0,3.9], font_size=9.8, header_size=10.3)
+s.shapes.add_picture(f"{PNG}/fig14.png", Inches(2.9), Inches(4.3), width=Inches(6.0))
+add_text(s, Inches(2.9), Inches(7.03), Inches(6.0), Inches(0.3),
+         "Eigenvalue scree, cumulative variance explained, and reconstruction error vs. k factors.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(4.3), Inches(2.2), Inches(0.35),
+         "Why this matters:", size=11, bold=True, color=ACCENT_DK, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(4.7), Inches(2.2), Inches(2.0),
+         "A factor model is only useful to a risk reviewer if the factors mean something -- these do.",
+         size=10, color=GREY, font=FONT_BODY, line_spacing=1.1)
 
 s = content_slide(5, "Common Random Numbers Make Bump-and-Reprice 282x Less Noisy Than Independent Draws")
 set_notes(s,
@@ -881,6 +1059,32 @@ s.shapes.add_picture(f"{PNG}/fig_kva_compare.png", Inches(6.9), Inches(4.0), wid
 add_text(s, Inches(6.9), Inches(7.0), Inches(5.4), Inches(0.4),
          "Item 8: KVA vs CVA at 8/10/12% cost of capital.",
          size=10, italic=True, color=GREY, font=FONT_BODY)
+
+s = content_slide(6, "DV01 via a Jacobian: Full Before/After, and Why It Changes Hedging",
+                   feedback_tag="Feedback-driven")
+set_notes(s,
+  "Go deep on item 10 -- this is the single biggest methodology correction from feedback, and it has a real hedging consequence, not just a cosmetic one.",
+  ["A 'Jacobian' here means the DV01 to each of the curve's own ~45 construction instruments (SOFR futures + Bloomberg long-end points), not to 8 interpolated zero-rate tenors",
+   "The old method's 10y bucket (39% of DV01) was an artifact of where the zero-rate grid happened to sample the fitted curve, not of where the book's rate risk actually sits",
+   "Practical consequence: a hedger following the old attribution would buy/sell 10y instruments to offset CPTY_C's rate risk -- but 82% of the real risk is in the 30y bucket, where the 2049 bond forward actually lives, leaving the position effectively unhedged against a curve twist"],
+  "2 min")
+add_text(s, Inches(0.5), Inches(1.45), Inches(12.3), Inches(0.9),
+         "A Jacobian is the matrix of sensitivities of one set of quantities to another. Here: dNPV / d(each of the curve's own ~45 "
+         "native build instruments), summed into the 8 standard tenor buckets by the same chain-rule weights used to build the curve itself.",
+         size=12, color=NAVY, font=FONT_BODY, line_spacing=1.1)
+rows = [["Tenor bucket","Old (zero-grid)","New (par-instrument Jacobian)"],
+        ["0.25y","-2,182","-2,892"],["0.5y","-46","-1"],["1y","-44","-14"],["2y","-131","-205"],
+        ["3y","-96","-105"],["5y","-770","-713"],["10y","-18,324 (39%)","-6,592 (11%)"],
+        ["30y","-24,988 (54%)","-47,191 (82%)"],["Sum","-46,580","-57,713"],["Parallel bump (check)","-46,605","-57,705"]]
+simple_table(s, Inches(0.5), Inches(2.6), Inches(5.9), Inches(4.5), rows, col_widths=[2.0,1.6,2.3], font_size=10, header_size=10.5)
+why_box(s, Inches(6.6), Inches(2.6), Inches(6.2), Inches(2.5), "The Benefit, Concretely", [
+    "Correct tenor attribution means a hedge actually offsets the risk that exists -- old grid would have left the real 30y exposure open while 'hedging' a bucket with little real risk",
+    "Total portfolio DV01 itself moves from $46.6k to $57.7k/bp -- the par-instrument method captures curvature the old linear zero-rate interpolation missed, not just a reallocation",
+    "Each method is internally consistent (bucket sum matches its own parallel-shift check to within 0.05%) -- the two totals differ because they measure genuinely different things",
+], size=10.5)
+s.shapes.add_picture(f"{PNG}/fig_dv01_compare.png", Inches(7.4), Inches(5.2), width=Inches(4.4))
+add_text(s, Inches(6.6), Inches(7.22), Inches(6.1), Inches(0.25),
+         "Bucketed DV01, old vs new method.", size=9, italic=True, color=GREY, font=FONT_BODY)
 
 print("Section 7 (Feedback) done")
 
@@ -1138,6 +1342,35 @@ s.shapes.add_picture(f"{PNG}/fig36.png", Inches(6.9), Inches(4.25), width=Inches
 add_text(s, Inches(6.9), Inches(6.9), Inches(5.9), Inches(0.4),
          "Discounted EE, CVA by counterparty, and portfolio CVA by assumed rating.",
          size=9.5, italic=True, color=GREY, font=FONT_BODY)
+
+s = content_slide(7, "Extra Credit: Pricing a Risky Bond With an Issuer-Credit Proxy")
+set_notes(s,
+  "The second kickoff extra-credit item -- a sample risky-bond trade outside the 16-trade book, pricing issuer credit risk directly into the bond.",
+  ["Issuer credit and counterparty CVA are two different things: issuer credit lowers the bond's own value; counterparty CVA (shown on the previous slide) is the risk that the other side of the trade defaults",
+   "No CDS quotes were obtainable for the issuer, so the same proxy method as the counterparty spreads is reused: ICE BofA BBB option-adjusted spreads with the pricing library's credit-triangle survival curve",
+   "The risky bond is worth $934k less than the risk-free version -- issuer credit is not a small effect here, it flips the forward's sign (from +$654k to -$280k)"],
+  "1.5 min")
+add_bullets(s, Inches(0.5), Inches(1.5), Inches(6.0), Inches(2.2), [
+    ("Sample trade: a long forward on a 5% BBB corporate bond, $25M notional, forward date 2027-02-26 -- not part of the ESF book", "", 0),
+    ("Issuer curve: same BBB proxy method as counterparty spreads (0.5y 59bp -> 10y 118bp), re-anchored at every simulated node with a deterministic term structure", "", 0),
+    ("Priced two ways: risk-free (ignore issuer credit) vs. risky (issuer credit priced in) -- same forward, same simulation, only the discount/survival treatment differs", "", 0),
+], size=12, space_after=8)
+rows = [["Quantity","Risk-free bond","Risky bond (issuer credit)"],
+        ["t=0 NPV of the forward","$653,843","-$280,309"],
+        ["Forward clean price","102.6666","98.8568"],
+        ["Issuer credit charge at t=0","--","$934,152"],
+        ["CS01 (NPV per +1bp issuer spread)","--","-$10,998"],
+        ["Close-out MPE99 (counterparty exposure)","$0.5M","$0.5M"],
+        ["Peak level PFE99 (uncollateralized)","$2.1M","$1.3M"]]
+simple_table(s, Inches(0.5), Inches(4.0), Inches(7.1), Inches(3.0), rows, col_widths=[3.1,2.0,2.0], font_size=10.3, header_size=10.8)
+why_box(s, Inches(6.9), Inches(1.5), Inches(5.9), Inches(2.3), "What's Missing vs. a Full CDS Build-Out", [
+    "Issuer credit is deterministic here (the spread curve doesn't move in the simulation) -- a stochastic issuer-spread factor is listed as future work",
+    "No CDS instrument pricer exists in the supplied library, so CDS themselves (as opposed to a risky bond) could not be added",
+], size=11)
+add_bullets(s, Inches(6.9), Inches(4.0), Inches(5.9), Inches(3.0), [
+    ("Counterparty exposure (close-out MPE99 $0.5M) is almost unchanged between the two versions -- it's driven by the forward's market-risk move, not by issuer credit", "", 0),
+    ("Peak level PFE99 falls from $2.1M to $1.3M on the risky bond: issuer credit lowers the bond's value, which lowers the level of exposure at risk, even though CS01 adds a new risk dimension", "", 0),
+], size=12, space_after=8)
 
 s = content_slide(7, "SA-CVA Capital $0.10M (Close-Out) / $2.23M (Level); SA-CCR EAD $260.3M")
 set_notes(s,
