@@ -900,16 +900,16 @@ set_notes(s,
    "LHS is the only method that is both best on the controlled test AND better than pseudo-random on both real-engine statistics -- that consistency is why it was selected over Sobol, the controlled-test runner-up"],
   "2 min")
 matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.5),
-    ["Call RMSE (Test 1)","PFE99 noise (Test 2)","Median noise (Test 2)","Verdict"],
+    ["RMSE vs pseudo-random","PFE99 rel. SE","Median PFE rel. SE","Verdict"],
     ["Pseudo-random","Antithetic","Moment-matched","Sobol","Latin Hypercube"],
     [["1.0x (baseline)","2.60%","0.66%","Baseline"],
      ["1.4x better","1.98%","0.39%","Modest, real engine"],
      ["6.3x better","2.49%","0.35%","Median only, no PFE99 gain"],
      ["28.7x better","1.64%","0.70%","Best PFE99, no median gain"],
      ["50.6x better","2.25%","0.42%","Best on both"]], font_size=8.8)
-add_text(s, Inches(0.5), Inches(4.05), Inches(7.6), Inches(0.35),
-         "Test 1: European call price vs. Black-Scholes, RMSE relative to pseudo-random. Test 2: relative "
-         "standard deviation of the real 663-dim engine's estimator across 8 repeats (% of reference value).",
+add_text(s, Inches(0.5), Inches(4.05), Inches(7.6), Inches(0.4),
+         "Two studies, same table: a controlled European-call benchmark (RMSE vs. Black-Scholes, relative to "
+         "pseudo-random) and the real 663-dim engine's own estimator noise (relative standard error, 8 repeats).",
          size=9, italic=True, color=GREY, font=FONT_BODY)
 badge_chosen(s, Inches(8.4), Inches(1.95))
 why_box(s, Inches(8.4), Inches(2.3), Inches(4.4), Inches(2.0), "Latin Hypercube", [
@@ -1024,28 +1024,39 @@ set_notes(s,
    "Pathwise is validated and used as a free cross-check for equity/FX (0.2-0.4s vs ~260s) but cannot reach rates without differentiating the pricers",
    "Adjoint differentiation is the asymptotically fastest method but needs a differentiable port of the supplied black-box pricers -- listed as future work, not adopted"],
   "1.5 min")
-matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.1),
-    ["Works as black box","Covers quantiles","Cost"],
-    ["Bump, independent draws","Bump, CRN (used)","Pathwise (eq/FX check)","Adjoint (not adopted)"],
-    [["check","check","1x, but 282x noisier"],
-     ["check","check","1x, cost measured"],
-     ["cross","cross","~1000x faster, eq/FX only"],
-     ["cross","mid","3-5x one valuation -- needs differentiable pricers"]], font_size=9.5)
-badge_chosen(s, Inches(8.3), Inches(1.85))
-add_text(s, Inches(9.6), Inches(1.9), Inches(3.2), Inches(0.3), "CRN bump-and-reprice", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
-why_box(s, Inches(8.3), Inches(2.3), Inches(4.5), Inches(1.9), "CRN", [
+add_text(s, Inches(0.5), Inches(1.5), Inches(7.1), Inches(0.3),
+         "Validated on a European call against the known Black-Scholes answer (Section 11.6):",
+         size=11.5, bold=True, color=NAVY, font=FONT_BODY)
+rows = [["Estimator","Bias","Std of estimate","Time/trial"],
+        ["Pathwise","+0.000085","0.003771","0.470 ms"],
+        ["Bump, common random numbers (used)","+0.000033","0.003742","0.327 ms"],
+        ["Bump, independent random numbers","-0.003502","0.096885","0.850 ms"]]
+simple_table(s, Inches(0.5), Inches(1.9), Inches(7.1), Inches(1.5), rows,
+             col_widths=[3.0,1.4,1.7,1.5], font_size=9.8, header_size=10.2)
+add_text(s, Inches(0.5), Inches(3.5), Inches(7.1), Inches(0.3),
+         "CRN is statistically indistinguishable from pathwise (26x lower std than independent draws) -- and works on any pricer.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_text(s, Inches(0.5), Inches(4.0), Inches(7.1), Inches(0.3), "All 5 Greeks methods considered:",
+         size=12.5, bold=True, color=NAVY, font=FONT_HEAD)
+add_bullets(s, Inches(0.5), Inches(4.4), Inches(7.1), Inches(2.9), [
+    ("Bump, independent draws -- unbiased, but noise swamps the signal on the real book (282x higher std): rejected", "", 0),
+    ("Bump, common random numbers (used) -- same draws in base and bumped runs; works as a black box for every measure including PFE99, which has no pathwise derivative", "", 0),
+    ("Pathwise (infinitesimal perturbation) -- differentiates the payoff along each path, no repricing; exact for linear equity/FX deltas, but can't reach rates without differentiating the pricers: used as a free cross-check only", "", 0),
+    ("Likelihood ratio -- differentiates the path density instead of the payoff; suits vega-type parameters but has high variance over many time steps: not adopted", "", 0),
+    ("Adjoint (algorithmic) differentiation -- asymptotically fastest (all Greeks for ~3-5x one valuation) but needs a differentiable port of the black-box pricers: not possible here, listed as future work", "", 0),
+], size=10, space_after=6)
+badge_chosen(s, Inches(8.1), Inches(1.5))
+add_text(s, Inches(9.4), Inches(1.54), Inches(3.4), Inches(0.3), "CRN bump-and-reprice", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
+why_box(s, Inches(8.1), Inches(1.95), Inches(4.7), Inches(1.9), "CRN", [
     "Works on any pricer as a black box, for every measure including PFE99, which has no pathwise derivative",
     "282x lower estimator noise at zero extra simulation cost -- same number of paths, just reused random numbers",
     "Generalises automatically to every new risk factor (e.g. the JPY factor) without new Greeks code",
 ], size=9.3)
-s.shapes.add_picture(f"{PNG}/fig_greeks_cost.png", Inches(0.9), Inches(3.9), width=Inches(4.3))
-add_text(s, Inches(0.9), Inches(6.55), Inches(5.6), Inches(0.5),
-         "Cost per Greeks method, measured at N=300, 8 cores.",
-         size=10.5, italic=True, color=GREY, font=FONT_BODY)
-add_bullets(s, Inches(5.6), Inches(3.9), Inches(7.2), Inches(2.7), [
-    ("82 of 91 total factor bumps (equity+FX) cost 88s total via exact GBM path rescaling -- vs ~8,166s naive resimulation", "", 0),
-    ("Rate/vol bumps still need resimulation (~109s each, 13 needed) -- the exact analytic rate Greek (feedback item 7, next section) removes even that cost for curve-only bumps", "", 0),
-], size=11.5, space_after=8)
+s.shapes.add_picture(f"{PNG}/fig_greeks_cost.png", Inches(8.3), Inches(4.0), width=Inches(4.2))
+add_text(s, Inches(8.1), Inches(6.6), Inches(4.7), Inches(0.5),
+         "Cost per Greeks method, measured at N=300, 8 cores. 82 of 91 factor bumps cost 88s total via exact "
+         "GBM path rescaling -- vs ~8,166s naive resimulation.",
+         size=9, italic=True, color=GREY, font=FONT_BODY)
 
 print("Section 6 (Trade-offs) done")
 
@@ -1264,32 +1275,6 @@ add_bullets(s, Inches(0.5), Inches(5.75), Inches(12.3), Inches(1.4), [
     ("This directly supports retaining the simpler one-factor Hull-White: the bigger uncertainty lives elsewhere", "", 0),
 ], size=12, space_after=6)
 
-s = content_slide(7, "Stress Testing: Close-Out MPE99 Moves at Most -24% / +23%, Level Moves Up to +86%",
-                   feedback_tag="Feedback-driven")
-set_notes(s,
-  "Answers feedback item 1 -- a structured stress programme, not a paragraph. Key finding: margin, not the shock, is what dampens the close-out measure.",
-  ["Close-out exposure is structurally far less sensitive to instantaneous shocks than the level exposure, because 10-day moves from a margined start are what's being measured",
-   "Product-specific: equity TRS respond only to equity/FX shocks; bond forwards/TRS respond only to rate shocks, exactly as trade structure implies",
-   "Largest close-out move: Stagflation -24%; largest level move: Stagflation +86% for the opposite reason (level exposure keeps the whole MTM at risk)"],
-  "2 min")
-rows = [["Scenario","Close-out MPE99","Level MPE99"],
-        ["Base case","$49.2M","$201.7M"],
-        ["Equities -30%","-16%","+60%"],
-        ["Rates -200bp","+23%","-68%"],
-        ["Flight to quality","-3%","+19%"],
-        ["Stagflation","-24%","+86%"],
-        ["Hist. equity crash (2020)","-15%","+53%"]]
-simple_table(s, Inches(0.5), Inches(1.7), Inches(5.6), Inches(2.3), rows, col_widths=[2.2,1.7,1.7], font_size=9.8, header_size=10.3)
-s.shapes.add_picture(f"{PNG}/fig33.png", Inches(0.5), Inches(4.15), width=Inches(5.6))
-add_text(s, Inches(0.5), Inches(6.85), Inches(5.6), Inches(0.5),
-         "Close-out PFE99 ratio to base, by scenario, through the first year -- margin dampens the shock.",
-         size=9.5, italic=True, color=GREY, font=FONT_BODY)
-add_bullets(s, Inches(6.3), Inches(1.7), Inches(6.5), Inches(4.3), [
-    ("13 scenarios total: 8 round-number hypothetical + 5 historical replays (2020 crash, 2022 rate spike, 2024 yen surge, and newly added 2008 GFC, 2015 China deval. -- see Appendix A3)", "", 0),
-    ("Each scenario is a full Monte Carlo re-run from the shocked state, with the same random numbers as the base case -- so the difference is the shock, not sampling noise", "", 0),
-    ("Flight-to-quality and stagflation apply the same equity shock with opposite rate shocks -- CPTY_A/B move similarly in both; CPTY_C moves oppositely because a 22-year bond gains duration value as yields fall", "", 0),
-], size=12.5, space_after=9)
-
 print("Section 8b (Results pt2) done")
 
 
@@ -1314,24 +1299,47 @@ add_bullets(s, Inches(0.5), Inches(4.3), Inches(12.3), Inches(2.6), [
     ("Full Greeks set (~91 factor bumps) costs ~1,614s at N=300 (8 cores) against ~9,690s naive -- 6.0x; at production N=1,000 the whole set costs roughly 1.5 hours", "", 0),
 ], size=12.5, space_after=8)
 
-s = content_slide(7, "Validation: Self-Check to 0.0000%, Martingale Tests, and a 1.04x VaR Benchmark")
+s = content_slide(7, "Validated to 0.0000%, Then Stress-Tested Across 13 Scenarios",
+                   feedback_tag="Feedback-driven")
 set_notes(s,
-  "This is how we know the engine is right, independent of the headline results themselves.",
-  ["t=0 self-check: simulated EE(0) equals the directly computed current exposure to 0.0000%",
-   "Delta-normal VaR benchmark: $12.6M (independent method) vs $12.1M from the Monte Carlo P&L distribution, ratio 1.04 -- within the accepted 0.3-1.3x range",
-   "142 automated tests pass, covering curve fit, GBM martingale property, 1/sqrt(N) error law, negative-rate behaviour, close-out exposure convention, and more"],
-  "1.5 min")
+  "Two forms of checking the engine in one slide: independent validation of correctness, then a structured stress programme (feedback item 1) showing how the results move under shocks.",
+  ["Validation: t=0 self-check to 0.0000%, martingale tests, a 1.04x delta-normal VaR benchmark, and 142 automated tests -- each isolates one layer of the engine, independent of the headline results",
+   "Stress: 13 scenarios (8 hypothetical + 5 historical, incl. 2008 GFC) run as a full Monte Carlo re-run from the shocked state, same random numbers as the base case",
+   "Close-out MPE99 moves at most -24%/+23%; level MPE99 moves up to +86% -- margin is why the close-out measure is far less sensitive to instantaneous shocks"],
+  "2.5 min")
+add_text(s, Inches(0.5), Inches(1.45), Inches(12.3), Inches(0.3), "Validation: 5 independent checks",
+         size=13, bold=True, color=NAVY, font=FONT_HEAD)
 rows = [["Check","Result"],
         ["t=0 self-consistency (EE(0) vs direct exposure)","Matches to 0.0000%"],
         ["Martingale / no-arbitrage (bank-account check, 8,000 paths)","Max relative difference 0.85bp across nodes"],
         ["JPY bank-account martingale (valued in USD)","z = +0.03 (|z|<~2 expected under null)"],
         ["Delta-normal VaR benchmark (99%, 1-day)","$12.6M (parametric) vs $12.1M (Monte Carlo); ratio 1.04x"],
         ["Automated statistical and unit tests","142 pass"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(3.0), rows,
-             col_widths=[6.5,5.8], font_size=11, header_size=11.5)
-add_text(s, Inches(0.5), Inches(4.9), Inches(12.3), Inches(1.6),
-    "Each check isolates one layer of the engine (paths, pricing, calibration, aggregation) so a failure points directly at where to look. Validation rests on independent methods -- parametric VaR, hand-calculated analytic bond prices, and martingale conditions derived from first principles -- not circular checks of the engine against itself.",
-    size=12, italic=True, color=GREY, font=FONT_BODY)
+simple_table(s, Inches(0.5), Inches(1.78), Inches(12.3), Inches(1.5), rows,
+             col_widths=[6.5,5.8], font_size=9, header_size=9.5)
+add_text(s, Inches(0.5), Inches(3.35), Inches(12.3), Inches(0.3),
+    "Each check isolates one layer (paths, pricing, calibration, aggregation) and rests on an independent method, not a circular check of the engine against itself.",
+    size=9.5, italic=True, color=GREY, font=FONT_BODY)
+
+add_text(s, Inches(0.5), Inches(3.75), Inches(12.3), Inches(0.3), "Stress testing: 13 scenarios, close-out vs. level",
+         size=13, bold=True, color=NAVY, font=FONT_HEAD)
+rows2 = [["Scenario","Close-out MPE99","Level MPE99"],
+        ["Base case","$49.2M","$201.7M"],
+        ["Equities -30%","-16%","+60%"],
+        ["Rates -200bp","+23%","-68%"],
+        ["Flight to quality","-3%","+19%"],
+        ["Stagflation","-24%","+86%"],
+        ["Hist. equity crash (2020)","-15%","+53%"]]
+simple_table(s, Inches(0.5), Inches(4.05), Inches(5.1), Inches(1.9), rows2, col_widths=[2.0,1.5,1.5], font_size=8.8, header_size=9.3)
+s.shapes.add_picture(f"{PNG}/fig33.png", Inches(5.8), Inches(4.05), width=Inches(4.7))
+add_text(s, Inches(5.8), Inches(6.32), Inches(4.7), Inches(0.3),
+         "Close-out PFE99 ratio to base, by scenario -- margin dampens the shock.",
+         size=8.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(10.65), Inches(4.05), Inches(2.15), Inches(3.2), [
+    ("13 scenarios: 8 hypothetical + 5 historical (incl. 2008 GFC, 2015 China deval. -- Appendix A3)", "", 0),
+    ("Same random numbers as base case -- the difference is the shock, not noise", "", 0),
+    ("Flight-to-quality / stagflation: same equity shock, opposite rate shocks -- CPTY_C moves oppositely (22-year bond duration)", "", 0),
+], size=8.3, space_after=5)
 
 s = content_slide(7, "Backtest: 99% Quantiles Close to Calibrated, 4/6/2 Exceptions vs 2.4 Expected")
 set_notes(s,
