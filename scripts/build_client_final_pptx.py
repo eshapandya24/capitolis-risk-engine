@@ -375,6 +375,16 @@ def badge_chosen(slide, l, t):
     r = p.add_run(); r.text = "SELECTED"
     r.font.size = Pt(10); r.font.bold = True; r.font.color.rgb = WHITE; r.font.name = FONT_BODY
 
+def why_box(slide, l, t, w, h, heading, points, size=11.5):
+    """Highlighted callout explaining why a choice was made over alternatives."""
+    add_rect(slide, l, t, w, h, LIGHTBG)
+    add_rect(slide, l, t, Pt(3.5), h, ACCENT)
+    add_text(slide, l + Inches(0.2), t + Inches(0.12), w - Inches(0.35), Inches(0.32),
+              "WHY " + heading.upper(), size=12, bold=True, color=ACCENT_DK, font=FONT_HEAD)
+    items = [(pt, "", 0) for pt in points]
+    add_bullets(slide, l + Inches(0.2), t + Inches(0.52), w - Inches(0.35), h - Inches(0.6),
+                items, size=size, space_after=5)
+
 print("helpers ready")
 
 
@@ -425,15 +435,18 @@ rows = [["Instrument","Count","Counterparties","Risk factors"],
         ["Equity TRS","8 (incl. 1 JPY compo)","A, B, C","USD curve + equity spots (+ USDJPY for compo)"],
         ["Bond Forward","4","A, C","USD curve only (risk-free bonds)"],
         ["Bond TRS","4","A, B, C","USD curve only"]]
-simple_table(s, Inches(0.55), Inches(1.5), Inches(7.0), Inches(2.0), rows,
-             col_widths=[1.7,1.3,1.7,3.3], font_size=11, header_size=11.5)
-add_bullets(s, Inches(8.0), Inches(1.5), Inches(4.85), Inches(2.3), [
+simple_table(s, Inches(0.55), Inches(1.5), Inches(7.0), Inches(1.9), rows,
+             col_widths=[1.7,1.3,1.7,3.3], font_size=10.5, header_size=11)
+s.shapes.add_picture(f"{PNG}/fig04.png", Inches(8.0), Inches(1.5), width=Inches(4.85))
+add_text(s, Inches(8.0), Inches(4.22), Inches(4.85), Inches(0.3),
+         "Trade life spans: most of the book matures within ~4 months.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(0.55), Inches(3.55), Inches(7.0), Inches(1.0), [
     ("37 unique equities (31 USD, 6 JPY) + USDJPY + 5 Treasury bonds", "", 0),
     ("Capitolis is strictly the seller: falling market values increase counterparty exposure to us", "", 0),
-    ("No CSA data: uncollateralized book by default", "", 0),
-], size=12.5, space_after=8)
-add_text(s, Inches(0.55), Inches(4.0), Inches(12.2), Inches(0.4), "Today's agenda", size=14, bold=True, color=NAVY, font=FONT_HEAD)
-add_bullets(s, Inches(0.55), Inches(4.5), Inches(12.2), Inches(2.3), [
+], size=11.5, space_after=6)
+add_text(s, Inches(0.55), Inches(4.75), Inches(12.2), Inches(0.4), "Today's agenda", size=14, bold=True, color=NAVY, font=FONT_HEAD)
+add_bullets(s, Inches(0.55), Inches(5.25), Inches(12.2), Inches(2.0), [
     ("The brief and what we delivered against it  \u2022  Data sourcing  \u2022  Pipeline and architecture", "", 0),
     ("Modelling choices  \u2022  Trade-offs and alternatives considered  \u2022  Feedback incorporated", "", 0),
     ("Results (the core of this deck)  \u2022  Conclusions and next steps", "", 0),
@@ -589,18 +602,26 @@ set_notes(s,
    "Gaussian, so it supports negative rates -- essential for JPY, harmless for USD",
    "sigma fitted to realised 2y-30y Treasury yield vol (96bp), not the overnight SOFR fixing (63bp), because the book's risk comes from the long end"],
   "1.5 min")
-add_text(s, Inches(0.5), Inches(1.5), Inches(6.0), Inches(0.9),
-         "dr(t) = [theta(t) - a r(t)] dt + sigma dW(t)\nr(t) = x(t) + alpha(t)", size=15, color=NAVY, font="Courier New")
+add_text(s, Inches(0.5), Inches(1.5), Inches(6.0), Inches(0.8),
+         "dr(t) = [theta(t) - a r(t)] dt + sigma dW(t)\nr(t) = x(t) + alpha(t)", size=14, color=NAVY, font="Courier New")
 rows = [["Parameter","Value","Source"],
         ["sigma","0.96%","Fitted to realised 2y-30y Treasury yield vol"],
         ["a (mean reversion)","0.0167","USD swaption cube (1M expiry, 1Y-15Y tenors)"],
         ["r(0)","3.69%","Bootstrapped SOFR futures curve"]]
-simple_table(s, Inches(0.5), Inches(2.6), Inches(6.0), Inches(1.6), rows, col_widths=[2.0,1.4,3.5], font_size=10.5, header_size=11)
-add_bullets(s, Inches(6.9), Inches(1.5), Inches(5.9), Inches(3.5), [
-    ("Why this model: reproduces today's curve to 1e-9; analytic bond prices at every node; Gaussian (negative-rate capable)", "", 0),
-    ("Rejected: CIR/Black-Karasinski (cannot go negative, invalid for JPY); LMM/HJM (too many parameters for our data); constant-rate (ignores funding-leg and bond-forward rate risk)", "", 0),
-    ("A two-factor alternative (G2++) is implemented and compared -- Section 6", "", 0),
-], size=12.5, space_after=9)
+simple_table(s, Inches(0.5), Inches(2.45), Inches(6.0), Inches(1.5), rows, col_widths=[2.0,1.4,3.5], font_size=10.3, header_size=10.8)
+why_box(s, Inches(0.5), Inches(4.15), Inches(6.0), Inches(2.6), "Why Hull-White 1F", [
+    "Reproduces today's curve to 1e-9, so discounting is exact at t=0",
+    "Analytic bond price at every node -- 10x faster than a curve object",
+    "Gaussian: supports negative rates, essential for JPY",
+    "Rejected: CIR/BK (floored at zero, invalid for JPY); LMM/HJM (too many parameters for our data); constant rate (ignores funding-leg and bond-forward rate risk)",
+])
+s.shapes.add_picture(f"{PNG}/fig11.png", Inches(6.9), Inches(1.5), width=Inches(5.9))
+add_text(s, Inches(6.9), Inches(4.85), Inches(5.9), Inches(0.35),
+         "Simulated USD short rate fan (3,000 scenarios); median tracks today's forward curve.",
+         size=10.5, italic=True, color=GREY, font=FONT_BODY)
+add_text(s, Inches(6.9), Inches(5.3), Inches(5.9), Inches(0.9),
+         "A two-factor alternative (G2++) is implemented, fully calibrated and compared in the next section -- it is not the default because it changes the headline by only -3%.",
+         size=11.5, color=NAVY, font=FONT_BODY)
 
 s = content_slide(4, "Equities, FX and Correlation: GBM Driven by the Simulated Rates")
 set_notes(s,
@@ -609,20 +630,27 @@ set_notes(s,
    "One static 39x39 correlation matrix from 616 aligned daily dates, applied via Cholesky -- the USD rate row uses 10-year-yield changes, not the overnight SOFR fixing, which correlates with nothing",
    "This drift derivation is exactly where the USDJPY sign error (defect #11) was caught and fixed"],
   "1.5 min")
-add_text(s, Inches(0.5), Inches(1.5), Inches(12.2), Inches(0.9),
-         "dS_i/S_i = (r_USD - q_i) dt + sigma_i dW_i   (USD names)\n"
-         "dX/X = (r_JPY - r_USD + sigma_X^2) dt + sigma_X dW_X   (USDJPY)",
-         size=13.5, color=NAVY, font="Courier New")
-add_bullets(s, Inches(0.5), Inches(2.9), Inches(5.9), Inches(3.5), [
-    ("Correlation: Cholesky factor L of the 39x39 matrix, Y = L Z gives exactly the target correlation -- cheapest exact method", "", 0),
+add_text(s, Inches(0.5), Inches(1.45), Inches(6.0), Inches(0.95),
+         "dS_i/S_i = (r_USD - q_i) dt + sigma_i dW_i\n"
+         "dX/X = (r_JPY - r_USD + sigma_X^2) dt + sigma_X dW_X",
+         size=12.5, color=NAVY, font="Courier New")
+why_box(s, Inches(0.5), Inches(2.5), Inches(6.0), Inches(2.1), "GBM + Cholesky", [
+    "Matches the lognormal vol convention we measure; needs only one vol per name",
+    "Drifts derived from the martingale condition, not assumed -- verified by martingale tests",
+    "Rejected: Heston/SABR (no option surfaces available); jump models (unobservable parameters) -- both disclosed as understating fat tails",
+], size=11)
+add_bullets(s, Inches(0.5), Inches(4.75), Inches(6.0), Inches(2.1), [
     ("741 pairwise correlations, mean 0.14; first PCA factor (a 'market' mode) explains 20% of variance alone", "", 0),
-    ("Rejected: Heston/SABR (no option surfaces available); jump models (unobservable parameters); both disclosed as understating fat tails", "", 0),
-], size=12.5, space_after=8)
-add_bullets(s, Inches(6.9), Inches(2.9), Inches(5.9), Inches(3.5), [
-    ("Volatility: 3-year realised (lognormal for equity/FX, simple differences for rates) -- no single-name options data available, a documented proxy", "", 0),
-    ("37 equities span an order of magnitude in vol (a few names at 50-76%), which dominates tail exposure of the trades referencing them", "", 0),
-    ("A PCA factor-model alternative (optional, k=5) for correlation is compared in Section 6", "", 0),
-], size=12.5, space_after=8)
+    ("37 equities span an order of magnitude in vol (a few names at 50-76%), dominating tail exposure of the trades referencing them", "", 0),
+], size=11.5, space_after=7)
+s.shapes.add_picture(f"{PNG}/fig12.png", Inches(6.9), Inches(1.45), width=Inches(5.9))
+add_text(s, Inches(6.9), Inches(3.98), Inches(5.9), Inches(0.35),
+         "Simulated USDJPY and two equities (low-vol vs. highest-vol name), 1-99% and 25-75% bands.",
+         size=10.5, italic=True, color=GREY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig13.png", Inches(7.35), Inches(4.4), width=Inches(5.0))
+add_text(s, Inches(6.9), Inches(6.85), Inches(5.9), Inches(0.35),
+         "Cholesky demo: independent draws (left) become correlated draws (right), target corr. 0.82.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
 
 s = content_slide(4, "JPY: a Genuine Negative-Rate-Capable Hull-White Factor")
 set_notes(s,
@@ -636,12 +664,16 @@ rows = [["Parameter","Value","Source / status"],
         ["sigma","0.267%/yr","Realised vol of the overnight call rate, 3y window"],
         ["a (mean reversion)","0.0010 (lower bound)","All 3 real JPY calibration routes gave a negative a"],
         ["USD-JPY rate correlation","-0.040","Real SOFR vs TONA daily changes (n=1983); statistically zero"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(7.5), Inches(2.2), rows, col_widths=[2.2,2.0,3.3], font_size=10.3, header_size=10.8)
-add_bullets(s, Inches(8.25), Inches(1.5), Inches(4.55), Inches(3.5), [
-    ("Why: for two decades the BOJ pinned the short end (zero / negative policy, YCC), so long tenors moved more freely than short -- the reverse of what a mean-reverting factor assumes", "", 0),
-    ("A single Gaussian factor cannot produce that shape; the Ho-Lee limit (a near 0) is the closest fit available", "", 0),
-    ("A two-factor or regime-dependent model would be needed to match the shape -- listed as future work", "", 0),
-], size=12, space_after=8)
+simple_table(s, Inches(0.5), Inches(1.5), Inches(6.2), Inches(1.9), rows, col_widths=[1.9,1.7,2.6], font_size=9.8, header_size=10.3)
+why_box(s, Inches(0.5), Inches(3.6), Inches(6.2), Inches(3.3), "the Lower-Bound Mean Reversion", [
+    "For two decades the BOJ pinned the short end (zero / negative policy, YCC), so long tenors moved more freely than short -- the reverse of what a mean-reverting factor assumes",
+    "A single Gaussian factor cannot produce that shape; a=0.001 (the Ho-Lee limit, flat vol across tenors) is the closest fit available",
+    "Rejected: constant USD-rate differential (cannot represent JPY's own dynamics); a two-factor or regime-dependent model would match the shape but is listed as future work",
+], size=11)
+s.shapes.add_picture(f"{PNG}/fig16.png", Inches(7.0), Inches(1.5), width=Inches(5.8))
+add_text(s, Inches(7.0), Inches(4.05), Inches(5.8), Inches(0.6),
+         "Real Bank of Japan TONA, 1998-2026: at or below zero for most of 25 years -- a model with a floor could not represent this.",
+         size=11, italic=True, color=GREY, font=FONT_BODY)
 
 s = content_slide(4, "Exposure Built to the Brief's Exact Definition, Not a Simplification")
 set_notes(s,
@@ -678,7 +710,7 @@ set_notes(s,
    "On the real 663-dimensional engine the advantages compress -- no single method wins both PFE99 and median PFE",
    "LHS is the only method that is both best on the controlled test AND better than pseudo-random on both real-engine statistics -- that consistency is why it was selected over Sobol, the controlled-test runner-up"],
   "2 min")
-matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.3), Inches(2.4),
+matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.5),
     ["Call RMSE vs PR","PFE99 rel.std","Median PFE rel.std","Verdict"],
     ["Pseudo-random","Antithetic","Moment-matched","Sobol","Latin Hypercube"],
     [["1.0x (baseline)","2.60%","0.66%","Baseline"],
@@ -686,17 +718,41 @@ matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.3), Inches(2.4),
      ["6.3x better","2.49%","0.35%","Median only, no PFE99 gain"],
      ["28.7x better","1.64%","0.70%","Best PFE99, no median gain"],
      ["50.6x better","2.25%","0.42%","Best on both"]], font_size=9.5)
-badge_chosen(s, Inches(8.1), Inches(3.85))
-add_bullets(s, Inches(8.1), Inches(1.5), Inches(4.7), Inches(2.2), [
-    ("SELECTED: Latin Hypercube -- best controlled-test error, most consistent across both real-engine statistics, negligible extra cost over pseudo-random", "", 0),
-], size=12, space_after=6)
-add_text(s, Inches(0.5), Inches(4.25), Inches(12.3), Inches(0.4), "Scenario count: N=5,000 reporting, N=10,000 sign-off", size=14, bold=True, color=NAVY, font=FONT_HEAD)
-rows = [["N","Rel. SE of PFE99 (1y)","Est. time (8 cores)","Verdict"],
+badge_chosen(s, Inches(8.4), Inches(1.95))
+why_box(s, Inches(8.4), Inches(2.35), Inches(4.4), Inches(1.65), "Latin Hypercube", [
+    "Best controlled-test error, 50.6x vs pseudo-random",
+    "Only method better than pseudo-random on BOTH real-engine statistics -- that consistency is the deciding factor",
+], size=11)
+s.shapes.add_picture(f"{PNG}/fig_sampling_greeks.png", Inches(0.75), Inches(4.3), width=Inches(7.0))
+add_text(s, Inches(0.75), Inches(6.85), Inches(7.0), Inches(0.3),
+         "Left: 51x lower RMSE vs Black-Scholes. Right: real-engine estimator noise by method.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(8.4), Inches(4.3), Inches(4.4), Inches(2.6), [
+    ("On the real 663-dimensional engine, advantages compress -- no single method wins both PFE99 and the median", "", 0),
+    ("Sobol is the controlled-test runner-up (28.7x) but loses its edge on the median PFE and is less robust at this dimensionality", "", 0),
+], size=11.5, space_after=8)
+
+s = content_slide(5, "Scenario Count: N=5,000 for Reporting, N=10,000 for Limit Sign-Off")
+set_notes(s,
+  "Error falls as 1/sqrt(N); we picked the count where further scenarios stop being worth the runtime.",
+  ["Monte Carlo error follows 1/sqrt(N) exactly -- shown on the chart",
+   "N=5,000 gives 0.29% relative SE at 8 minutes; N=10,000 gives 0.21% at 15 minutes for sign-off",
+   "Beyond ~15-20k scenarios, returns diminish sharply while cost keeps scaling linearly -- and the remaining sampling error is an order of magnitude smaller than the model sensitivities in Section 7.9"],
+  "1.5 min")
+cats = ["1,000","5,000","10,000","20,000"]
+bar_chart(s, Inches(0.5), Inches(1.5), Inches(7.3), Inches(4.0), cats,
+    {"Rel. SE of PFE99 (%)": [0.66, 0.29, 0.21, 0.09]}, number_format='0.00',
+    title="Relative standard error of PFE99 falls as 1/sqrt(N)", color_list=[ACCENT])
+rows = [["N","Rel. SE","Est. time (8 cores)","Verdict"],
         ["1,000","0.66%","119s","Iteration / what-if"],
-        ["5,000","0.29%","479s","RECOMMENDED: standard reporting"],
-        ["10,000","0.21%","929s","Recommended for limit sign-off"],
+        ["5,000","0.29%","479s","SELECTED: standard reporting"],
+        ["10,000","0.21%","929s","SELECTED: limit sign-off"],
         ["20,000+","0.09%","1,829s+","Diminishing returns"]]
-simple_table(s, Inches(0.5), Inches(4.75), Inches(12.3), Inches(2.0), rows, col_widths=[1.3,2.7,2.3,5.5], font_size=10.3, header_size=10.8)
+simple_table(s, Inches(8.1), Inches(1.6), Inches(4.7), Inches(2.6), rows, col_widths=[1.0,1.3,1.6,3.0], font_size=9.3, header_size=9.8)
+why_box(s, Inches(8.1), Inches(4.5), Inches(4.7), Inches(2.3), "5,000 / 10,000", [
+    "Cost grows linearly; error falls only as 1/sqrt(N) -- diminishing returns past ~15-20k",
+    "Remaining sampling error (<0.4%) is an order of magnitude smaller than the model-risk sensitivities (Section 7.9)",
+], size=10.5)
 
 s = content_slide(5, "Two-Factor Rates (G2++) Changes the Portfolio MPE99 by Only -3%")
 set_notes(s,
@@ -705,20 +761,24 @@ set_notes(s,
    "The effect on the headline number is small: -3% on portfolio MPE99, -1% to -3% by counterparty",
    "One-factor Hull-White retained as the default: materially simpler, calibrates cleanly to the swaption cube, and the model-risk study (Section 7.9) shows equity volatility and rate-equity dependence matter far more than this choice"],
   "1.5 min")
-matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.5), Inches(1.8),
+matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.5), Inches(1.6),
     ["Curve fit","Negative rates","Calibration error","Params"],
     ["Hull-White 1F","G2++ (2-factor)"],
     [["Exact","Yes","N/A (level only)","2 (a, sigma)"],
-     ["Exact","Yes","16% (Frobenius, yield covariance)","5 (a,b,sigma,eta,rho)"]], font_size=10)
-badge_chosen(s, Inches(8.3), Inches(1.95))
+     ["Exact","Yes","16% (Frobenius, yield covariance)","5 (a,b,sigma,eta,rho)"]], font_size=9.8)
+badge_chosen(s, Inches(8.25), Inches(1.75))
+add_text(s, Inches(9.55), Inches(1.8), Inches(3.2), Inches(0.3), "Hull-White 1F (default)", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig19.png", Inches(0.5), Inches(3.3), width=Inches(5.0))
+add_text(s, Inches(0.5), Inches(5.85), Inches(5.6), Inches(0.5),
+         "G2++ fit to realised yield-change vol by tenor: matches level/slope, not the 5y hump.",
+         size=10.5, italic=True, color=GREY, font=FONT_BODY)
 rows = [["Netting set","MPE99 1F","MPE99 2F","Change"],
         ["CPTY_A","$26.2M","$26.0M","-1%"],["CPTY_B","$9.5M","$9.3M","-3%"],
         ["CPTY_C","$28.9M","$28.9M","-0%"],["Portfolio","$51.5M","$50.0M","-3%"]]
-simple_table(s, Inches(0.5), Inches(4.0), Inches(6.0), Inches(2.3), rows, col_widths=[1.8,1.4,1.4,1.2], font_size=10.5, header_size=11)
-add_bullets(s, Inches(6.9), Inches(4.0), Inches(5.9), Inches(2.3), [
-    ("2,000 scenarios, same random numbers, close-out exposure, 1-year horizon", "", 0),
-    ("G2++ is implemented in models/g2pp.py and selectable (rates_model='g2pp') -- not hidden, just not the default", "", 0),
-], size=12, space_after=8)
+simple_table(s, Inches(6.5), Inches(3.35), Inches(6.3), Inches(2.1), rows, col_widths=[1.9,1.5,1.5,1.4], font_size=10.5, header_size=11)
+why_box(s, Inches(6.5), Inches(5.65), Inches(6.3), Inches(1.45), "Hull-White 1F", [
+    "-3% on the headline is not worth 3 extra parameters here; the bigger uncertainty is equity vol and rate-equity dependence (Section 7.9)",
+], size=11)
 
 s = content_slide(5, "Full-Rank Correlation Kept: PCA Factor Model Adds No Speed, No Consistent Accuracy")
 set_notes(s,
@@ -732,15 +792,19 @@ rows = [["Factors k","Var. explained","CPTY_A vol","CPTY_B vol","CPTY_C vol","Sh
         ["10","62%","$53.5M (+1.1%)","$19.9M (+1.5%)","$25.8M (+1.7%)","2.29s"],
         ["5","47%","$52.9M (+0.0%)","$19.9M (+1.7%)","$26.4M (+3.9%)","2.08s"],
         ["3","37%","$53.2M (+0.6%)","$20.0M (+2.1%)","$26.3M (+3.4%)","n/a"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(2.2), rows,
-             col_widths=[1.3,1.7,1.9,1.9,1.9,1.9], font_size=10, header_size=10.5)
-badge_chosen(s, Inches(0.5), Inches(3.85))
-add_text(s, Inches(1.85), Inches(3.9), Inches(3.0), Inches(0.3), "Full-rank Cholesky (default)", size=11, bold=True, color=NAVY, font=FONT_BODY)
-add_bullets(s, Inches(0.5), Inches(4.4), Inches(12.3), Inches(2.3), [
+simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(1.95), rows,
+             col_widths=[1.3,1.7,1.9,1.9,1.9,1.9], font_size=9.8, header_size=10.3)
+badge_chosen(s, Inches(0.5), Inches(3.65))
+add_text(s, Inches(1.85), Inches(3.7), Inches(3.0), Inches(0.3), "Full-rank Cholesky (default)", size=11, bold=True, color=NAVY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig14.png", Inches(0.5), Inches(4.15), width=Inches(5.5))
+add_text(s, Inches(0.5), Inches(6.68), Inches(6.6), Inches(0.3),
+         "5 factors explain 47% of variance, 10 explain 62% -- PCA approximates, not replicates, the matrix.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(7.4), Inches(4.15), Inches(5.4), Inches(2.6), [
     ("Sampling error is not consistently lower for PCA either: across 3/5/10 factors its std of PFE99 ranges 2.6%-6.2% of reference vs 4.5-4.9% for full rank -- no stable advantage", "", 0),
     ("Explainable: factor 1 (20% of variance) is a broad market mode; factor 2 (8.9%) separates Japan from US listings", "", 0),
     ("Would become useful only if systematic factors were drawn quasi-randomly and idiosyncratic noise pseudo-randomly -- listed as future work", "", 0),
-], size=12, space_after=8)
+], size=11.5, space_after=8)
 
 s = content_slide(5, "Common Random Numbers Make Bump-and-Reprice 282x Less Noisy Than Independent Draws")
 set_notes(s,
@@ -749,18 +813,26 @@ set_notes(s,
    "Pathwise is validated and used as a free cross-check for equity/FX (0.2-0.4s vs ~260s) but cannot reach rates without differentiating the pricers",
    "Adjoint differentiation is the asymptotically fastest method but needs a differentiable port of the supplied black-box pricers -- listed as future work, not adopted"],
   "1.5 min")
-matrix_table(s, Inches(0.5), Inches(1.5), Inches(8.3), Inches(2.3),
+matrix_table(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(2.1),
     ["Works as black box","Covers quantiles","Cost"],
     ["Bump, independent draws","Bump, CRN (used)","Pathwise (eq/FX check)","Adjoint (not adopted)"],
     [["check","check","1x, but 282x noisier"],
      ["check","check","1x, cost measured"],
      ["cross","cross","~1000x faster, eq/FX only"],
-     ["cross","mid","3-5x one valuation -- needs differentiable pricers"]], font_size=9.8)
-badge_chosen(s, Inches(9.0), Inches(2.2))
-add_bullets(s, Inches(9.0), Inches(2.7), Inches(3.85), Inches(3.5), [
-    ("CRN selected: works on any pricer as a black box, for every measure including PFE99, which has no pathwise derivative", "", 0),
+     ["cross","mid","3-5x one valuation -- needs differentiable pricers"]], font_size=9.5)
+badge_chosen(s, Inches(8.3), Inches(1.85))
+add_text(s, Inches(9.6), Inches(1.9), Inches(3.2), Inches(0.3), "CRN bump-and-reprice", size=10.5, bold=True, color=NAVY, font=FONT_BODY)
+why_box(s, Inches(8.3), Inches(2.3), Inches(4.5), Inches(1.4), "CRN", [
+    "Works on any pricer as a black box, for every measure including PFE99, which has no pathwise derivative",
+], size=11)
+s.shapes.add_picture(f"{PNG}/fig_greeks_cost.png", Inches(0.9), Inches(3.9), width=Inches(4.3))
+add_text(s, Inches(0.9), Inches(6.55), Inches(5.6), Inches(0.5),
+         "Cost per Greeks method, measured at N=300, 8 cores.",
+         size=10.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(5.6), Inches(3.9), Inches(7.2), Inches(2.7), [
     ("82 of 91 total factor bumps (equity+FX) cost 88s total via exact GBM path rescaling -- vs ~8,166s naive resimulation", "", 0),
-], size=11.5, space_after=7)
+    ("Rate/vol bumps still need resimulation (~109s each, 13 needed) -- the exact analytic rate Greek (feedback item 7, next section) removes even that cost for curve-only bumps", "", 0),
+], size=11.5, space_after=8)
 
 print("Section 6 (Trade-offs) done")
 
@@ -797,15 +869,18 @@ set_notes(s,
   "1.5 min")
 rows = [["#","You said","We did","Impact"],
         ["9","CVA is for understanding sensitivities, not just a number","Delivered CVA01, full rating table, SA-CVA weighted sensitivities by risk class","Rating table AAA $5.0k to B $32.8k; ccs delta is 88% of SA-CVA capital"],
-        ["10","Compute DV01 via a proper par-instrument Jacobian","Bump the curve's own ~45 native pillars, not 8 hand-picked zero-rate tenors","30y bucket: 82% of DV01 (new) vs 54% (old) -- old grid smeared 20-50y risk into the 10y bucket"],
-        ["11","Validate with an independent Excel parametric test","Bump one equity's vol +-1%, compare closed-form Black vs Monte Carlo","Level match within ~3%; vega match within ~7%"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(2.6), rows,
-             col_widths=[0.4,2.9,4.6,4.4], font_size=10, header_size=10.5)
-add_text(s, Inches(0.5), Inches(4.45), Inches(12.3), Inches(0.4), "Full tracker status", size=14, bold=True, color=NAVY, font=FONT_HEAD)
-add_bullets(s, Inches(0.5), Inches(4.95), Inches(12.3), Inches(1.8), [
-    ("All 11 items closed with a quantified result -- none left as a narrative response or a promise for next time", "", 0),
-    ("Both kickoff extra-credit items (xVA, risky bonds) also delivered alongside the feedback items, despite no CDS data being obtainable", "", 0),
-], size=13, space_after=8)
+        ["10","Compute DV01 via a proper par-instrument Jacobian","Bump the curve's own ~45 native pillars, not 8 hand-picked zero-rate tenors","30y bucket: 82% of DV01 (new) vs 54% (old)"],
+        ["11","Validate with an independent Excel parametric test","Bump one equity's vol +-1%, compare closed-form Black vs Monte Carlo","Level match ~3%; vega match ~7%"]]
+simple_table(s, Inches(0.5), Inches(1.45), Inches(12.3), Inches(2.3), rows,
+             col_widths=[0.4,2.9,4.6,4.4], font_size=9.3, header_size=9.8)
+s.shapes.add_picture(f"{PNG}/fig_dv01_compare.png", Inches(0.5), Inches(4.0), width=Inches(5.7))
+add_text(s, Inches(0.5), Inches(6.65), Inches(5.7), Inches(0.4),
+         "Item 10: old zero-grid DV01 bucketing vs the new par-instrument Jacobian.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+s.shapes.add_picture(f"{PNG}/fig_kva_compare.png", Inches(6.9), Inches(4.0), width=Inches(4.9))
+add_text(s, Inches(6.9), Inches(7.0), Inches(5.4), Inches(0.4),
+         "Item 8: KVA vs CVA at 8/10/12% cost of capital.",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
 
 print("Section 7 (Feedback) done")
 
@@ -830,26 +905,29 @@ rows = [["Netting set","Peak EE","Peak median PFE","MPE (peak PFE99)","MPE date"
         ["CPTY_B","$1.8M","$0.3M","$9.6M","2026-09-04"],
         ["CPTY_C","$5.2M","$0.9M","$29.6M","2026-09-28"],
         ["Portfolio","$11.6M","$8.2M","$51.0M","2026-09-20"]]
-simple_table(s, Inches(0.5), Inches(3.1), Inches(12.3), Inches(2.0), rows,
-             col_widths=[1.8,1.8,2.0,2.0,2.0], font_size=11, header_size=11.5)
-add_bullets(s, Inches(0.5), Inches(5.3), Inches(12.3), Inches(1.5), [
+simple_table(s, Inches(0.5), Inches(3.1), Inches(7.2), Inches(2.1), rows,
+             col_widths=[1.4,1.4,1.5,1.5,1.4], font_size=10.3, header_size=10.8)
+s.shapes.add_picture(f"{PNG}/fig26.png", Inches(8.0), Inches(3.05), width=Inches(4.8))
+add_text(s, Inches(8.0), Inches(5.4), Inches(4.8), Inches(0.3),
+         "Peak PFE99 by counterparty under three exposure definitions.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(0.5), Inches(5.5), Inches(12.3), Inches(1.4), [
     ("Close-out MPE99 is far below the level exposure because the prior-day value is margined: CPTY_C's $121.3M bond forward has a 99th-pct 10-day move that peaks at just $25.6M", "", 0),
     ("CPTY_A and CPTY_B are driven by the equity swap baskets; their peak occurs in the first weeks, when the baskets are largest, and falls as trades mature", "", 0),
-], size=12.5, space_after=7)
+], size=12, space_after=6)
 
 s = content_slide(7, "Exposure Runs Off Within Four Months as the Book's Trades Mature")
 set_notes(s,
-  "Show the time profile with a native line chart -- almost all counterparty credit risk sits in the next four months.",
+  "Show the time profile -- almost all counterparty credit risk sits in the next four months.",
   ["Nearly the whole book matures within ~4 months; only BTRS_0001 and EQTRS_0008 run past mid-2027",
    "Portfolio EE falls by more than 90% by end of December 2026",
    "This is why monitoring should concentrate on the next four months, not a flat one-year horizon"],
   "2 min")
-cats = ["t=0","1mo","2mo","3mo (peak)","4mo","6mo","9mo","12mo"]
-line_chart(s, Inches(0.5), Inches(1.5), Inches(7.6), Inches(4.2), cats,
-    {"PFE99": [0,38,48,51,30,8,3,1], "EE": [0,9,11,11.6,7,2,1,0.3], "Median PFE": [0,6,7.5,8.2,5,1.5,0.5,0.1]},
-    title="Portfolio close-out exposure (USD M) -- illustrative shape from Fig. 25")
-add_bullets(s, Inches(8.3), Inches(1.6), Inches(4.55), Inches(4.5), [
-    ("Shape illustrates Figure 25 of the report (EE, median PFE, PFE99 by counterparty and portfolio)", "", 0),
+s.shapes.add_picture(f"{PNG}/fig25.png", Inches(0.5), Inches(1.5), width=Inches(7.0))
+add_text(s, Inches(0.5), Inches(6.4), Inches(7.0), Inches(0.3),
+         "Close-out EE, median PFE and PFE99 by counterparty and for the portfolio (Report Fig. 25).",
+         size=10, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(8.8), Inches(1.6), Inches(4.05), Inches(5.0), [
     ("CPTY_C concentration: one trade, BF_0003, accounts for 90% of the portfolio's peak PFE99 and 96% of today's exposure", "", 0),
     ("This is concentration risk, not diversified counterparty risk -- a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report", "", 0),
 ], size=12, space_after=9)
@@ -883,24 +961,28 @@ set_notes(s,
    "CPTY_C is not a pure rate netting set: DV01 $594k/bp dominated by BF_0003, but its equity delta ($1.24M) is comparable to CPTY_B's",
    "At the portfolio's peak date, standalone PFE99 are A $25.9M + C $28.5M = $54.4M (107% of the $51.0M portfolio figure) -- the portfolio is close to A+C, with B adding little"],
   "2 min")
-rows = [["Netting set","Equity delta (/+1%)","DV01 (/+1bp)","FX delta (/+1%)","Driver"],
-        ["CPTY_A","-$2,254,257","$31,203","$0","Equities fall"],
-        ["CPTY_B","-$961,146","-$3,663","$416,550","Equities fall, yen weakens"],
-        ["CPTY_C","-$1,240,431","$594,443","$0","Equities fall AND yields rise"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(8.0), Inches(1.9), rows,
-             col_widths=[1.4,2.0,1.6,1.9,2.4], font_size=10.3, header_size=10.8)
-add_bullets(s, Inches(8.75), Inches(1.5), Inches(4.05), Inches(2.3), [
+rows = [["Netting set","Equity delta (/+1%)","DV01 (/+1bp)","Driver"],
+        ["CPTY_A","-$2,254,257","$31,203","Equities fall"],
+        ["CPTY_B","-$961,146","-$3,663","Equities fall, yen weakens"],
+        ["CPTY_C","-$1,240,431","$594,443","Equities fall AND yields rise"]]
+simple_table(s, Inches(0.5), Inches(1.5), Inches(6.3), Inches(1.7), rows,
+             col_widths=[1.3,1.9,1.5,2.4], font_size=9.8, header_size=10.3)
+s.shapes.add_picture(f"{PNG}/fig28.png", Inches(7.0), Inches(1.45), width=Inches(5.3))
+add_text(s, Inches(7.0), Inches(4.02), Inches(5.3), Inches(0.3),
+         "Probability of positive exposure by counterparty -- why median PFE differs from EE.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(0.5), Inches(3.35), Inches(6.3), Inches(1.5), [
     ("Rank correlation of exposures: A-B 0.34, A-C 0.33, B-C 0.12", "", 0),
     ("Yield-equity correlation in our data is ~0.00 -- the 'bonds vs equities inversely' intuition is regime-dependent, not fixed", "", 0),
-], size=11.5, space_after=7)
-rows2 = [["Statistic (at portfolio MPE date)","CPTY_A","CPTY_B","CPTY_C"],
-         ["Standalone PFE99","$25.9M","$9.1M","$28.5M"],
-         ["Prob. exposure positive","51%","53%","52%"],
-         ["Share of tail scenarios at zero exposure","0%","12%","0%"]]
-simple_table(s, Inches(0.5), Inches(3.7), Inches(8.0), Inches(1.8), rows2, col_widths=[3.0,1.7,1.7,1.7], font_size=10.3, header_size=10.8)
-add_bullets(s, Inches(8.75), Inches(3.9), Inches(4.05), Inches(2.0), [
-    ("Rate-equity dependence stress: flight-to-quality (yields fall with equities) moves portfolio MPE to 70% of sum; both-fall-together moves it to 85%", "", 0),
-], size=11.5, space_after=7)
+], size=11, space_after=6)
+s.shapes.add_picture(f"{PNG}/fig30.png", Inches(0.5), Inches(5.0), width=Inches(4.5))
+add_text(s, Inches(0.5), Inches(7.12), Inches(4.5), Inches(0.3),
+         "Expected NPV by trade through time -- BF_0003 dominates, disappears Dec 2026.",
+         size=9, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(5.3), Inches(5.0), Inches(7.5), Inches(2.0), [
+    ("Standalone PFE99 at portfolio peak date: A $25.9M, B $9.1M, C $28.5M -- A+C = $54.4M (107% of portfolio)", "", 0),
+    ("Rate-equity dependence stress: flight-to-quality moves portfolio MPE to 70% of sum; both-fall-together moves it to 85%", "", 0),
+], size=11.5, space_after=6)
 
 s = content_slide(7, "Corrections Moved the Headline From $45.7M to $51.5M, One Fix at a Time")
 set_notes(s,
@@ -924,19 +1006,22 @@ set_notes(s,
    "The two-factor rates model (G2++) changes the headline by only -3% -- so rate-model choice is a minor source of uncertainty here",
    "Each row is a one-at-a-time perturbation on 2,000 scenarios, same random numbers -- not a vague sensitivity statement"],
   "1.5 min")
+cats = ["G2++ vs HW1F","USD mean rev. x3","USD rate sigma x1.25","Equity/FX vols x1.25","Equity correl. +30% to 1"]
+bar_chart(s, Inches(0.5), Inches(1.5), Inches(7.4), Inches(4.0), cats,
+    {"Portfolio MPE99 change": [-3, -5, 9, 19, 22]}, number_format='+0;-0', color_list=[ACCENT],
+    title="Portfolio MPE99 % change per perturbation (2,000 scenarios)")
 rows = [["Perturbation","CPTY_A","CPTY_B","CPTY_C","Portfolio"],
-        ["Base case (final model)","$26.2M","$9.5M","$28.9M","$51.5M"],
+        ["Equity/FX vols x1.25","+29%","+26%","+11%","+19%"],
+        ["Equity correl. +30% to 1","+23%","+35%","+9%","+22%"],
         ["USD rate sigma x1.25","+3%","+1%","+24%","+9%"],
         ["USD mean reversion x3","+2%","+1%","-13%","-5%"],
-        ["Equity/FX vols x1.25","+29%","+26%","+11%","+19%"],
-        ["Equity correlations +30% to 1","+23%","+35%","+9%","+22%"],
-        ["Two-factor G2++ vs HW1F","-1%","-3%","-0%","-3%"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(12.3), Inches(3.3), rows,
-             col_widths=[3.2,2.2,2.2,2.2,2.2], font_size=10.5, header_size=11)
-add_bullets(s, Inches(0.5), Inches(5.1), Inches(12.3), Inches(1.7), [
+        ["G2++ vs HW1F","-1%","-3%","-0%","-3%"]]
+simple_table(s, Inches(8.2), Inches(1.5), Inches(4.6), Inches(3.9), rows,
+             col_widths=[2.3,1.1,1.1,1.1,1.2], font_size=9.3, header_size=9.6)
+add_bullets(s, Inches(0.5), Inches(5.75), Inches(12.3), Inches(1.4), [
     ("Model risk in the headline is dominated by equity volatility and by the (unobservable) rate-equity dependence, not by the choice of rate model", "", 0),
     ("This directly supports retaining the simpler one-factor Hull-White: the bigger uncertainty lives elsewhere", "", 0),
-], size=12.5, space_after=7)
+], size=12, space_after=6)
 
 s = content_slide(7, "Stress Testing: Close-Out MPE99 Moves at Most -24% / +23%, Level Moves Up to +86%",
                    feedback_tag="Feedback-driven")
@@ -953,9 +1038,13 @@ rows = [["Scenario","Close-out MPE99","Level MPE99"],
         ["Flight to quality","-3%","+19%"],
         ["Stagflation","-24%","+86%"],
         ["Hist. equity crash (2020)","-15%","+53%"]]
-simple_table(s, Inches(0.5), Inches(1.8), Inches(6.1), Inches(2.6), rows, col_widths=[2.4,1.9,1.9], font_size=10.5, header_size=11)
-add_bullets(s, Inches(6.9), Inches(1.8), Inches(5.9), Inches(4.3), [
-    ("13 scenarios total: 8 round-number hypothetical + 5 historical replays (2020 crash, 2022 rate spike, 2024 yen surge, and newly added 2008 GFC, 2015 China deval.)", "", 0),
+simple_table(s, Inches(0.5), Inches(1.7), Inches(5.6), Inches(2.3), rows, col_widths=[2.2,1.7,1.7], font_size=9.8, header_size=10.3)
+s.shapes.add_picture(f"{PNG}/fig33.png", Inches(0.5), Inches(4.15), width=Inches(5.6))
+add_text(s, Inches(0.5), Inches(6.85), Inches(5.6), Inches(0.5),
+         "Close-out PFE99 ratio to base, by scenario, through the first year -- margin dampens the shock.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
+add_bullets(s, Inches(6.3), Inches(1.7), Inches(6.5), Inches(4.3), [
+    ("13 scenarios total: 8 round-number hypothetical + 5 historical replays (2020 crash, 2022 rate spike, 2024 yen surge, and newly added 2008 GFC, 2015 China deval. -- see Appendix A3)", "", 0),
     ("Each scenario is a full Monte Carlo re-run from the shocked state, with the same random numbers as the base case -- so the difference is the shock, not sampling noise", "", 0),
     ("Flight-to-quality and stagflation apply the same equity shock with opposite rate shocks -- CPTY_A/B move similarly in both; CPTY_C moves oppositely because a 22-year bond gains duration value as yields fall", "", 0),
 ], size=12.5, space_after=9)
@@ -1040,11 +1129,15 @@ simple_table(s, Inches(0.5), Inches(1.8), Inches(6.0), Inches(2.1), rows, col_wi
 rows2 = [["Rating","Portfolio CVA","Multiple of BBB"],
          ["AAA","$4,970","0.42x"],["AA","$7,028","0.60x"],["A","$7,997","0.68x"],
          ["BBB","$11,747","1.00x"],["BB","$18,150","1.55x"],["B","$32,847","2.80x"]]
-simple_table(s, Inches(6.9), Inches(1.8), Inches(5.9), Inches(3.0), rows2, col_widths=[1.5,2.2,2.0], font_size=10.5, header_size=11)
+simple_table(s, Inches(6.9), Inches(1.8), Inches(5.9), Inches(2.2), rows2, col_widths=[1.5,2.2,2.0], font_size=9.8, header_size=10.3)
 add_bullets(s, Inches(0.5), Inches(4.2), Inches(6.0), Inches(2.5), [
     ("CVA concentrated where exposure is: CPTY_C carries 68% of the $11,747 close-out total", "", 0),
     ("Own credit and funding spread are assumed (BBB proxy, funding = own spread) -- disclosed, with sensitivity shown", "", 0),
 ], size=11.5, space_after=7)
+s.shapes.add_picture(f"{PNG}/fig36.png", Inches(6.9), Inches(4.25), width=Inches(5.9))
+add_text(s, Inches(6.9), Inches(6.9), Inches(5.9), Inches(0.4),
+         "Discounted EE, CVA by counterparty, and portfolio CVA by assumed rating.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
 
 s = content_slide(7, "SA-CVA Capital $0.10M (Close-Out) / $2.23M (Level); SA-CCR EAD $260.3M")
 set_notes(s,
@@ -1058,15 +1151,20 @@ rows = [["Risk class","Close-out capital","Uncollateralized capital"],
         ["fx delta","$95","$2,351"],["ccs delta","$85,198","$2,032,731"],
         ["eq delta","$2,068","$110,371"],["eq vega","$3,256","$6,278"],
         ["Total SA-CVA capital","$96,675","$2,226,821"]]
-simple_table(s, Inches(0.5), Inches(1.5), Inches(6.9), Inches(3.3), rows, col_widths=[2.3,2.3,2.3], font_size=10, header_size=10.5)
+simple_table(s, Inches(0.5), Inches(1.5), Inches(6.2), Inches(2.9), rows, col_widths=[2.0,2.1,2.1], font_size=9.5, header_size=10)
+s.shapes.add_picture(f"{PNG}/fig37.png", Inches(0.5), Inches(4.5), width=Inches(6.2))
+add_text(s, Inches(0.5), Inches(7.03), Inches(6.2), Inches(0.35),
+         "CVA sensitivity to USD yields and counterparty spreads; SA-CVA capital by risk class.",
+         size=9.5, italic=True, color=GREY, font=FONT_BODY)
 rows2 = [["Netting set","Replacement cost","Add-on","EAD"],
          ["CPTY_A","$3.6M","$16.8M","$28.4M"],["CPTY_B","$1.0M","$9.1M","$14.0M"],
          ["CPTY_C","$125.1M","$30.5M","$217.8M"],["Total","$129.6M","$56.3M","$260.3M"]]
-simple_table(s, Inches(7.6), Inches(1.5), Inches(5.2), Inches(2.6), rows2, col_widths=[1.3,1.6,1.3,1.3], font_size=10, header_size=10.5)
-add_bullets(s, Inches(7.6), Inches(4.4), Inches(5.2), Inches(2.3), [
+simple_table(s, Inches(7.1), Inches(1.5), Inches(5.7), Inches(2.0), rows2, col_widths=[1.3,1.6,1.3,1.3], font_size=10, header_size=10.5)
+add_bullets(s, Inches(7.1), Inches(3.75), Inches(5.7), Inches(3.3), [
     ("For CPTY_C the replacement cost of BF_0003 dominates SA-CCR EAD", "", 0),
     ("For the equity netting sets SA-CCR PFE is of the same order as the Monte Carlo level-exposure MPE -- an independent cross-check", "", 0),
-], size=11, space_after=7)
+    ("SA-CVA requirement dominated by ccs delta (88% of the total) -- a 5% risk weight on credit spreads is large relative to a ~100bp spread level", "", 0),
+], size=11.5, space_after=8)
 
 print("Section 8d (Results pt4) done")
 
