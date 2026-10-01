@@ -414,9 +414,9 @@ set_notes(s,
 s = content_slide(0, "Portfolio MPE99 of $51.0M on the Brief's Close-Out Definition")
 set_notes(s,
   "We built, validated and stress-tested the full CCR engine the brief asked for; headline portfolio MPE99 is $51.0M, concentrated in the first four months.",
-  ["Peak EE $11.6M, peak median PFE $8.2M, MPE99 $51.0M -- all on the brief's 10-day close-out definition",
-   "CVA $11.7k (close-out) / $247k (uncollateralized); SA-CVA capital $0.10M / $2.23M; 142 automated tests pass",
-   "One trade (BF_0003, $500M bond forward) dominates concentration -- CPTY_C is 96% of today's exposure"],
+  ["Don't read the four KPI tiles aloud -- they're there for the audience to see. Instead say what they mean together: the book is short-dated and lightly diversified, so the headline number is really a statement about one counterparty's one trade, not a smoothed portfolio average",
+   "The gap between $129.8M (today's full uncollateralized exposure) and $51.0M (the brief's close-out MPE99) is the single most important number relationship in this deck -- it's entirely the effect of daily margining, and it's worth pausing on because everything downstream (CVA, capital, stress) depends on which of these two conventions applies",
+   "This is the 30-second version of the whole 50-minute deck -- if someone has to leave after this slide, they should walk away knowing the number, why it's concentrated, and that margin terms are the open question"],
   "1.5 min")
 kpi_tile(s, Inches(0.55), Inches(1.5), Inches(2.95), Inches(1.5), "$51.0M", "Portfolio MPE99 (close-out)", "peak 2026-09-20, 99th pct")
 kpi_tile(s, Inches(3.68), Inches(1.5), Inches(2.95), Inches(1.5), "$11.6M", "Peak Expected Exposure", "close-out, within 1 year")
@@ -433,9 +433,9 @@ add_bullets(s, Inches(0.55), Inches(3.35), Inches(11.9), Inches(3.2), [
 s = content_slide(0, "The Book: 16 Trades, Dominated in Size by One $500M Bond Forward")
 set_notes(s,
   "Show the actual book before anything else -- every number in this deck traces back to these 16 rows.",
-  ["BF_0003 ($121.3M NPV) is more than 20x the next-largest position -- this single trade is why CPTY_C dominates concentration throughout the deck",
-   "8 Equity TRS, 4 Bond Forwards, 4 Bond TRS; maturities cluster in late 2026, with BTRS_0001 and EQTRS_0008 running into 2027/2028",
-   "This table is Section 2.1 of the report -- supplied by Capitolis in trade_data/, unmodified by us"],
+  ["Grounding move: before any model talk, make the audience see that this is a real, small, lopsided book -- not an abstract portfolio. That context changes how they should read every later result (a 'portfolio' number here is mostly one trade's behavior)",
+   "If asked why NPVs differ so much in sign and size across similar-looking Equity TRS trades: it's spot moves since inception, not a modelling artifact -- each one was struck at a different time against a different basket",
+   "Useful transition line into the next slide: 'given this is the book, here's the shape of the whole engine we built to risk-manage it'"],
   "1.5 min")
 rows = [["Trade","Type","Cpty","Ends","NPV today"],
         ["EQTRS_0001","Equity TRS","A","2026-10-14","-$5,547,056"],
@@ -469,9 +469,9 @@ why_box(s, Inches(8.3), Inches(4.6), Inches(4.5), Inches(2.2), "One Trade Domina
 s = content_slide(0, "16 Trades, 3 Counterparties, 37 Equities and USDJPY, One Engine")
 set_notes(s,
   "Set scope and agenda; this is a readout, not a first look -- we move quickly through concepts the audience already knows.",
-  ["Book: 8 Equity TRS, 4 Bond Forwards, 4 Bond TRS across CPTY_A/B/C",
-   "Agenda mirrors the brief's own structure: data, pipeline, models, trade-offs, feedback, results, conclusions",
-   "This is the final readout after ~7 weeks and two rounds of feedback -- not an introduction to the concepts"],
+  ["Say explicitly that we'll move fast through anything covered in the kickoff deck or prior meetings -- this audience has seen the brief and the basic asset classes before, so dwelling here would waste the time budget",
+   "The agenda order is deliberate: data and pipeline first (so results are trusted before they're shown), modelling choices and trade-offs before feedback (so the feedback section reads as closing loops, not introducing new material), results last and longest",
+   "If the room seems impatient to get to numbers, it's fine to say 'results start in about 15 minutes' and keep moving -- the earlier sections exist to make the results credible, not to be lingered on"],
   "1 min")
 rows = [["Instrument","Count","Counterparties","Risk factors"],
         ["Equity TRS","8 (incl. 1 JPY compo)","A, B, C","USD curve + equity spots (+ USDJPY for compo)"],
@@ -499,14 +499,16 @@ print("Section 1 (Introduction) done")
 
 # ============================================================ SECTION 2: THE BRIEF
 s = section_divider(1, "What Capitolis Gave Us, and Asked For", "The brief, the deliverables, and how every ask maps to what we built")
-set_notes(s, "Section divider -- the brief and our delivered scope.", ["Two deliverables: engine codebase + technical report", "Two extra-credit items flagged at kickoff: xVA, risky bonds + CDS"], "20 sec")
+set_notes(s, "Section divider -- the brief and our delivered scope.",
+  ["Keep this short -- its only job is to signal we're about to prove delivery against the brief's own words, not our own framing of success"],
+  "20 sec")
 
 s = content_slide(1, "The Brief: No Initial Margin, 10-Day Close-Out, Capitolis Is Seller")
 set_notes(s,
   "Restate the brief's own assumptions exactly as given, because every modelling choice downstream traces back to them.",
-  ["Exposure = max(V(t+10bd) - V(t-1bd), 0): variation margin is the prior-day NPV, no initial margin",
-   "Capitolis is strictly the seller: falling market values increase counterparty exposure to us",
-   "Scenario count is our choice but must evidence convergence -- this governs our N=1k/5k/10k decision later"],
+  ["Make the point that we didn't choose the close-out definition or the no-initial-margin assumption -- these came from Capitolis, and we're showing them here specifically so nobody mistakes a given constraint for a modelling choice we made",
+   "The 'strictly the seller' point is worth explaining out loud: it means the book's risk is one-directional by construction (we never benefit from market moves the way the counterparty does), which is why every result in this deck is framed as counterparty exposure to us, never the reverse",
+   "Flag that scenario count being 'our choice, with evidence of convergence' is exactly the freedom we used to justify the N=1k/5k/10k tiering shown later in Trade-offs -- it's not an oversight that we didn't pick one fixed number"],
   "1.5 min")
 add_text(s, Inches(0.55), Inches(1.5), Inches(12.2), Inches(0.4), "Deliverables (kickoff, slide 16)", size=14, bold=True, color=NAVY, font=FONT_HEAD)
 add_bullets(s, Inches(0.55), Inches(2.0), Inches(5.9), Inches(1.6), [
@@ -533,9 +535,9 @@ simple_table(s, Inches(0.55), Inches(4.5), Inches(12.25), Inches(2.2), rows,
 s = content_slide(1, "Every Ask Mapped to What We Delivered, Including Both Extra-Credit Items")
 set_notes(s,
   "Walk the brief's own checklist against our delivery, ending on the two extra-credit items both being complete.",
-  ["Every core objective delivered; both extra-credit items (xVA, risky bonds) delivered despite no CDS data being obtainable",
-   "SA-CCR and SA-CVA were not explicitly asked for by name but follow directly from the xVA extra-credit ask",
-   "This mapping is why we can say nothing in the plan was left undone -- what remains is data Capitolis holds, not engineering (Section 15)"],
+  ["Move quickly down the rows -- the point of this slide isn't to re-read each cell, it's to let the room see for themselves that every row has an entry, which is the credibility payoff",
+   "Spend the real time on the last row (risky bonds + CDS): be upfront that we could not source CDS data despite trying, and that the risky-bond proxy is a deliberate, disclosed substitution, not a silent gap -- this honesty here builds trust for the limitations slide at the end",
+   "If asked why SA-CCR appears when it wasn't named in the brief: it's the natural regulatory companion to SA-CVA once you're computing xVA, so we included it as part of delivering the xVA ask fully rather than narrowly"],
   "1.5 min")
 rows = [["Requirement","Delivered","Evidence"],
         ["Stochastic models for rates, equity, FX","Hull-White 1F (+G2++ alternative); correlated GBM + quanto; JPY factor","Sections 4, 6"],
@@ -553,7 +555,9 @@ print("Section 2 (Brief) done")
 
 # ============================================================ SECTION 3: DATA SOURCING
 s = section_divider(2, "Data Sourcing", "Every input, what it is used for, how it was cleaned, and what we assumed")
-set_notes(s, "Section divider -- data.", ["Real data wherever verifiable; documented proxy where not", "Two real bugs were found and fixed via cross-checks"], "20 sec")
+set_notes(s, "Section divider -- data.",
+  ["Frame this section as answering 'can we trust the inputs', which has to come before 'can we trust the model' -- a perfect model on bad data is still wrong"],
+  "20 sec")
 
 s = content_slide(2, "Real Market Data Everywhere Verifiable; Proxies Documented Where Not")
 set_notes(s,
@@ -675,7 +679,9 @@ print("Section 3 (Data) done")
 
 # ============================================================ SECTION 4: PIPELINE
 s = section_divider(3, "Pipeline and Architecture", "Six stages, data to outputs; modular, reproducible, and fast")
-set_notes(s, "Section divider -- pipeline.", ["calibrate -> grid -> draw -> step -> reprice -> aggregate", "Pricers are a black box by design: correctness first"], "20 sec")
+set_notes(s, "Section divider -- pipeline.",
+  ["This section exists to show the engine is one coherent system, not a pile of scripts -- worth saying explicitly since the next two slides move fast through a lot of structure"],
+  "20 sec")
 
 s = content_slide(3, "Six Stages From Real Market Data to Every Risk Output")
 set_notes(s,
@@ -781,7 +787,9 @@ print("Section 4 (Pipeline) done")
 
 # ============================================================ SECTION 5: MODELING CHOICES
 s = section_divider(4, "Modelling Choices", "What we implemented, with the exact parameters used")
-set_notes(s, "Section divider -- models.", ["HW1F for USD, GBM for equity/FX, a real JPY factor, exposure built to the brief's exact definition"], "20 sec")
+set_notes(s, "Section divider -- models.",
+  ["Set expectations: this section is about the models we actually shipped, with their fitted parameters -- the trade-off section right after is where we justify them against the alternatives, so don't pre-empt that debate here"],
+  "20 sec")
 
 s = content_slide(4, "USD Short Rate: Hull-White 1F, Fitted Exactly to Today's Curve")
 set_notes(s,
@@ -896,7 +904,9 @@ print("Section 5 (Models) done")
 
 # ============================================================ SECTION 6: TRADE-OFFS
 s = section_divider(5, "Trade-Offs, Alternatives and Enhancements", "What we tried and rejected, and why; every choice measured, not asserted")
-set_notes(s, "Section divider -- trade-offs.", ["Five sampling methods tested; two rate models compared; two correlation methods compared; four Greeks methods compared"], "20 sec")
+set_notes(s, "Section divider -- trade-offs.",
+  ["This is the section that answers 'why not X instead' before anyone has to ask -- every alternative shown here was actually built and measured, not dismissed on intuition, which is the point to make explicit before diving in"],
+  "20 sec")
 
 s = content_slide(5, "Latin Hypercube Beats Four Other Sampling Methods on a Controlled Test")
 set_notes(s,
@@ -1069,14 +1079,16 @@ print("Section 6 (Trade-offs) done")
 
 # ============================================================ SECTION 7: FEEDBACK
 s = section_divider(6, "Feedback Incorporated", "Every item raised across two rounds of review, addressed and evidenced")
-set_notes(s, "Section divider -- feedback.", ["11 items across 2 meetings, all addressed", "Next 2 slides condense the full tracker; items also tagged inline on model/results slides"], "20 sec")
+set_notes(s, "Section divider -- feedback.",
+  ["Frame this as closing the loop, not introducing new work -- every item here should feel like a callback to something the audience themselves raised, which is why several are tagged 'Feedback-driven' inline earlier in the deck too"],
+  "20 sec")
 
 s = content_slide(6, "11 Feedback Items Across Two Rounds, All Addressed")
 set_notes(s,
   "Give the full tracker as a single visual before drilling into highlights -- this is the 'you said / we did' overview.",
-  ["5 items from the earlier meeting, 6 from the most recent -- all 11 closed",
-   "Every item has a quantified result, not just a narrative response",
-   "The next slide pulls out the highlights with their numbers; all 11 are also tagged inline where they appear in the Models/Trade-offs/Results sections"],
+  ["Don't read all 8 rows -- let the table speak, and instead name the pattern: every item has a number attached to it, not just a description of what we did, because a client wants evidence an item is actually closed, not just acknowledged",
+   "If pressed on any one item, you can go deeper live since every row traces to a specific section of the report -- treat this as an index you navigate from, not a wall of text to narrate",
+   "Good moment to pause and ask if anyone wants to go deeper on a specific item before moving to items 9-11 on the next slide"],
   "1.5 min")
 rows = [["#","Feedback","Action Taken","Impact"],
         ["1","Make stress testing robust and structured, not a paragraph","13 scenarios (8 round-number + 5 historical), full MC re-run from shocked state, same random draws","Close-out MPE99 moves -24%/+23%; level moves up to +89% -- margin is why"],
@@ -1145,14 +1157,16 @@ print("Section 7 (Feedback) done")
 
 # ============================================================ SECTION 8: RESULTS
 s = section_divider(7, "Results", "Exposure, validation, Greeks, stress, credit -- the full output of the engine")
-set_notes(s, "Section divider -- results, the core of the deck.", ["Headline KPIs, profiles, diversification, attribution, model risk, stress, Greeks, validation, backtest, xVA, capital"], "20 sec")
+set_notes(s, "Section divider -- results, the core of the deck.",
+  ["Signal the pace change here -- everything before this was setup; this section is where the audience's actual questions ('what's the number, why, how sure are we') get answered, so expect it to run longer and take more questions along the way"],
+  "20 sec")
 
 s = content_slide(7, "Peak Portfolio MPE99 is $51.0M, 78% of the Sum of Counterparty MPE99s")
 set_notes(s,
   "Restate the headline with full precision and immediately explain the diversification number -- this is the single most important slide in the deck.",
-  ["MPE99 $51.0M at 2026-09-20 on the brief's close-out definition; peak EE $11.6M; peak median PFE $8.2M",
-   "78% of the sum of counterparty MPE99s ($65.1M) -- little diversification because netting never crosses counterparties and the three books peak within about 24 days of each other",
-   "Current exposure today (uncollateralized, no margin) is $129.8M -- 96% of it is CPTY_C, driven by the single $500M BF_0003 bond forward"],
+  ["The 78% diversification figure is the one number on this slide worth explaining rather than reading: it's low specifically because netting is only ever within a counterparty, never across -- so three separate books peaking in the same three-week window barely offset each other at all. That's a structural fact about the book, not a weakness in the model",
+   "Anticipate the obvious follow-up: 'is $51.0M a big number?' -- frame it relative to today's $129.8M uncollateralized exposure, since that comparison is what tells the client how much the close-out/margin convention is doing for them",
+   "This is the slide to slow down on -- everything later in Results (attribution, stress, Greeks, credit) is explaining different facets of this one number, so make sure the room has it before moving on"],
   "2 min")
 kpi_tile(s, Inches(0.5), Inches(1.5), Inches(2.95), Inches(1.35), "$51.0M", "Portfolio MPE99 (close-out)", "2026-09-20, 99th pct")
 kpi_tile(s, Inches(3.63), Inches(1.5), Inches(2.95), Inches(1.35), "$11.6M", "Peak EE (close-out)", "within 1 year")
@@ -1193,9 +1207,9 @@ add_bullets(s, Inches(8.8), Inches(1.6), Inches(4.05), Inches(5.0), [
 s = content_slide(7, "Per-Trade Detail: BF_0003 Alone Drives CPTY_C's $29.6M Peak MPE99")
 set_notes(s,
   "Drill from counterparty to trade level -- shows the per-trade numbers do not simply sum to the counterparty figures.",
-  ["Per-trade figures do not add up to the counterparty figures: netting and the tail of a sum differ from the sum of tails",
-   "BF_0003's own peak EE ($4.5M) and MPE ($25.6M) dominate CPTY_C's netting set",
-   "Largest equity-driven trades: EQTRS_0003 (CPTY_A, peak MPE $12.0M) and EQTRS_0007 (CPTY_C, $11.4M)"],
+  ["Worth flagging explicitly: if someone adds up the per-trade MPE column they will NOT get the counterparty total from the earlier slide, and that's correct, not an error -- the 99th percentile of a sum is never the sum of 99th percentiles, because the trades don't all hit their own worst case on the same date",
+   "This table is really here to answer one question in detail: which individual trades are actually driving each counterparty's number, since the netting-set view alone can't tell you that",
+   "If the audience starts asking about a specific trade not shown (there are 16, only 8 fit), offer to pull up the full table from the report rather than reciting numbers from memory"],
   "1.5 min")
 rows = [["Trade","Cpty","NPV today","Peak EE","MPE (peak PFE99)"],
         ["EQTRS_0003","A","$9,921,581","$2,219,389","$12,021,160"],
@@ -1288,9 +1302,9 @@ s = content_slide(7, "Book Greeks Today: DV01 of $622k/bp Dominated by the CPTY_
                    feedback_tag="Feedback-driven")
 set_notes(s,
   "The t=0 Greeks by netting set, validated against analytic values -- sets up the DV01 Jacobian fix on the next data point.",
-  ["Portfolio equity delta -$4.46M per +1% (we gain when equities fall, consistent with being pay-equity)",
-   "DV01 dominated by CPTY_C ($594k of the $622k portfolio total) via the BF_0003 bond forward",
-   "t=0 equity delta validated against the analytic value (shares x spot x 1%) to a maximum relative error of 1.6e-2 across all 41 trade-name pairs"],
+  ["Make the sign explicit for the room: a negative equity delta means we gain when equities fall, which is the mirror image of being pay-equity on every swap -- worth stating in plain English since the table alone just shows a negative number",
+   "These are t=0 snapshot Greeks, not scenario-based risk measures like the MPE99 shown earlier -- they tell you today's instantaneous sensitivity, which is a different (and complementary) question from 'how bad could it get'",
+   "This table is the setup for the next topic (DV01 via a Jacobian) -- worth a one-line bridge: 'that $594k DV01 number for CPTY_C is correct in total, but where it sits by tenor is what feedback item 10 corrected'"],
   "1.5 min")
 rows = [["Netting set","NPV","Equity delta (/+1%)","FX delta (/+1%)","DV01 (/+1bp)"],
         ["CPTY_A","$3,572,955","-$2,254,257","$0","$31,203"],
