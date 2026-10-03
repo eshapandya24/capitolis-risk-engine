@@ -4,8 +4,10 @@ next to the Monte Carlo close-out exposure of Section 7.1.
 
     python scripts/run_sa_ccr.py
 
-Inputs: t = 0 NPVs (data/processed/npv_2026-08-28.json from price_full_book_real_data.py),
-live equity spots and USDJPY from the calibration. Writes data/processed/sa_ccr_results.json.
+Inputs: the t = 0 NPVs, equity spots and USDJPY of the headline simulation snapshot
+(data/processed/report/main_run.npz and meta.json, written by generate_report_data.py), so
+the replacement cost and add-ons are on exactly the same snapshot as Sections 2.1 and 7.4
+of the report. Writes data/processed/sa_ccr_results.json.
 """
 import json
 import os
@@ -14,20 +16,23 @@ from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+sys.path.insert(0, ROOT)
 OUT = os.path.join(ROOT, "data", "processed", "sa_ccr_results.json")
 
 
 def main():
+    import numpy as np
     from run_simulation import load_trades
-    from risk_engine.models.calibration import build_calibration
     from risk_engine.exposure import sa_ccr as S
 
     ref = date(2026, 8, 28)
-    calib = build_calibration(ref)
     trades = load_trades()
-    npv = json.load(open(os.path.join(ROOT, "data", "processed", "npv_2026-08-28.json")))
-    npv = npv["npv_by_trade"]
-    items = S.build_items(trades, ref, calib["equity_spots"], calib["fx_spot"], lambda t: t.bond)
+    rep = os.path.join(ROOT, "data", "processed", "report")
+    meta = json.load(open(os.path.join(rep, "meta.json")))
+    npv0 = np.load(os.path.join(rep, "main_run.npz"))["npv"][:, 0, :].mean(axis=1)  # t = 0 is deterministic
+    npv = {tid: float(v) for tid, v in zip(meta["trade_ids"], npv0)}
+    items = S.build_items(trades, ref, meta["equity_spots"], meta["fx_spot"], lambda t: t.bond)
     res = {"ref_date": str(ref), "alpha": S.ALPHA, "by_cpty": {}}
     tot = {"EAD": 0.0, "RC": 0.0, "PFE": 0.0}
     for c in sorted(items):

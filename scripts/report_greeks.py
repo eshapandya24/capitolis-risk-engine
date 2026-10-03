@@ -104,7 +104,7 @@ def fig_validation(g):
     return fig
 
 
-def section(add, doc, g, tickers, trade_meta):
+def section(add, doc, g, tickers, trade_meta, jpy_isins=()):
     b = g["book_t0"]
     cp = b["counterparty"]
     j = peak_node(g)
@@ -137,8 +137,8 @@ def section(add, doc, g, tickers, trade_meta):
         rows.append([c, format(ns[c], ",.0f"), format(eq_by_set[c], ",.0f"), format(eg_by_set[c], ",.0f"), format(fx_by_set[c], ",.0f"), format(dv_by_set[c], ",.0f"), format(rg_by_set[c], ",.0f")])
     rows.append(["Portfolio", format(ns["__portfolio__"], ",.0f"), format(sum(eq_by_set.values()), ",.0f"), format(sum(eg_by_set.values()), ",.0f"), format(sum(fx_by_set.values()), ",.0f"), format(sum(dv_by_set.values()), ",.0f"), format(sum(rg_by_set.values()), ",.0f")])
     add(tbl(rows, widths=[1.2, 1.4, 1.5, 1.1, 1.3, 1.3, 1.1], font=7.2))
-    add(P("All values in USD. The equity and bond trades are linear in the equity spot, so equity and FX gamma are zero to rounding; rate gamma is small. The DV01 is dominated by the CPTY_C bond forward. The largest deltas and the bucketed DV01s:"))
-    add(doc.figure(fig_book(g, tickers), "Left: DV01 by netting set and tenor. Right: the twelve largest equity deltas at t = 0."))
+    add(P("All values in USD. The equity and bond trades are linear in the equity spot, so equity and FX gamma are zero to rounding; rate gamma is small. The DV01 is dominated by the CPTY_C bond forward. The book values here are those of the Greeks run's market snapshot (Section 3); they differ from Sections 2.1 and 7.4 by $2,634 in CPTY_B (0.002% of the portfolio NPV), which is the effect of a USDJPY snapshot about 0.006% different on the two JPY compo trades. The largest deltas and the bucketed DV01s:"))
+    add(doc.figure_full(fig_book(g, tickers), "Left: DV01 by netting set and tenor. Right: the twelve largest equity deltas at t = 0."))
     rows = [["Netting set"] + [("%gy" % float(k)) for k in b["rate_buckets"]]]
     for c in cpts:
         rows.append([c] + [format(sum(v for t, v in b["rate_buckets"][k].items() if cp[t] == c), ",.0f") for k in b["rate_buckets"]])
@@ -147,7 +147,7 @@ def section(add, doc, g, tickers, trade_meta):
 
     add(P("9.3 Sensitivities of the exposure measures", H2))
     add(P("These are the Greeks that matter for counterparty credit risk: how EE, median PFE and PFE99 change when a market factor moves. The figure shows the portfolio profiles for the three main factors, and the table gives the sensitivities at the date of peak PFE99 (%s), by netting set." % date_pk))
-    add(doc.figure(fig_profiles(g), "Change in portfolio EE, median PFE and PFE99 through time for +1% on all equities, +1% on USDJPY and +1bp on USD rates."))
+    add(doc.figure_full(fig_profiles(g), "Change in portfolio EE, median PFE and PFE99 through time for +1% on all equities, +1% on USDJPY and +1bp on USD rates."))
     rows = [["Factor shift", "Measure"] + [("Portfolio" if e == "__portfolio__" else e) for e in ENT]]
     spec = [("All equities +1%", "equity_all", "delta"), ("USDJPY +1%", "fx", "delta"), ("USD rates +1bp", "rate_parallel", "delta")]
     for lab, key, sub in spec:
@@ -163,8 +163,8 @@ def section(add, doc, g, tickers, trade_meta):
     add(P("Change in the measure, in USD, at %s. Delta and vega are one-sided shifts read as change per unit shift; gamma is the second difference." % date_pk, SMALL))
     e_d, p_d = g["equity_all"]["delta"]["__portfolio__"]["EE"][j], g["equity_all"]["delta"]["__portfolio__"]["PFE"][j]
     r_d = g["rate_parallel"]["delta"]["__portfolio__"]["PFE"][j]
-    add(P("<b>Reading the table.</b> The equity delta of exposure is negative (EE falls by about $%s per +1%% on all equities and PFE99 by $%s): the swaps are pay-equity, so our claim on the counterparty shrinks when shares rise, and the adverse scenarios for credit exposure are equity falls. The USD rate DV01 of PFE99 is positive ($%s per +1bp), reflecting the funding legs and bond forwards. The equity and rate gammas of the exposure are positive, as expected for max(V, 0) (a call on the netted value), and small relative to the deltas at a +1%% shift." % (_k(abs(e_d)) + "k", _k(abs(p_d)) + "k", _k(r_d) + "k")))
-    add(doc.figure(fig_pfe_names(g, tickers), "Left: the twelve largest single-name deltas of portfolio PFE99 at the peak date. Right: bucketed USD rate DV01 of PFE99 at the same date."))
+    add(P("<b>Reading the table.</b> On the brief's close-out definition the exposure is the 10-day move of the position, not its level, so the equity delta of the exposure measures is %s: raising all equity prices by 1%% enlarges the baskets, and with them the 10-day dollar moves, by about 1%%, so EE %s by $%sk and PFE99 by $%sk at the peak date. This is the opposite sign to the delta of the book's value (negative, because the swaps are pay-equity); the adverse scenarios for the credit exposure are still equity falls, but their size scales with the level of the equities. The USD rate DV01 of PFE99 is %s (PFE99 %s by $%sk per +1bp): a higher yield level shortens the duration of the long bond forward, so the same 10-day yield move changes its value by less. The gammas of the exposure measures are small relative to the deltas at a +1%% shift, so the deltas describe the local behaviour well; individual gamma entries, such as the CPTY_C PFE99 equity gamma, are noisy because a quantile is estimated from a handful of scenarios." % ("positive" if e_d > 0 else "negative", "rises" if e_d > 0 else "falls", _k(abs(e_d)), _k(abs(p_d)), "negative" if r_d < 0 else "positive", "falls" if r_d < 0 else "rises", _k(abs(r_d)))))
+    add(doc.figure_full(fig_pfe_names(g, tickers), "Left: the twelve largest single-name deltas of portfolio PFE99 at the peak date. Right: bucketed USD rate DV01 of PFE99 at the same date."))
     add(P("Single-name deltas of PFE99 show which positions drive the tail; because a quantile is not additive across names, the single-name deltas sum only approximately to the all-equity delta (Section 9.5)."))
 
     add(P("9.4 Efficiency", H2))
@@ -185,14 +185,17 @@ def section(add, doc, g, tickers, trade_meta):
     tk = trade_meta
     rows = [["Check", "Result"]]
     d0 = b["equity_delta"]
-    err = []
+    err, err_usd, err_jpy = [], [], []
     for isin, dd in d0.items():
         for t, v in dd.items():
             if t in tk:
                 exp_ = tk[t].get(isin)
                 if exp_ is not None:
-                    err.append(abs(v - exp_) / max(abs(exp_), 1.0))
-    rows.append(["t = 0 equity delta against the analytic value (shares x spot x 1%%, signed by trade direction), all %d trade-name pairs" % len(err), "maximum relative error %.1e" % (max(err) if err else float("nan"))])
+                    e_ = abs(v - exp_) / max(abs(exp_), 1.0)
+                    err.append(e_)
+                    (err_jpy if isin in jpy_isins else err_usd).append(e_)
+    rows.append(["t = 0 equity delta against the analytic value (shares x spot x 1%%, signed by trade direction), all %d trade-name pairs" % len(err),
+                 "maximum relative error %.0e for the %d USD-listed pairs; %.0e for the %d JPY-listed pairs, where the USDJPY snapshot of this run differs from the headline run's by about %.4f%%" % (max(err_usd), len(err_usd), max(err_jpy), len(err_jpy), max(err_jpy) * 100)])
     bs = g["bump_size"]
     rng_ = [bs[s]["__portfolio__"]["EE"][j] for s in ("0.5%", "1%", "2%")]
     rows.append(["Bump-size stability of the all-equity EE delta at the peak date: 0.5%, 1%, 2% bumps (USD k per +1%)", ", ".join(_k(x) for x in rng_) + " (spread %.2f%%)" % (100 * (max(rng_) - min(rng_)) / abs(np.mean(rng_)))])
@@ -206,7 +209,7 @@ def section(add, doc, g, tickers, trade_meta):
     c = g["crn_vs_independent"]
     rows.append(["Common random numbers against independent draws: standard deviation of the EE delta estimate over %d repeats at N = %d" % (len(c["crn"]), c["n"]), "%s USD k against %s USD k (%.0fx lower)" % (_k(c["crn_std"]), _k(c["independent_std"]), c["independent_std"] / max(c["crn_std"], 1e-9))])
     add(tbl(rows, widths=[4.6, 3.0], font=7.4))
-    add(doc.figure(fig_validation(g), "Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws."))
+    add(doc.figure_full(fig_validation(g), "Left: delta of EE and PFE99 against bump size. Middle: the sum of the 37 single-name EE deltas equals the all-equity delta through time. Right: estimates of the EE delta with common random numbers and with independent draws."))
 
     add(P("9.6 Does the sampling scheme help the Greeks?", H2))
     add(P("Common random numbers (Section 9.5) is what makes the Greeks precise; a separate question is whether the sampling scheme used to generate those random numbers (Section 5.4 compares five schemes for the exposure measures themselves) also helps the sensitivities. We repeated the equity, FX and rate deltas at N = 256 scenarios, 4 to 6 independent seeds per scheme, and measured the standard deviation of each delta across seeds: the smaller that spread, the less noise the Greek carries at a given N."))
@@ -242,16 +245,16 @@ def section(add, doc, g, tickers, trade_meta):
     dj = None
     try:
         dj = json.load(open(os.path.join(ROOT, "data", "processed", "dv01_jacobian.json")))
-        rows = [["Report tenor", "Old triangular-grid DV01 (rate-node bump)", "New par-instrument DV01 (native-pillar bump)"]]
+        rows = [["Report tenor", "Old triangular-grid DV01 of portfolio PFE99 (USD per +1bp)", "New par-instrument DV01 of portfolio PFE99 (USD per +1bp)"]]
         old_by_t = {"0.25": 0, "0.5": 0, "1": 0, "2": 0, "3": 0, "5": 0, "10": 0, "30": 0}
         pk = int(np.argmax(np.array(g["base"]["__portfolio__"]["PFE"])))
         for k in old_by_t:
             key = float(k) if "." in k else int(k)
             old_by_t[k] = g["rate_buckets"][str(key)]["__portfolio__"]["PFE"][pk]
         for t in ("0.25", "0.5", "1", "2", "3", "5", "10", "30"):
-            rows.append([t + "y", _k(old_by_t[t]), _k(dj["par_bucket_dv01"][t]["__portfolio__"]["PFE"])])
-        rows.append(["Sum of buckets", _k(sum(old_by_t.values())), _k(dj["sum_of_par_buckets"]["__portfolio__"]["PFE"])])
-        rows.append(["Parallel (all tenors together)", _k(g["rate_parallel"]["delta"]["__portfolio__"]["PFE"][pk]), _k(dj["parallel_dv01"]["__portfolio__"]["PFE"])])
+            rows.append([t + "y", format(old_by_t[t], ",.0f"), format(dj["par_bucket_dv01"][t]["__portfolio__"]["PFE"], ",.0f")])
+        rows.append(["Sum of buckets", format(sum(old_by_t.values()), ",.0f"), format(dj["sum_of_par_buckets"]["__portfolio__"]["PFE"], ",.0f")])
+        rows.append(["Parallel (all tenors together)", format(g["rate_parallel"]["delta"]["__portfolio__"]["PFE"][pk], ",.0f"), format(dj["parallel_dv01"]["__portfolio__"]["PFE"], ",.0f")])
         add(tbl(rows, widths=[2.2, 3.0, 3.0]))
         old30 = old_by_t["30"] / sum(old_by_t.values()) * 100
         new30 = dj["par_bucket_dv01"]["30"]["__portfolio__"]["PFE"] / dj["sum_of_par_buckets"]["__portfolio__"]["PFE"] * 100
@@ -261,11 +264,11 @@ def section(add, doc, g, tickers, trade_meta):
         add(P("Par-instrument DV01 comparison not yet run for this build; see scripts/run_dv01_jacobian.py."))
 
     add(P("9.9 An exact rate Greek from the same simulated draws", H2))
-    add(P("The rate Greeks above (and all earlier reported DV01s) are bump-and-RESIMULATE: a new SimulationEngine is built on the bumped curve and the whole Monte Carlo is run again, at the same seed. That is common random numbers (Section 9.1), but it still redraws and re-steps every path. There is a cheaper, EXACT alternative for this model: in the one-factor Hull-White model the short rate is r(t) = x(t) + alpha(t), where x(t) is the simulated stochastic factor and alpha(t) is a deterministic function of the curve, a and sigma only. A curve bump that leaves a and sigma unchanged (every DV01 bump here) therefore leaves x(t) IDENTICAL, scenario by scenario, to the base run -- the same Latin Hypercube draws already simulated. Since the equity/FX drift uses r(t) piecewise-constant and additively, the whole effect of a curve bump on every equity and FX path is a single deterministic number per date (identical across scenarios, opposite sign for USDJPY, zero for JPY-listed names), computable directly from the two curves with no simulation at all."))
+    add(P("The rate Greeks above (and every DV01 reported above) are bump-and-RESIMULATE: a new SimulationEngine is built on the bumped curve and the whole Monte Carlo is run again, at the same seed. That is common random numbers (Section 9.1), but it still redraws and re-steps every path. There is a cheaper, EXACT alternative for this model: in the one-factor Hull-White model the short rate is r(t) = x(t) + alpha(t), where x(t) is the simulated stochastic factor and alpha(t) is a deterministic function of the curve, a and sigma only. A curve bump that leaves a and sigma unchanged (every DV01 bump here) therefore leaves x(t) IDENTICAL, scenario by scenario, to the base run -- the same Latin Hypercube draws already simulated. Since the equity/FX drift uses r(t) piecewise-constant and additively, the whole effect of a curve bump on every equity and FX path is a single deterministic number per date (identical across scenarios, opposite sign for USDJPY, zero for JPY-listed names), computable directly from the two curves with no simulation at all."))
     add(code("r(t) = x(t) + alpha(t)     alpha(t) = curve-dependent, a/sigma-dependent, NOT random\n"
              "cum_offset(T) = sum_k [alpha_bumped(t_k) - alpha_base(t_k)] * dt_k     (identical on every path)"))
     n_scen_txt = format(dj["n_scenarios"], ",") if dj is not None else "N"
-    add(P("This is validated, not just argued: repricing the base run's own paths shifted by cum_offset(T) reproduces a full independent resimulation with the identical random draws to 1e-15 relative precision (tests/test_rate_shift.py) -- it does not approximate the resimulated bump, it computes the same number. The par-instrument DV01 buckets above (Section 9.8) use exactly this method: %s scenarios, 8 buckets and a parallel bump, with no path resimulated at all -- only the base run's own paths, shifted and repriced. Repricing every trade at every date still costs what it costs (a curve bump changes discounting book-wide, so it cannot use the equity/FX bump's subset-repricing shortcut), but the simulation cost -- drawing and stepping %s Latin Hypercube scenarios across the grid -- is paid exactly once, for the base run, not once per bucket." % (n_scen_txt, n_scen_txt)))
+    add(P("This is validated, not just argued: repricing the base run's own paths shifted by cum_offset(T) reproduces a full independent resimulation with the identical random draws to 1e-15 relative precision (tests/test_rate_shift.py) -- it does not approximate the resimulated bump, it computes the same number. The par-instrument DV01 buckets above (Section 9.7) use exactly this method: %s scenarios, 8 buckets and a parallel bump, with no path resimulated at all -- only the base run's own paths, shifted and repriced. Repricing every trade at every date still costs what it costs (a curve bump changes discounting book-wide, so it cannot use the equity/FX bump's subset-repricing shortcut), but the simulation cost -- drawing and stepping %s Latin Hypercube scenarios across the grid -- is paid exactly once, for the base run, not once per bucket." % (n_scen_txt, n_scen_txt)))
     add(P("This is the direct answer to \"can Latin Hypercube be used to calculate sensitivities\": yes, for any bump that changes only the deterministic part of a simulated factor (here, any USD curve bump under the one-factor Hull-White model) -- the SAME simulated draws are reused exactly, not just with the same seed but algebraically, and the resulting Greek carries no additional Monte Carlo noise at all relative to the base run. It does not extend to a volatility or mean-reversion bump (those change the stochastic part itself, x(t) is no longer identical) or to the two-factor G2++ model (not implemented here); those still need a true resimulation."))
 
     add(P("9.10 Limitations", H2))
@@ -274,4 +277,4 @@ def section(add, doc, g, tickers, trade_meta):
            "Interest rate Greeks are for the USD curve only: the simulated JPY rate drives only the drift of JPY-listed names and USDJPY, and no trade is discounted on JPY. There is no inflation, credit-spread or dividend Greek for exposure (credit-spread and vega sensitivities of CVA are in Section 8).",
            "Volatility bumps are parallel across each factor class (all equity vols together); there is no vol-surface or per-name vega. No cross-gamma is computed, and theta is represented by the exposure profile itself.",
            "Exposure Greeks are for the close-out exposure over the first year at 99%; the uncollateralized level exposure has much larger sensitivities (its delta is the delta of the mark-to-market itself)."]))
-    add("\\clearpage\n")
+    add("" if getattr(doc, "short", False) else "\\clearpage\n")

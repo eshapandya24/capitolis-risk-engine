@@ -184,40 +184,54 @@ PREAMBLE = r"""\documentclass[11pt,letterpaper]{article}
 
 
 class Report:
-    def __init__(self, path, title, tmpdir):
+    def __init__(self, path, title, tmpdir, tag=""):
         self.pdf_path = path
         self.title = title
-        root = os.path.join(os.path.dirname(os.path.dirname(path)), "docs", "latex")
+        self.tag = tag
         self.texdir = os.path.join(os.path.dirname(path), "latex")
-        self.figdir = os.path.join(self.texdir, "figures")
+        self.figname = "figures" + (("_" + tag) if tag else "")
+        self.figdir = os.path.join(self.texdir, self.figname)
         if os.path.isdir(self.figdir):
             shutil.rmtree(self.figdir, ignore_errors=True)
         os.makedirs(self.figdir, exist_ok=True)
         self.fig_n = 0
+        self.short = False
+        self.suppress = False  # when True, figure() emits nothing (content omitted from a short-form build)
+
+    def figure_full(self, fig, caption, width=None, height_in=None):
+        """A figure that appears only in the complete report (illustrative or secondary)."""
+        if self.short:
+            plt.close(fig)
+            return ""
+        return self.figure(fig, caption, width, height_in)
 
     def figure(self, fig, caption, width=None, height_in=None):
+        if self.suppress:
+            plt.close(fig)
+            return ""
         self.fig_n += 1
         name = f"fig{self.fig_n:02d}.pdf"
         fig.savefig(os.path.join(self.figdir, name), bbox_inches="tight", facecolor="white")
         plt.close(fig)
         return ("\\begin{figure}[H]\n\\centering\n"
-                f"\\includegraphics[width=\\linewidth]{{figures/{name}}}\n"
+                f"\\includegraphics[width=\\linewidth]{{{self.figname}/{name}}}\n"
                 f"\\caption{{{inline(caption)}}}\n\\end{{figure}}\n")
 
     def multiBuild(self, S):
         body = "".join(S if isinstance(S, list) else [S])
         tex = PREAMBLE.replace("__SHORT__", inline(self.title)) + body + "\n\\end{document}\n"
-        texpath = os.path.join(self.texdir, "report.tex")
+        stem = "report" + (("_" + self.tag) if self.tag else "")
+        texpath = os.path.join(self.texdir, stem + ".tex")
         with open(texpath, "w", encoding="ascii", newline="\n") as f:
             f.write(tex)
-        for _ in range(2):
-            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "report.tex"],
+        for _ in range(3):
+            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", stem + ".tex"],
                                cwd=self.texdir, capture_output=True, text=True)
             if r.returncode != 0:
                 print(r.stdout[-3000:])
-                raise RuntimeError("pdflatex failed; see docs/latex/report.log")
-        shutil.copyfile(os.path.join(self.texdir, "report.pdf"), self.pdf_path)
+                raise RuntimeError("pdflatex failed; see docs/latex/%s.log" % stem)
+        shutil.copyfile(os.path.join(self.texdir, stem + ".pdf"), self.pdf_path)
         for ext in ("aux", "toc", "out"):
-            p = os.path.join(self.texdir, f"report.{ext}")
+            p = os.path.join(self.texdir, f"{stem}.{ext}")
             if os.path.exists(p):
                 os.remove(p)

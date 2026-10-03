@@ -324,7 +324,7 @@ def cva_walkthrough(doc, calib_ref):
     R = _j("xva_results.json")
     t = np.array(R["times"])
     tn, sp = rating_spread_curve("BBB", calib_ref, CCS_TENORS)
-    out = [P("This section walks through the CVA calculation step by step for one netting set, CPTY_C, on the close-out exposure, with the numbers behind each column, and closes with the questions to settle at the next session.")]
+    out = [P("This section walks through the CVA calculation step by step for one netting set, CPTY_C, on the close-out exposure, with the numbers behind each column, and closes with the decisions needed from Capitolis.")]
     out.append(P("<b>The formula.</b> Credit valuation adjustment is the expected loss from a counterparty default, priced under the risk-neutral measure (Basel MAR50.32):"))
     out.append(code("CVA = LGD * sum_i  0.5 * ( DEE(t_{i-1}) + DEE(t_i) ) * PD(t_{i-1}, t_i)\n"
                     "DEE(t)   = E[ D(t) * exposure(t) ]           expected discounted exposure, D = pathwise discount factor\n"
@@ -345,7 +345,7 @@ def cva_walkthrough(doc, calib_ref):
     tc, tl = R["conventions"]["closeout"]["total"], R["conventions"]["level"]["total"]
     cco = R["conventions"]["closeout"]["by_cpty"]
     out.append(P("<b>Reading the numbers.</b> The CVA is small relative to the exposure because the default probability over a year or two is small (a BBB spread of about 100bp gives roughly 1.7%% a year at 60%% LGD) and because the exposure runs off quickly as trades mature. On the close-out definition the total CVA for the three netting sets is %s; on the uncollateralized level exposure it is %s, larger because the level exposure keeps the whole mark-to-market at risk (for CPTY_C the 500M bond forward: %s against %s). The close-out figure is what a margined counterparty would cost; the level figure is the price if no margin were ever called." % (_k(tc["CVA"]), _k(tl["CVA"]), _k(R["conventions"]["level"]["by_cpty"]["CPTY_C"]["CVA"]), _k(cco["CPTY_C"]["CVA"]))))
-    out.append(P("<b>To settle at the next session.</b>"))
+    out.append(P("<b>Decisions needed from Capitolis.</b>"))
     out.append(B(["<b>Exposure definition for CVA.</b> Confirm that CVA should be on the brief's margined close-out exposure, with the uncollateralized figure as an upper bound, or whether Capitolis prices CVA on the level exposure.",
                   "<b>Counterparty credit.</b> Real ratings or CDS for CPTY_A, CPTY_B and CPTY_C (the BBB proxy drives everything; the sensitivity of the total to the rating is in the table of Section 8.3). Whether a sector or region adjustment is wanted.",
                   "<b>Capitolis' own credit and funding.</b> DVA and FVA are computed on assumptions (own credit BBB, funding spread equal to own spread); they need a Capitolis curve, and a decision on whether DVA is recognised at all (Basel CVA capital ignores it).",

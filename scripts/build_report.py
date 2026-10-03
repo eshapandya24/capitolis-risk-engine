@@ -36,7 +36,8 @@ inch = 72
 
 PROC = os.path.join(ROOT, "data", "processed")
 REP = os.path.join(PROC, "report")
-OUT_PDF = os.path.join(ROOT, "docs", "Capitolis_CCR_Complete_Report.pdf")
+SHORT = "--short" in sys.argv   # short-form report: same content and numbers, without the concept explanations
+OUT_PDF = os.path.join(ROOT, "docs", "Capitolis_CCR_Report_Short_Form.pdf" if SHORT else "Capitolis_CCR_Complete_Report.pdf")
 CONF = 0.99
 
 
@@ -673,7 +674,7 @@ def fig_spec_compare(S_, D):
     fig, ax = plt.subplots(figsize=(6.4, 2.7))
     w = 0.27
     ax.bar(np.arange(3) - w, unc, w, color=GREY, label="uncollateralized level, max(V,0)")
-    ax.bar(np.arange(3), old, w, color=TEAL, label="earlier full-VM illustration (Section 7.7)")
+    ax.bar(np.arange(3), old, w, color=TEAL, label="full-VM illustration (Section 7.7)")
     ax.bar(np.arange(3) + w, new, w, color=NAVY, label="brief's close-out exposure (headline)")
     ax.set_xticks(range(3)); ax.set_xticklabels(cp); ax.set_ylabel("MPE99 (USD M)"); ax.legend(fontsize=6.5)
     ax.set_title("Peak PFE99 under three exposure definitions")
@@ -685,16 +686,41 @@ def main():
     from datetime import date as _d
     from risk_engine.models.calibration import build_calibration
     D = exposures(load_all())
-    calib = build_calibration(_d(2026, 8, 28))
+    import time as _t
+    for _attempt in range(6):   # the SOFR futures pull is a live API call; retry through transient network failures
+        try:
+            calib = build_calibration(_d(2026, 8, 28))
+            break
+        except Exception as _e:
+            print("calibration attempt %d failed: %s" % (_attempt + 1, str(_e)[:120]))
+            if _attempt == 5:
+                raise
+            _t.sleep(30)
     meta = D["meta"]
     tmp = tempfile.mkdtemp(prefix="ccrfig_")
-    doc = Report(OUT_PDF, "Monte Carlo Counterparty Credit Risk Engine - Complete Report", tmp)
+    doc = Report(OUT_PDF, "Monte Carlo Counterparty Credit Risk Engine - " + ("Short-Form Report" if SHORT else "Complete Report"), tmp,
+                 tag="short" if SHORT else "")
+    doc.short = SHORT
     S = []
+    _skip = [False]
+
     def add(x):
+        if _skip[0]:
+            return
         if isinstance(x, (list, tuple)):
             S.extend(x)
         else:
             S.append(x)
+
+    def S0():
+        """Begin content that appears only in the complete report (concept explanations, demonstrations)."""
+        _skip[0] = SHORT
+        doc.suppress = SHORT
+
+    def S1():
+        _skip[0] = False
+        doc.suppress = False
+    SB = "" if SHORT else PageBreak()   # page break used between sections of the complete report only
 
     ids = meta["trade_ids"]
     npv0 = D["npv"][:, 0, :].mean(axis=1)  # t=0 is deterministic
@@ -704,9 +730,10 @@ def main():
 
     # ---------- cover + exec summary
     add(titlepage("Monte Carlo Counterparty Credit Risk Engine",
-                  "Methodology, calibration and results for the ESF derivatives book",
+                  ("Short-form report: methods, decisions and results for the ESF derivatives book" if SHORT
+                   else "Complete report: methodology, calibration and results for the ESF derivatives book"),
                   "Prepared for Capitolis | Berkeley MFE Industry Project",
-                  "Valuation date 2026-08-28 | September 2026"))
+                  "Valuation date 2026-08-28 | October 2026"))
     add("\\section*{Abstract}\n")
     add(P("This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing "
           "(ESF) derivatives book, which comprises 16 trades with three counterparties. The engine simulates the joint evolution "
@@ -715,10 +742,14 @@ def main():
           "Exposure (EE), median PFE, Potential Future Exposure at the 99th percentile (PFE99) and Maximum PFE (MPE) by trade, by counterparty and for the "
           "portfolio on the 10-day close-out definition specified in the project brief. It prices counterparty credit risk (CVA, with DVA and FVA), "
           "computes the Basel SA-CVA capital requirement and the SA-CCR exposure at default, provides the full set of sensitivities (Greeks) of the book and of "
-          "the exposure measures with the method and its cost stated, and is stress tested and backtested against realised history. The report sets out the "
-          "underlying concepts from first principles, the market data and calibration, every modelling choice together with the alternatives considered, "
-          "the validation performed, and the results. Every quantity is either measured from the engine on real market data as of 2026-08-28 or is an "
-          "explicitly stated assumption."))
+          "the exposure measures with the method and its cost stated, and is stress tested and backtested against realised history. " +
+          ("This short-form report records the market data and calibration, every modelling choice together with the alternatives that were tested and rejected, "
+           "the validation performed, and the results; it assumes familiarity with the underlying concepts, which the Complete Report develops from first principles. "
+           if SHORT else
+           "The report sets out the underlying concepts from first principles, the market data and calibration, every modelling choice together with the alternatives considered, "
+           "the validation performed, and the results. ") +
+          "Every quantity is either measured from the engine on real market data (curves and historical series as of the 2026-08-28 valuation date; equity and "
+          "USDJPY spot snapshot as described in Section 3) or is an explicitly stated assumption."))
     add(make_toc())
     add(PageBreak())
     add("\\section*{Summary of results}\n")
@@ -749,7 +780,9 @@ def main():
              ["DVA and FVA (close-out)", "$%s and $%s" % (format(Xv["conventions"]["closeout"]["total"]["DVA"], ",.0f"), format(Xv["conventions"]["closeout"]["total"]["FVA"], ",.0f")), "On assumed own credit and funding spreads (Section 8.5)"],
              ["SA-CVA capital", "$%.2fM close-out; $%.2fM uncollateralized (RWA $%.1fM; $%.1fM)" % (Rc0["K_sa_cva"] / 1e6, RN._j("sa_cva_results_level.json")["K_sa_cva"] / 1e6, Rc0["RWA"] / 1e6, RN._j("sa_cva_results_level.json")["RWA"] / 1e6), "Basel standardised approach on the two exposure definitions; dominated by counterparty credit spread risk (Section 8.4)"],
              ["SA-CCR exposure at default", m(Sa["total"]["EAD"]), "Regulatory EAD, uncollateralized; dominated by the replacement cost of BF_0003 (Section 8.7)"],
-             ["Greeks", "t = 0 book Greeks; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities", "Complete, by netting set, method and cost stated (Section 9)"],
+             ["Greeks", "Book today: equity delta %s per +1%%, DV01 %s per +1bp; sensitivities of EE, median PFE and PFE99 to equities, USDJPY, USD rates and volatilities" % (
+                  "-$%.2fM" % (abs(sum(sum(d_.values()) for d_ in RG.load()["book_t0"]["equity_delta"].values())) / 1e6),
+                  "$%.0fk" % (sum(RG.load()["book_t0"]["rate_parallel"].values()) / 1e3)), "Complete, by netting set, method and cost stated (Section 9)"],
              ["Stress test", "%d scenarios; largest close-out MPE %s (%s)" % (len(Sx["scenarios"]), m(Sx["scenarios"][_stress_worst]["closeout"]["__portfolio__"]["MPE"]), RN2.SHORT.get(_stress_worst, _stress_worst)), "Hypothetical and historical replays, by product and along the time path (Section 7.10)"],
              ["Backtest (Kupiec)", "99%% equity leg: %s exceptions against %s expected in the three netting sets" % ("/".join(str(r["x"]) for r in _bt99), "/".join("%.1f" % r["expected"] for r in _bt99)), "Realised 10-day moves against the model's quantiles, out of sample (Section 11.7)"]],
             widths=[2.3, 2.5, 3.2]))
@@ -757,7 +790,7 @@ def main():
     add(B([
         "Monte Carlo under the risk-neutral measure. USD short rate: one-factor Hull-White fitted exactly to today's SOFR curve, with the Bloomberg long end spliced beyond the last futures contract and sigma fitted to the realised volatility of 2y-30y Treasury yields. Equities and USDJPY: correlated geometric Brownian motion driven by the simulated rates; a two-factor Gaussian (G2++) alternative is implemented and compared.",
         "Exposure: the brief's definition, max(V(t + 10bd) - V(t - 1bd), 0) with variation margin equal to the prior-day value, per trade and per counterparty over one year; the uncollateralized level exposure is kept as a secondary view.",
-        "Correlation: one static 40x40 matrix (37 equities, USDJPY, USD rate on 10-year-yield shocks, JPY rate) estimated from 616 aligned daily returns and applied through a Cholesky factor; a PCA factor model (5 factors) is provided as an alternative and its cost and benefit are measured (Section 4.4).",
+        "Correlation: one static 39x39 matrix (37 equities, USDJPY, USD rate on 10-year-yield shocks) estimated from 616 aligned daily returns and applied through a Cholesky factor, extended by the JPY rate factor (40 simulated factors, Section 4.5); a PCA factor model (5 factors) is provided as an alternative and its cost and benefit are measured (Section 4.4).",
         "Sampling and size: Latin Hypercube sampling (lowest error of the five methods tested) with N = 5,000 scenarios for standard reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
         "Dates: standard market pillar dates (O/N to 10Y) with every trade's own reset and maturity date, and the t - 1bd and t + 10bd nodes required by the exposure definition, on the grid.",
         "Mean reversion: a = 0.0167 for USD from the swaption cube; for JPY the lower bound a = 0.001, because real JPY volatility rises with tenor (three independent sources).",
@@ -766,7 +799,25 @@ def main():
         "Model risk: attribution of every correction, a one-at-a-time perturbation study, a structured stress test and a Kupiec backtest (Sections 7.3, 7.9, 7.10, 11.7)."]))
     add(PageBreak())
 
-    # ---------- 1 concepts
+    # ---------- 1 concepts (complete report) / scope and conventions (short form)
+    if SHORT:
+        add(P("1. Scope, deliverables and conventions", H1))
+        add(P("This report records what was built for Capitolis' ESF derivatives book against the project brief: the data and calibration, every modelling choice with the "
+              "alternatives that were tested and rejected, the validation performed and the results. It does not re-derive the underlying concepts."))
+        add(tbl([["Requirement of the brief", "Delivered", "Where"],
+                 ["Stochastic models for rates, equity and FX", "Hull-White 1F for USD (G2++ alternative implemented and compared); correlated GBM with quanto correction for 37 equities and USDJPY; a JPY Hull-White factor", "Sections 4, 6, 7.9"],
+                 ["Pricing model integration", "Every scenario and date repriced through the supplied pricing library, unmodified", "Section 2.2"],
+                 ["Exposure profiles (EE, median PFE, PFE99, MPE)", "The brief's close-out definition (headline) and the uncollateralized level exposure, by trade, counterparty and portfolio", "Section 7"],
+                 ["Efficient Greeks", "Bump-and-reprice with common random numbers, subset repricing, pathwise check, exact analytic rate Greek, par-instrument DV01", "Section 9"],
+                 ["Performance and scalability", "Analytic Hull-White bond price, multiprocessing, sampling scheme and scenario count chosen from measured error and cost", "Sections 5.3 to 5.5"],
+                 ["Extra credit: xVA", "CVA, DVA, FVA and KVA; SA-CVA capital; SA-CCR exposure at default, on both exposure definitions", "Section 8"],
+                 ["Extra credit: risky bonds and CDS", "Risky-bond sample trade on a bond-index issuer-curve proxy (no CDS data obtainable)", "Section 8.10"]],
+                widths=[2.3, 4.2, 1.2]))
+        add(P("<b>Reporting conventions.</b>", BODY))
+        add(B(["Exposure is the brief's close-out definition, max(V(t + 10bd) - V(t - 1bd), 0), netted by counterparty; EE, median PFE, PFE99 (99th percentile) and MPE (peak PFE99 within one year) are computed on it unless a figure is labelled uncollateralized (level exposure max(V, 0)).",
+               "Headline figures use 5,000 Latin Hypercube scenarios; amounts are in USD; the valuation date of the curves and historical series is 2026-08-28 (the spot snapshot is described in Section 3).",
+               "Section numbers in this report are the same as in the Complete Report."]))
+    S0()
     add(P("1. The problem from scratch", H1))
     add(P("1.1 What is counterparty credit risk?", H2))
     add(P("A derivative is a contract whose value changes as markets move. If we hold a contract with positive value to us, the "
@@ -807,12 +858,17 @@ def main():
           "is used for regulatory PFE limits and would add a risk premium to the drifts. We use risk-neutral because it needs no extra "
           "unobservable inputs and is verified by a martingale test (Section 11). Because the horizon is short (under two years) and most "
           "positions are financed at the same rates, the difference between the two drifts is small relative to volatility."))
-    add(PageBreak())
+    S1()
+    add(SB)
 
     # ---------- 2 book
     add(P("2. The trade book", H1))
     add(P("The book has <b>16 trades</b> with <b>3 counterparties</b> (CPTY_A, CPTY_B, CPTY_C), referencing 37 unique equities (%d USD-quoted, %d JPY-quoted) and 5 US Treasury bonds. Trade files are supplied by Capitolis in trade_data/." % (sum(1 for v in meta["currencies"].values() if v != "JPY"), sum(1 for v in meta["currencies"].values() if v == "JPY"))))
     add(P("2.1 The three instruments", H2))
+    if SHORT:
+        add(P("Eight equity total return swaps (EQTRS_0001-0008), all pay-equity from our side, two of them JPY compo trades; four short bond forwards (BF_0001-0004), of which "
+              "BF_0003, a 500M forward on a 2049 Treasury, dominates CPTY_C; and four bond total return swaps (BTRS_0001-0004). The trade-level formulas are in the Complete Report."))
+    S0()
     add(P("<b>Equity Total Return Swap (TRS).</b> One party pays the total return of a basket of shares (price change plus dividends) and receives a "
           "funding leg (SOFR plus a spread, or a fixed rate) on a financed amount. Value = equity leg minus funding leg:"))
     add(code("equity leg  = sum_i shares_i * DF(end) * (F_i(end) - basis_i)     F(t) = S(t)/DF(end)\n"
@@ -825,25 +881,28 @@ def main():
           "(forward clean price - strike). The forward price is the spot financed at the repo rate less coupons in the window. Four of these, all short. "
           "BF_0003 has a 500M notional and dominates CPTY_C."))
     add(P("<b>Bond TRS.</b> Same idea as an equity TRS but on a bond: return leg (price change plus coupons) versus a funding leg over a reset schedule. Four of these."))
+    S1()
     rows = [["Trade", "Type", "Counterparty", "Ends", "Today's NPV"]]
     for i, t in enumerate(ids):
         rows.append([t, meta["trade_type"][t], meta["trade_counterparty"][t], meta["trade_expiry"][t], f"{npv0[i]:,.0f}"])
     add(tbl(rows, widths=[1.3, 1.2, 1.1, 1.1, 1.5]))
     add(Spacer(1, 6))
-    add(doc.figure(fig_book_timeline(D), "Life span of every trade. Nearly all exposure will therefore disappear within four months; only BTRS_0001 and EQTRS_0008 run past mid-2027."))
-    add(doc.figure(fig_t0_npv(D, npv0), "Today's mark-to-market per trade. CPTY_C's total is dominated by BF_0003 (+%.0fM); CPTY_B nets to a small positive, so its exposure today is small." % (npv0[ids.index("BF_0003")] / 1e6)))
+    add(doc.figure_full(fig_book_timeline(D), "Life span of every trade. Nearly all exposure will therefore disappear within four months; only BTRS_0001 and EQTRS_0008 run past mid-2027."))
+    add(doc.figure_full(fig_t0_npv(D, npv0), "Today's mark-to-market per trade. CPTY_C's total is dominated by BF_0003 (+%.0fM); CPTY_B nets to a small positive, so its exposure today is small." % (npv0[ids.index("BF_0003")] / 1e6)))
     add(P("2.2 Pricing library (the 'contract')", H2))
     add(P("The trades are priced by capitolis_pricers, a self-contained standard-library re-implementation of QuantLib/ORE-style discounted cash flows supplied "
           "with the project. Every pricer is a pure function <font face='Courier'>npv = pricer.npv(MarketState)</font>. Our simulation therefore never contains pricing logic of its own: "
           "at every (scenario, date) we build a <font face='Courier'>MarketState</font> from simulated inputs (a discount curve, equity spots, an FX curve) and call the same "
           "<font face='Courier'>.npv()</font>. This is a deliberate design choice: the pricers were independently reviewed (docs/notes/pricer_review.md), so any error "
           "in the exposure numbers cannot hide inside re-implemented pricing."))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 3 data
     add(P("3. Market data: what we used and why", H1))
+    S0()
     add(P("Every risk factor needs both a <i>starting value</i> and <i>dynamics</i> (volatility, correlation, mean reversion). We prefer real, verifiable data; "
           "where none exists we use a labelled assumption."))
+    S1()
     add(tbl([["Input", "Source", "Used for", "Note"],
              ["USD discount curve", "Databento: CME SR3/SR1 SOFR futures (33 live contracts), bootstrapped by us", "Discounting, forwards, Hull-White fit", "Validated against Treasury.gov par curve (spread 13bp at 1M to 46bp at 10Y)"],
              ["37 equity spots and dividend yields", "yfinance", "GBM start values and drift", "Keyed by ISIN; BRK.B ticker mismatch found and fixed"],
@@ -860,17 +919,24 @@ def main():
              ["JGB par yields 1Y-40Y", "Japan Ministry of Finance, daily from 1974", "JPY mean-reversion test", "Public"]],
             widths=[1.5, 2.2, 1.8, 2.2], font=7.3))
     add(Spacer(1, 6))
+    add(P("<b>Data timestamps.</b> The USD curve (SOFR futures settlement of 2026-08-28), the volatilities, correlations, calibrations and every historical series are as of the "
+          "2026-08-28 valuation date. Equity and USDJPY spot prices are the last prices available when each run was executed (2026-09-23 to 2026-09-27, as retrieved from yfinance), "
+          "not the 2026-08-28 closes. The exposure results are therefore conditional on that spot snapshot, and runs executed on different days differ slightly in their t = 0 marks "
+          "(for example the book NPV of Section 9.2 differs from Section 7.4 by $2,634, 0.002% of the portfolio NPV, because the USDJPY snapshot moved by about 0.006% between the "
+          "headline run and the Greeks run). A re-run on date-pinned closes is listed under the open items of Section 15."))
     Sx_old_bf3 = RN._j("spec_run", "spec_exposure_before_fixes.json")["per_trade"]["BF_0003"]["mtm_t0"]
     add(P("3.1 The USD curve", H2))
     add(P("Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its "
-          "reference quarter; chaining consecutive quarters multiplies discount factors. The futures end about 6.5 years out. Beyond the last contract the curve now follows the "
-          "forward structure of the Bloomberg USD SOFR zero curve (below); earlier versions extrapolated flat, which was one of the defects corrected in this version (Section 12). "
+          "reference quarter; chaining consecutive quarters multiplies discount factors. The futures end about 6.5 years out. Beyond the last contract the curve follows the "
+          "forward structure of the Bloomberg USD SOFR zero curve (below); a flat extrapolation was rejected after it was found to understate the long-dated bond forward (defect 10, Section 12). "
           "Two real bugs in the futures bootstrap were found by cross-checking with the Treasury curve (Section 12). The curve is the starting point of the Hull-White model and the discount curve at t=0."))
     add(doc.figure(fig_curve(calib), "The bootstrapped USD SOFR curve, with the long end spliced beyond the last futures contract. The upward slope (zero rate about 3.7% at the front, above 4% by 6 years) means forwards exceed spot rates."))
     add(RN.curve_splice(doc, calib, bf3_old=Sx_old_bf3))
     add(P("3.2 Volatilities", H2))
     add(P("Volatility is the annualised standard deviation of daily changes over the last three years (log returns for equities and FX; simple differences for rates, "
-          "because rate LEVELS near or below zero make log returns meaningless). The USD rate volatility is treated separately, below."))
+          "because rate LEVELS near or below zero make log returns meaningless). The USD rate volatility is treated separately, below." if not SHORT else
+          "Volatility is the annualised standard deviation of daily changes over the last three years (log returns for equities and FX, simple differences for rates). "
+          "The USD rate volatility is treated separately, below."))
     add(doc.figure(fig_vols(calib), "Realised volatility spans an order of magnitude across the 37 names. A few names carry 50-76% vol, which dominates tail exposure of the trades that reference them."))
     add(RN.rates_vol(doc, calib))
     add(P("<b>Choice and alternative.</b> Implied volatility from options would be forward-looking and is the norm for pricing, but we had no single-name options data (the Bloomberg "
@@ -881,17 +947,22 @@ def main():
     add(doc.figure(fig_c, "Left: the 39x39 correlation matrix reordered so similar names sit together; a broad positive 'market' block is visible. Right: the 741 pairwise correlations centre on %.2f." % off.mean()))
     add(P("<b>Estimation and stationarity.</b> The matrix is static, not re-estimated per date. We take the daily returns of all 39 factors, keep only the 616 dates on which every series has a price "
           "(US and Tokyo trade on different calendars, so series are joined by calendar date rather than timestamp), and compute one pairwise correlation matrix. The USD rate factor's row uses daily changes of the 10-year Treasury yield rather than the overnight SOFR fixing, which moves in steps on Fed dates and correlates with nothing. It is assumed "
-          "constant over the simulation horizon. The alternatives (time-varying DCC-GARCH, or stressed correlations) add parameters we cannot validate with our data; we flag this as a limitation."))
-    add(PageBreak())
+          "constant over the simulation horizon. The alternatives (time-varying DCC-GARCH, or stressed correlations) add parameters we cannot validate with our data; we flag this as a limitation. "
+          "The simulation correlates 40 factors: these 39 plus the JPY rate factor, whose correlations with the USD rate, USDJPY and the equities are calibrated separately (Section 4.5)."))
+    add(SB)
 
     # ---------- 4 models
     add(P("4. The risk-factor models", H1))
     add(P("4.1 USD short rate: Hull-White one-factor", H2))
+    if SHORT:
+        add(P("The USD curve at every future date and scenario comes from the Gaussian one-factor Hull-White model, implemented in its shifted Ornstein-Uhlenbeck form r(t) = x(t) + alpha(t):"))
+    S0()
     add(P("We need the whole USD curve at every future date and scenario, because bonds and funding legs are discounted with it. The standard tool is the <b>Hull-White one-factor "
           "model</b>, a Gaussian, mean-reverting short-rate model:"))
     add(code("dr(t) = [ theta(t) - a * r(t) ] dt + sigma dW(t)"))
     add(P("<b>a</b> is mean reversion (how fast rates are pulled back), <b>sigma</b> is rate volatility, and <b>theta(t)</b> is chosen so that the model prices today's curve "
           "exactly. We use the equivalent shifted Ornstein-Uhlenbeck form r(t) = x(t) + alpha(t):"))
+    S1()
     add(code("x(t+dt) = x(t) e^{-a dt} + sigma sqrt( (1 - e^{-2 a dt}) / (2a) ) Z      (exact transition)\n"
              "alpha(t) = f(0,t) + sigma^2/(2 a^2) (1 - e^{-a t})^2                      (fits today's curve)\n"
              "P(t,T)   = A(t,T) exp( -B(t,T) r(t) ),  B = (1 - e^{-a (T-t)})/a        (analytic bond price)"))
@@ -900,38 +971,54 @@ def main():
           "<b>Alternatives rejected:</b> CIR/Black-Karasinski (positive-only, cannot represent negative JPY rates); LMM/HJM multi-factor curve models (more realistic curve twists but many more parameters than "
           "our data can support and slower); a constant-rate assumption (would ignore the funding-leg and bond-forward rate risk)."))
     add(P("<b>Parameters.</b> sigma = %.2f%% (fitted to realised 2y-30y Treasury yield volatility, Section 3.2); a = %.4f (calibrated, Section 6). Today's short rate r(0) = %.2f%%." % (meta["hw_sigma"] * 100, meta["hw_a"], meta["hw_r0"] * 100)))
-    add(doc.figure(fig_rate_fan(D, calib), "Simulated USD short rate. The median tracks today's forward curve (dashed) because the model is fitted to it; the widening bands are rate uncertainty."))
+    add(doc.figure_full(fig_rate_fan(D, calib), "Simulated USD short rate. The median tracks today's forward curve (dashed) because the model is fitted to it; the widening bands are rate uncertainty."))
     add(P("4.2 Equities and USDJPY: correlated geometric Brownian motion", H2))
     add(code("dS_i / S_i = ( r_USD - q_i ) dt + sigma_i dW_i                         USD-quoted names\n"
              "dS_i / S_i = ( r_JPY - q_i + rho_iX sigma_i sigma_X ) dt + sigma_i dW_i   JPY-quoted names (S in JPY)\n"
              "dX / X     = ( r_JPY - r_USD + sigma_X^2 ) dt + sigma_X dW_X             USDJPY, X = JPY per USD"))
+    if SHORT:
+        add(P("Each step is the exact log-normal step with the short rates at the start of the step, so equities, FX and rates are linked. The drifts follow from requiring that every USD-denominated "
+              "tradable asset, discounted at the USD money market, is a martingale, including the quanto correction for JPY-listed names (verified in Section 11.2). A drift taken from the "
+              "USD-per-JPY quote and applied to the JPY-per-USD quote has the wrong sign; this was found and corrected during development (defect 11, Section 12) and its effect is measured in Section 7.3."))
+    S0()
     add(P("Each step is the exact log-normal step ln S(t+dt) = ln S(t) + (drift - sigma^2/2) dt + sigma sqrt(dt) Z, with the short rates at the start of the step (so equities, FX and rates are linked). The drifts follow from requiring that every "
           "USD-denominated tradable asset, discounted at the USD money market, is a martingale. A JPY bank account valued in USD, B_JPY / X, must earn the USD rate, which gives USDJPY (JPY per USD) a drift of r_JPY - r_USD: it falls when USD rates exceed JPY rates. A JPY-listed name held by a USD investor has USD value S / X and must also earn r_USD - q, "
-          "which gives the JPY-currency price the drift r_JPY - q plus a quanto correction rho sigma_S sigma_X. Both are verified by martingale tests (Section 11.2). An earlier version used the drift of USD-per-JPY for a JPY-per-USD quote, with the wrong sign; the correction is documented in Section 12 and its effect in Section 7.3."))
+          "which gives the JPY-currency price the drift r_JPY - q plus a quanto correction rho sigma_S sigma_X. Both are verified by martingale tests (Section 11.2). A drift taken from the USD-per-JPY quote and applied to the JPY-per-USD quote has the wrong sign; this was found and corrected during development (defect 11, Section 12) and its effect is measured in Section 7.3."))
+    S1()
     add(P("<b>Why GBM.</b> It matches the lognormal vol convention we measure, is the market default for equity CCR, and needs only a vol per name. <b>Alternatives:</b> local/stochastic vol "
           "(Heston, SABR) would capture skew and vol-of-vol but need option surfaces we do not have; jump models help tails but add unobservable parameters. We disclose that GBM understates fat tails."))
-    add(doc.figure(fig_fx_eq_fan(D, calib), "Simulated USDJPY and two equities (a low-vol and the highest-vol name) with 1-99 and 25-75 percent bands."))
+    add(doc.figure_full(fig_fx_eq_fan(D, calib), "Simulated USDJPY and two equities (a low-vol and the highest-vol name) with 1-99 and 25-75 percent bands."))
     add(P("4.3 Correlation and the Cholesky factor", H2))
+    if SHORT:
+        add(P("Correlated shocks are produced by the Cholesky factor L of the static correlation matrix C (L L' = C); a tiny eigenvalue clip guards against CSV round-off making C numerically non-PSD."))
+    S0()
     add(P("Independent random numbers give independent assets. Real assets move together, so we transform independent standard normals Z into correlated ones. Given the target "
           "correlation matrix C, the <b>Cholesky decomposition</b> finds the lower-triangular L with L L' = C. Then Y = L Z has exactly correlation C:"))
     add(code("Cov(Y) = L Cov(Z) L' = L I L' = L L' = C"))
     add(P("It is used because it is the cheapest exact way to impose an arbitrary positive-definite correlation structure. A tiny eigenvalue clip guards against CSV round-off making C numerically non-PSD."))
     fig_ch, (n1, n2, r12) = fig_cholesky_demo(calib)
     add(doc.figure(fig_ch, "Demonstration on the most correlated pair in our real matrix (%s / %s, corr %.2f): independent draws (left) become correlated draws (right) after multiplying by L." % (n1[:8], n2[:8], r12)))
+    S1()
     add(P("4.4 Optional alternative: a PCA factor model for correlation", H2))
+    if SHORT:
+        add(P("The 39x39 matrix has 741 free correlations estimated from only 616 days. A k-factor PCA model (C ~ B B' + diag(d), loadings from the top-k eigenvectors, unit variance restored) was built and measured as an alternative."))
+    S0()
     add(P("A 39x39 matrix has 741 free correlations estimated from only 616 days, so many entries are noisy. A <b>factor model</b> assumes co-movement comes from a few common drivers "
           "plus each name's own noise: C ~ B B' + diag(d), where B (39 x k) are loadings on k factors. We build it by principal-component analysis: B = top-k eigenvectors x sqrt(eigenvalue), "
           "and d = 1 - row sums of squares so every name still has unit variance. Simulation then draws k systematic and 39 idiosyncratic shocks."))
+    S1()
     fig_s, vals, ev, err_max = fig_scree(calib)
     add(doc.figure(fig_s, "Left: the first eigenvalue (%.1f of a total 39) is one dominant market factor. Middle: %d factors explain %.0f%% of variance and 10 explain %.0f%%. Right: reconstruction error falls as k grows (exactly zero at full rank)." % (vals[0], 5, ev[4] * 100, ev[9] * 100)))
+    S0()
     add(doc.figure(fig_loadings(calib), "Loadings of each of the 39 factors on the first five principal factors."))
+    S1()
     add(P("<b>Trade-off.</b> The factor model is smoother and more robust to estimation noise and gives quasi-random sequences a low-dimensional space where they work best, but it only approximates the "
           "empirical matrix. Because it changes results, it is an option (corr_mode='factor'), not the default. Section 7.8 compares its exposure profiles with the full-rank engine."))
     add(RN2.pca_section(doc))
-    add(PageBreak())
+    add(SB)
 
     add(P("4.5 JPY: a negative-rate-capable rate model", H2))
-    add(P("Until recently JPY drift used r_USD minus a constant differential. That cannot represent JPY's own rate dynamics. We therefore built a genuine second Hull-White factor for JPY "
+    add(P("A constant differential to the USD rate cannot represent JPY's own rate dynamics, so JPY has a genuine second Hull-White factor "
           "(<font face='Courier'>build_jpy_hull_white</font>): it starts from the real JPY OIS curve and, being Gaussian, has <b>no floor at zero</b>."))
     fig_t, tona = fig_tona()
     add(doc.figure(fig_t, "Real TONA history from the Bank of Japan: rates were at or below zero for most of 25 years, with %d negative daily fixings (2003 and 2016-2024). A model that floors at zero could not represent this." % int((tona < 0).sum())))
@@ -940,7 +1027,9 @@ def main():
     _cols = [c for c in _h.columns if c.startswith("JYSO") and jpy_ois.tenor_years(c) <= 5.0]
     add(P("The daily JPY OIS history provided by the project team (35 tenors, %d business days from October 2011) shows the same for the whole short end of the curve: the overnight call rate was negative on %d days, and OIS par rates out to five years were negative on %d days, with a minimum of %.2f%%." % (len(_h), int((_h["MUTKCALM"] < 0).sum()), int((_h[_cols] < 0).any(axis=1).sum()), _h.min().min())))
     fg, frac = fig_ou_negative()
+    S0()
     add(doc.figure(fg, "Demonstration of the capability: Hull-White started from a synthetic -0.10%% flat curve. %.0f%% of simulated points are negative and nothing is clipped. (Our only real JPY curve snapshot, Aug 2026, is positive after BOJ hikes, so the negative case is shown synthetically.)" % (frac * 100)))
+    S1()
     hj = meta["hw_jpy"]
     _jc = calib["jpy_rate_corr_detail"]
     add(tbl([["JPY factor parameter", "Value", "Source / status"],
@@ -953,11 +1042,13 @@ def main():
             widths=[1.8, 1.6, 4.3]))
     add(Spacer(1, 4))
     fg2, df_, d_ = fig_usd_jpy_rates()
+    S0()
     add(doc.figure(fg2, "Levels (left) rise together with the global cycle (level correlation ~0.38), but day-to-day changes (right) are uncorrelated (%+.3f): central banks set policy independently. A Hull-White correlation needs the CHANGES." % d_["SOFR"].corr(d_["TONA"])))
+    S1()
     add(P("<b>Effect on the results.</b> Only 2 of 16 trades hold JPY names, so the effect is confined to their netting sets; its size, together with that of the USDJPY drift correction, is measured in the attribution of Section 7.3."))
     add(P("4.6 A two-factor rates model: G2++", H2))
     add(RN.g2_section(doc, calib))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 5 engine
     add(P("5. How the simulation engine works", H1))
@@ -978,7 +1069,7 @@ def main():
     add(P("5.3 Speed", H2))
     add(tbl([["Bottleneck", "Fix", "Before", "After"],
              ["Discount curve per (scenario, node)", "Analytic Hull-White bond price instead of building a Curve object", "0.206 ms/call", "0.019 ms/call (10.6x, and exact)"],
-             ["Pure-Python pricers (~1.2 ms each)", "Multiprocessing over scenarios, 8 workers (a Windows spawn re-import bug was fixed)", "113 ms/scenario", "51 ms/scenario at the time"],
+             ["Pure-Python pricers (~1.2 ms each)", "Multiprocessing over scenarios, 8 workers (a Windows spawn re-import bug was fixed)", "113 ms/scenario", "51 ms/scenario"],
              ["Combined, 2,000 scenarios x 16 trades", "", "~12 min projected", "93 s (7.7x)"]], widths=[2.0, 3.2, 1.2, 1.7]))
     add(P("Current measured cost for the 3,000-scenario reporting run: %.0f s simulation of paths, %.0f s repricing (%.0f ms/scenario, including the extra MPOR look-ahead nodes)." % (meta["timing"]["paths_s"], meta["timing"]["reprice_s"], meta["timing"]["reprice_s"] / meta["n_scenarios"] * 1000)))
     add(P("5.4 Random numbers and variance reduction", H2))
@@ -1001,7 +1092,7 @@ def main():
     add(P("Relative standard deviation of the estimator across 8 independent repeats at 300 scenarios (portfolio, about 6 weeks out, near the PFE99 peak); the multiple in brackets is the improvement over pseudo-random. With only 8 repeats each standard deviation is itself uncertain by roughly a quarter, so real-engine differences between the better methods are indicative rather than conclusive.", SMALL))
     add(P("<b>Finding.</b> The controlled test gives a clear ordering (Latin Hypercube, Sobol, moment matching, antithetic, pseudo-random). On the real engine, at 663 effective dimensions (39 factors x 17 time steps), the advantages compress and the ranking depends on the statistic: the tail (PFE99) and the centre (median PFE) respond to different methods. Latin Hypercube is the only method that is both best on the controlled test and better than pseudo-random on both real-engine statistics."))
     add(callout("<b>Decision: Latin Hypercube sampling.</b> It is the best method on the controlled test and the most consistent across both reported statistics on the real engine, at negligible additional cost over plain pseudo-random draws. Sobol is the runner-up on the controlled test but is not recommended here because its benefit disappears for the median PFE and it is less robust at this dimensionality."))
-    add(PageBreak())
+    add(SB)
 
     add(P("5.5 Number of scenarios", H2))
     add(P("Monte Carlo error falls as 1/sqrt(N). Rather than rerun the expensive repricing at every candidate N, we estimate the standard error by bootstrap resampling of a simulated pool. Two studies are combined: (i) resampling of the 3,000-scenario reporting run, at the date of peak PFE99, for both PFE99 and the median PFE; (ii) a dedicated 30,000-scenario pool for the 99th percentile at the one-year node, which extends the range to large N."))
@@ -1026,7 +1117,7 @@ def main():
                      "%ss" % format(r["est_time_s"], ",.0f"), verdicts_n[r["N"]]])
     add(tbl(rows, widths=[0.7, 1.1, 0.9, 1.3, 1.1, 0.8, 2.1]))
     add(P("Tail study at the one-year node (pool value $%s, 30,000 scenarios) and the corresponding estimate at the date of peak PFE99, where the exposure distribution is wider (relative SE = %.1f%% / sqrt(N/1000), fitted to the reporting-run bootstrap). Times assume 8 cores." % (format(c99["pool_pfe_reference"], ",.0f"), se_at(1000)), SMALL))
-    add(callout("<b>Decision: number of paths.</b> Use <b>N = 5,000</b> for standard PFE99 reporting: relative standard error %.1f%% at the worst-case date (0.29%% at the one-year node), about 8 minutes on 8 cores. Use <b>N = 1,000</b> for iteration and what-if runs (%.1f%% at the worst-case date, about 2 minutes) and <b>N = 10,000</b> when a limit is being signed off (%.1f%%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below %.1f%%) is an order of magnitude smaller than the model sensitivities in Section 7.9 (a 25%% increase in equity volatility moves the portfolio MPE by about 19%%). These figures are for the uncollateralized level exposure of the earlier calibration; the level figures of this report use N = 3,000 (%.1f%% at the worst-case date) and the close-out headline figures N = 5,000 (bootstrap below)." % (se_at(5000), se_at(1000), se_at(10000), se_at(15000), se3000)))
+    add(callout("<b>Decision: number of paths.</b> Use <b>N = 5,000</b> for standard PFE99 reporting: relative standard error %.1f%% at the worst-case date (0.29%% at the one-year node), about 8 minutes on 8 cores. Use <b>N = 1,000</b> for iteration and what-if runs (%.1f%% at the worst-case date, about 2 minutes) and <b>N = 10,000</b> when a limit is being signed off (%.1f%%, about 15 minutes). We do not recommend more than 15,000: cost grows linearly while error falls only as 1/sqrt(N), and the remaining sampling error (below %.1f%%) is an order of magnitude smaller than the model sensitivities in Section 7.9 (a 25%% increase in equity volatility moves the portfolio MPE by about 19%%). These figures come from the convergence study of the uncollateralized level exposure; the level figures of this report use N = 3,000 (%.1f%% at the worst-case date) and the close-out headline figures N = 5,000 (bootstrap below)." % (se_at(5000), se_at(1000), se_at(10000), se_at(15000), se3000)))
     add(RN.convergence_closeout(doc))
     add(P("5.6 Independent parametric benchmarks (Excel)", H2))
     add(P("As a plain, formula-only sanity check separate from the Python pipeline, docs/Capitolis_CCR_Parametric_Benchmarks.xlsx recomputes the calibrated volatilities and the simulation's own realized vol with nothing but intuitive Excel formulas on the public raw data (STDEV of daily log/level changes, and the closed-form Hull-White yield-vol formula), and checks that every number lands in the same ballpark as what the engine reports:"))
@@ -1035,7 +1126,7 @@ def main():
            "Simulation cross-check: the analytic GBM/Hull-White standard deviation of the log-move at the one-year node (vol*SQRT(T), or the Hull-White short-rate formula) agrees with the standard deviation actually measured across the 5,000 simulated scenarios to within about 1-2%, well inside Monte Carlo noise (Section 5.5).",
            "Equity vega bump: bumping a USD name's volatility +/-1% and comparing the Monte Carlo vega of a simple ATM receive-equity position (E[max(S_T-S0,0)]) against the closed-form undiscounted Black vega (=NORM.S.DIST(d1,TRUE) formulas, live in the sheet) matches the level to about 3% and the vega itself to about 7%, the residual coming from the engine's stochastic Hull-White rate that the closed form treats as constant."]))
     add(P("This is a deliberately low-tech check: it does not replace the tests in tests/ or the model-risk analysis of Section 7.9, but it lets anyone confirm with a hand calculator that the numbers are not an artifact of the code, using only public data and one line of arithmetic per row."))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 6 calibration
     add(P("6. Calibrating Hull-White mean reversion", H1))
@@ -1060,7 +1151,7 @@ def main():
     fj = fig_jgb_vol()
     add(doc.figure(fj, "Realised volatility of JPY rates by tenor from two independent real datasets. At every window tried (1y, 3y, 10y) long tenors are MORE volatile than short ones, the reverse of the decay Hull-White assumes."))
     add(P("This is not bad data; it is a structural finding confirmed by three independent real sources: the daily JPY OIS curve history (35 tenors, 2011 to 2026, provided by the project team and the most complete of the three), 52 years of JGB yields, and a 2026 swaption cube. The fitted a is negative for the OIS history in every window tested (1, 3, 5, 10 and 15 years, and since the end of negative rates in March 2024). One factor, the level, explains about 84% of daily changes in the curve, and long rates move more than short rates. The plausible reason is that for two decades the Bank of Japan pinned the SHORT end (zero and negative policy rates, yield-curve control), so short-tenor volatility was suppressed while longer tenors moved more freely. A single mean-reverting Gaussian factor implies volatility that DEcreases with tenor, so it cannot represent this shape, and a negative a would make the short rate diverge."))
-    add(P("<b>Choice:</b> use the lowest admissible mean reversion, a = %.4f, the Ho-Lee limit in which volatility is flat across tenors. This is the closest a Gaussian factor can get to the data, and it replaces our earlier use of the USD value. A two-factor or regime-dependent model would be needed to match the shape, and is listed under future work." % meta["hw_jpy"]["a"]))
+    add(P("<b>Choice:</b> use the lowest admissible mean reversion, a = %.4f, the Ho-Lee limit in which volatility is flat across tenors. This is the closest a Gaussian factor can get to the data. A two-factor or regime-dependent model would be needed to match the shape, and is listed under future work." % meta["hw_jpy"]["a"]))
     add(P("<b>Practical impact:</b> small. JPY affects two trades, and the USD parameters are the ones used for discounting the whole book."))
     add(PageBreak())
 
@@ -1086,10 +1177,10 @@ def main():
     fgc, unc_, old_, new_ = fig_spec_compare(S_, D)
     add(doc.figure(fgc, "Peak PFE99 by counterparty under three definitions of exposure. The level exposure (grey) treats the whole mark-to-market as at risk; the brief's definition (navy) recognises that variation margin covers the prior-day value and leaves only the 10-day move."))
     _bf = S_["per_trade"]["BF_0003"]
-    add(P("<b>Reading the results.</b> The close-out MPE99 is far below the level exposure because the prior-day value is margined: CPTY_C's bond forward BF_0003 is worth %s today but its 99th-percentile 10-day move peaks at %s, so its counterparty peaks at $%.1fM against $%.1fM of level exposure. CPTY_A and CPTY_B are driven by the equity swap baskets, whose 10-day equity moves set the tail. Close-out exposure is a measure of market risk over the close-out window, not of the accumulated value, which is why the peak occurs in the first weeks, when the largest baskets are alive, and falls as trades mature. The uncollateralized level exposure is kept as a secondary measure (Sections 7.4 to 7.6), and the earlier full-variation-margin illustration (Section 7.7) used a same-day, zero-floored margin formula that differs slightly from the brief's. Section 7.2 explains why the portfolio figure is close to the sum of the counterparty figures; Sections 7.3, 7.9 and 7.10 show how the numbers move with each model correction, with the model inputs and under stress." % (m(_bf["mtm_t0"]), m(_bf["MPE"]), new_[2], unc_[2])))
+    add(P("<b>Reading the results.</b> The close-out MPE99 is far below the level exposure because the prior-day value is margined: CPTY_C's bond forward BF_0003 is worth %s today but its 99th-percentile 10-day move peaks at %s, so its counterparty peaks at $%.1fM against $%.1fM of level exposure. CPTY_A and CPTY_B are driven by the equity swap baskets, whose 10-day equity moves set the tail. Close-out exposure is a measure of market risk over the close-out window, not of the accumulated value, which is why the peak occurs in the first weeks, when the largest baskets are alive, and falls as trades mature. The uncollateralized level exposure is kept as a secondary measure (Sections 7.4 to 7.6), and the full-variation-margin illustration (Section 7.7) uses a same-day, zero-floored margin formula that differs slightly from the brief's. Section 7.2 explains why the portfolio figure is close to the sum of the counterparty figures; Sections 7.3, 7.9 and 7.10 show how the numbers move with each model correction, with the model inputs and under stress." % (m(_bf["mtm_t0"]), m(_bf["MPE"]), new_[2], unc_[2])))
     add(P("7.2 Why the portfolio MPE is close to the sum of the counterparty MPEs", H2))
     add(RN2.additivity_section(doc)[0])
-    add(P("7.3 What changed since the earlier version", H2))
+    add(P("7.3 Effect of each model correction", H2))
     add(RN.attribution(doc))
     add(P("7.4 Exposure today (t = 0)", H2))
     rows = [["Counterparty", "Trades", "Net MTM today", "Netted exposure today", "Comment"]]
@@ -1112,16 +1203,16 @@ def main():
           "remainder is the Bond TRS BTRS_0001 and the year-long EQTRS_0008. So almost all counterparty credit risk sits in the next four months and monitoring should be concentrated there."))
     _pk = {c: (per[c]["MED"].max(), per[c]["EE"].max()) for c in per}
     add(P("<b>EE, median PFE and PFE99.</b> On the uncollateralized level exposure the peak median PFE is %.0f%%, %.0f%% and %.0f%% of the peak EE for CPTY_A, CPTY_B and CPTY_C. Where the two are close (CPTY_C) the exposure is a large mark-to-market that is positive in almost every scenario; where the median is well below EE (CPTY_B) the counterparty is out of the money in many scenarios and EE is pulled up by the right tail. The median PFE describes the typical outcome and PFE99 the adverse tail; reporting all three prevents any single statistic from misleading." % (_pk["CPTY_A"][0] / _pk["CPTY_A"][1] * 100, _pk["CPTY_B"][0] / _pk["CPTY_B"][1] * 100, _pk["CPTY_C"][0] / _pk["CPTY_C"][1] * 100)))
-    add(doc.figure(fig_prob_positive(D), "Probability that a counterparty has any positive exposure at all. Where this is far below 100%, the median PFE is zero even though EE and PFE99 are large."))
-    add(doc.figure(fig_dists(D), "Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time."))
-    add(PageBreak())
+    add(doc.figure_full(fig_prob_positive(D), "Probability that a counterparty has any positive exposure at all. Where this is far below 100%, the median PFE is zero even though EE and PFE99 are large."))
+    add(doc.figure_full(fig_dists(D), "Portfolio exposure histograms (log count) at four dates with median (gold), EE (navy) and PFE99 (red). The right tail lengthens with time."))
+    add(SB)
 
     add(P("7.6 Where does the risk come from?", H2))
-    add(doc.figure(fig_trade_heat(D), "Expected NPV by trade at each reporting date. CPTY_C's BF_0003 dominates the picture and disappears at its 2026-12-06 settlement; a few equity TRS contribute negative expected NPV."))
+    add(doc.figure_full(fig_trade_heat(D), "Expected NPV by trade at each reporting date. CPTY_C's BF_0003 dominates the picture and disappears at its 2026-12-06 settlement; a few equity TRS contribute negative expected NPV."))
     cC = per["CPTY_C"]
     add(P("<b>Concentration.</b> CPTY_C accounts for %.0f%% of the portfolio's peak PFE99 and %.0f%% of today's exposure, and almost all of it comes from one trade, BF_0003 (500M notional, short forward struck at 100 on a long-dated 2.88%% 2049 Treasury trading roughly 25 points below par, so we are owed the difference). This is concentration risk rather than diversified counterparty risk; a limit or collateral on that single trade would move the portfolio number more than any modelling choice in this report." % (
               cC["P99"].max() / tot["P99"].max() * 100, ce0["CPTY_C"] / max(tot["EE"][0], 1) * 100)))
-    add(P("7.7 Earlier illustration: full variation margin with an MPOR shift", H2))
+    add(P("7.7 Illustration: full variation margin with an MPOR shift", H2))
     add(P("The real book is treated as <b>uncollateralized</b> because trade_data carries no CSA terms. For a collateralized counterparty, default does not mean instant close-out: there is a Margin Period of Risk "
           "(standard 10 business days) between the last collateral exchange and the actual replacement of the trades. The relevant exposure is what the position could gain in that window beyond the collateral held:"))
     add(code("C(t)        = max( V(t) - threshold, 0 )        collateral held at reporting date t\n"
@@ -1134,14 +1225,19 @@ def main():
     for c, a1, a2 in zip(cp, u, mp):
         rows.append([c, f"${a1:,.1f}M", f"${a2:,.1f}M", f"{(1 - a2 / a1) * 100 if a1 > 0 else 0:.0f}%"])
     add(tbl(rows, widths=[1.5, 2.0, 2.0, 1.2]))
+    if SHORT:
+        add(P("Initial margin and SIMM are not modelled: the illustration is variation-margin only, with a look-ahead of exactly 10 business days (US federal holidays skipped) and no minimum "
+              "transfer amount. Whether any trade is actually margined is the most important open question for Capitolis: it changes the answer several-fold for CPTY_C."))
+    S0()
     add(P("<b>Relation to SIMM and Basel.</b> The 10-day figure is the convention shared by both frameworks. Under the Basel counterparty credit risk rules (SA-CCR and the internal models method) the margin period of risk for a margined bilateral OTC netting set is at least 10 business days, 5 business days for centrally cleared trades and 20 business days for large or illiquid netting sets, and it lengthens after margin disputes. The ISDA Standard Initial Margin Model (SIMM) is a different object: a sensitivity-based methodology for the <i>initial margin</i> that the uncleared margin rules require counterparties to post, calibrated to a 99% one-tailed loss over a 10-day horizon using a stress period. Initial margin is collateral posted in addition to variation margin and held against precisely the close-out window described above."))
     add(P("Our engine does <b>not</b> implement SIMM and does not model initial margin. The calculation in this section is a variation-margin-only illustration: a threshold of zero removes any unsecured amount, but there is no initial margin buffer. If initial margin were posted it would absorb part of the 10-day move and reduce the exposure shown further; quantifying that requires computing SIMM sensitivities for each netting set, which we have not attempted. Two simplifications should also be noted: the look-ahead is exactly 10 business days (Monday to Friday, US federal holidays skipped; the SIFMA bond-market calendar differs marginally), and no minimum transfer amount is modelled."))
     add(P("Whether any trade is actually margined is the most important open question for Capitolis: it changes the answer several-fold for CPTY_C."))
-    add(PageBreak())
+    S1()
+    add(SB)
 
     add(P("7.8 Full-rank correlation versus PCA factor model", H2))
     fg, mpe_f, ee_f, ncmp = fig_factor_cmp()
-    add(doc.figure(fg, f"Uncollateralized level exposure, same seed and method ({ncmp:,} scenarios), with the full Cholesky correlation versus a k-factor PCA model. Curves coincide closely from k=5."))
+    add(doc.figure_full(fg, f"Uncollateralized level exposure, same seed and method ({ncmp:,} scenarios), with the full Cholesky correlation versus a k-factor PCA model. Curves coincide closely from k=5."))
     rows = [["Model", "Peak portfolio EE", "MPE (peak PFE99)", "MPE difference vs full"]]
     for k in mpe_f:
         rows.append([k, m(ee_f[k]), m(mpe_f[k]), "-" if k == "full" else f"{(mpe_f[k] / mpe_f['full'] - 1) * 100:+.1f}%"])
@@ -1199,7 +1295,7 @@ def main():
           "The CVA figures use %s scenarios (Latin Hypercube) on the brief's close-out exposure; on the uncollateralized level exposure the total is %s (Section 8.5). The SA-CVA sensitivities of Section 8.4 use %s scenarios with common random numbers." % (Rc["cva_by_cpty"]["CPTY_C"] / Rc["cva_total"] * 100, Rc["cva_vs_rating"]["BB"] / Rc["cva_vs_rating"]["AA"], format(Rc["n_scenarios_cva"], ","), "$" + format(Xv["conventions"]["level"]["total"]["CVA"], ",.0f"), format(Rc["n_scenarios"], ","))))
     add(P("8.4 Basel SA-CVA capital", H2))
     add(P("SA-CVA (MAR50.27 to 50.77) sets capital from the sensitivity of regulatory CVA to market risk factors. It is an adaptation of the market-risk standardised approach and needs supervisory approval, a CVA desk and monthly sensitivity calculation (MAR50.30); the figures here are therefore indicative of the requirement, not a filed number. For each risk factor k the CVA sensitivity s_k is computed by bump-and-reprice with common random numbers, converted to a weighted sensitivity WS_k = RW_k x s_k, and aggregated by bucket and risk class:"))
-    add(P("On this version the CVA sensitivities are taken on the brief's close-out exposure (%s scenarios, common random numbers). Equity and FX delta bumps reuse the base paths and reprice only the trades that hold the factor, exactly as for the Greeks (Section 9.4); interest-rate and volatility bumps re-simulate." % format(Rc["n_scenarios"], ",")))
+    add(P("The CVA sensitivities are taken on the brief's close-out exposure (%s scenarios, common random numbers). Equity and FX delta bumps reuse the base paths and reprice only the trades that hold the factor, exactly as for the Greeks (Section 9.4); interest-rate and volatility bumps re-simulate." % format(Rc["n_scenarios"], ",")))
     add(RN.sa_cva_conventions(doc))
     add(code("K_b = sqrt( sum_k WS_k^2 + sum_{k!=l} rho_kl WS_k WS_l )        S_b = clip( sum_k WS_k, -K_b, +K_b )\n"
              "K   = m_CVA * sqrt( sum_b K_b^2 + sum_{b!=c} gamma_bc S_b S_c )\n"
@@ -1218,6 +1314,25 @@ def main():
     eqb = Rc["equity_buckets"]
     add(P("Equity names are assigned to Basel buckets by size (market capitalisation of at least USD 2 billion), region (advanced versus emerging economy) and sector, using yfinance data: " + ", ".join("bucket %s: %d names" % (b, n_) for b, n_ in sorted(eqb.items(), key=lambda kv: int(kv[0]))) + "."))
     add(doc.figure(fig_sa_cva(Rc), "Left: CVA sensitivity to a 1bp rise in USD yields at each SA-CVA tenor. Middle: sensitivity of CVA to the counterparty credit spreads (three counterparties by five tenors). Right: SA-CVA capital by risk class."))
+    from risk_engine.exposure import sa_cva as _SC
+    _sn = Rc["sensitivities"]
+    _irt = list(_SC.IR_TENORS)
+    _cst = list(_SC.CCS_TENORS)
+    _f2 = lambda v_: ("%.2f" % v_) if abs(v_) >= 0.005 else "0.00"
+    add(P("<b>CVA sensitivities in USD per +1bp.</b> The Basel sensitivity s_k is the change in CVA for a 1bp shift divided by 1bp, i.e. per unit shift (the unit of the figure above); "
+          "per +1bp it is s_k x 0.0001. Before risk weights, on the close-out exposure and the BBB proxy:"))
+    add(tbl([["USD rate tenor"] + ["%gy" % t_ for t_ in _irt] + ["Total"],
+             ["CVA change per +1bp (USD)"] + [_f2(v_ * 1e-4) for v_ in _sn["ir_delta"]] + [_f2(sum(_sn["ir_delta"]) * 1e-4)]], widths=[2.0] + [1.0] * len(_irt) + [1.1], font=7.6))
+    _rows = [["Counterparty credit spread"] + ["%gy" % t_ for t_ in _cst] + ["Total"]]
+    for c_ in cpt:
+        _v = [_sn["ccs_delta"]["%s|%g" % (c_, t_)] * 1e-4 for t_ in _cst]
+        _rows.append([c_ + " (CVA01, USD per +1bp)"] + [_f2(x_) for x_ in _v] + [_f2(sum(_v))])
+    _tv = [sum(_sn["ccs_delta"]["%s|%g" % (c_, t_)] for c_ in cpt) * 1e-4 for t_ in _cst]
+    _rows.append(["Total"] + [_f2(x_) for x_ in _tv] + [_f2(sum(_tv))])
+    add(tbl(_rows, widths=[2.0] + [1.0] * len(_cst) + [1.1], font=7.6))
+    _ir_tot, _cs_tot = abs(sum(_sn["ir_delta"])), sum(_tv) / 1e-4
+    add(P("Credit-spread risk is about %.0f times the interest-rate risk of the CVA before weighting, and virtually all of it (%.2f%%) sits in the 0.5y and 1y buckets because the large CPTY_C forward matures within a year. "
+          "The 5%% credit-spread risk weight applied to these sensitivities, with the Basel correlations, gives the ccs delta capital below." % (_cs_tot / max(_ir_tot, 1e-9), 100 * (_tv[0] + _tv[1]) / sum(_tv))))
     cap = Rc["capital_by_class"]
     rows = [["Risk class", "Capital K (USD)"]]
     for k_, v in cap.items():
@@ -1240,7 +1355,7 @@ def main():
     _c, _l = Xv["conventions"]["closeout"]["total"], Xv["conventions"]["level"]["total"]
     add(P("<b>Reading the table.</b> On the margined close-out exposure the total CVA is %s and DVA %s, so the net credit charge is %s; funding costs %s (FCA %s less FBA %s). On the close-out definition the positive and negative sides are nearly symmetric, because both are 10-day moves around a margined start, so CVA and DVA almost cancel and the funding terms are small. On the level exposure CVA is %s and DVA %s: the difference from the close-out figures is the whole mark-to-market that margin would otherwise cover, and the asymmetry comes from the book being mostly in our favour (CPTY_C's bond forward), which makes the positive exposure, and therefore CVA and FCA, much larger than the negative exposure that drives DVA and FBA." % (RN._k(_c["CVA"]), RN._k(_c["DVA"]), RN._k(_c["CVA"] - _c["DVA"]), RN._k(_c["FVA"]), RN._k(_c["FCA"]), RN._k(_c["FBA"]), RN._k(_l["CVA"]), RN._k(_l["DVA"]))))
     add(P("8.6 KVA: a parametric capital charge", H2))
-    add(P("KVA is the cost of holding regulatory capital against the counterparty exposure over the life of the book, discounted like the other xVA terms. It is included here because the team asked for it, but it is explicitly illustrative, not a production number: neither a capital methodology (SA-CCR/IMM chain to risk-weighted assets) nor Capitolis' own cost of capital is supplied. We use the simplest capital-charge proxy in the literature, integrated over the expected positive exposure (EPE) profile:"))
+    add(P("KVA is the cost of holding regulatory capital against the counterparty exposure over the life of the book, discounted like the other xVA terms. It is included here because it was requested in review, but it is explicitly illustrative, not a production number: neither a capital methodology (SA-CCR/IMM chain to risk-weighted assets) nor Capitolis' own cost of capital is supplied. We use the simplest capital-charge proxy in the literature, integrated over the expected positive exposure (EPE) profile:"))
     add(code("K(t) = capital_ratio * risk_weight * alpha * EPE(t)     (ratio=8% Basel min, alpha=1.4, RW=100%)\n"
              "KVA  = CoC * sum_i 0.5 [ DF(t_{i-1}) K(t_{i-1}) + DF(t_i) K(t_i) ] dt_i"))
     add(P("alpha = 1.4 is the standard EAD multiplier used elsewhere in this report (SA-CCR, Section 8.7/CRE52); risk_weight = 100% is a placeholder in the absence of a counterparty-specific IMM or standardised credit risk weight. Since no cost of capital (CoC) is given, we sweep a small assumed grid (8%, 10%, 12%), typical of a bank's target return on capital."))
@@ -1254,9 +1369,9 @@ def main():
     add(P("At a 10%% cost of capital, KVA is %s on the close-out exposure and %s on the level exposure -- larger than CVA (%s / %s) because the capital charge multiplies the whole EPE profile by alpha = 1.4 and a fixed 8%% ratio, rather than by a market-implied default probability that is small for an investment-grade proxy. This is exactly the caveat above: the number is a sensitivity to the assumed capital and cost-of-capital inputs, not a calibrated result, and should not be compared directly to the CVA figures without first fixing a capital methodology." % (RN._k(kv["CoC_10%"]), RN._k(kv_l["CoC_10%"]), RN._k(_c["CVA"]), RN._k(_l["CVA"]))))
     add(P("8.7 SA-CCR exposure at default", H2))
     add(RN.sa_ccr_section(doc, S_))
-    add(P("8.8 CVA walk-through and set-up for the next session", H2))
+    add(P("8.8 CVA walk-through and open decisions", H2))
     add(RN2.cva_walkthrough(doc, calib["ref_date"]))
-    add(P("<b>Why we walk through CVA in this much detail.</b> The point of building CVA end-to-end is less the headline number (small, because the counterparties are proxied as investment grade and the close-out exposure is small once margin is assumed) and more that it gives us a full chain of Greeks and sensitivities to reason about: CVA01 to the counterparty spread, the rating sensitivity table (Section 8.3), and the SA-CVA weighted sensitivities by risk class (Section 8.4). Those sensitivities are what a credit or XVA desk actually manages day to day, far more than the point-in-time CVA figure itself."))
+    add(P("<b>Purpose of the walk-through.</b> The point of building CVA end-to-end is less the headline number (small, because the counterparties are proxied as investment grade and the close-out exposure is small once margin is assumed) and more that it gives us a full chain of Greeks and sensitivities to reason about: CVA01 to the counterparty spread, the rating sensitivity table (Section 8.3), and the SA-CVA weighted sensitivities by risk class (Section 8.4). Those sensitivities are what a credit or XVA desk actually manages day to day, far more than the point-in-time CVA figure itself."))
     add(P("8.9 Assumptions and limitations of the CVA work", H2))
     add(B(["<b>Counterparty ratings are assumed</b> (BBB financials). CVA and the credit-spread capital scale with this assumption; Section 8.3 shows the range.",
            "<b>Spreads are bond-index proxies</b>, not CDS: the maturity shape is common to all ratings, and the indices are US corporate spreads regardless of counterparty region or sector.",
@@ -1267,7 +1382,7 @@ def main():
            "The Basel Basic Approach (BA-CVA) is not computed; it needs only counterparty exposure and maturity and is the natural fallback if SA-CVA approval is not held."]))
     add(P("8.10 Extra credit: a risky-bond sample trade", H2))
     add(RN2.risky_bond_section(doc))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 9 Greeks
     g_ = RG.load()
@@ -1281,9 +1396,9 @@ def main():
             sign_ = -1.0 if t_.direction == "pay_equity" else 1.0
             tm_[tid_] = {}
             for p_ in t_.positions:
-                s_ = calib["equity_spots"][p_.isin] / (calib["fx_spot"] if p_.currency == "JPY" else 1.0)
+                s_ = meta["equity_spots"][p_.isin] / (meta["fx_spot"] if p_.currency == "JPY" else 1.0)  # snapshot of the headline run
                 tm_[tid_][p_.isin] = sign_ * p_.shares * s_ * 0.01
-    RG.section(add, doc, g_, tickers_, tm_)
+    RG.section(add, doc, g_, tickers_, tm_, jpy_isins={i_ for i_, c_ in meta["currencies"].items() if c_ == "JPY"})
 
     add(P("10. Every modelling choice, and what we rejected", H1))
     add(tbl([["Topic", "Choice", "Alternatives considered", "Reason"],
@@ -1294,7 +1409,7 @@ def main():
              ["Two-factor rates", "G2++ implemented, calibrated to the realised yield covariance; compared, not the default", "Two-factor default, swaption-calibrated 2F", "Adds a slope factor at 16% fit error; effect on exposure reported in Section 7.9"],
              ["Equities/FX", "Correlated GBM under the USD measure; quanto correction and rate-driven drifts for JPY names and USDJPY", "Heston, SABR, jumps", "No option surfaces; matches lognormal vol convention; drifts derived from the martingale condition and tested"],
              ["Volatility", "3y realised", "Implied vols", "No single-name options data; documented proxy"],
-             ["Correlation", "One static 40x40 matrix (USD rate on 10-year-yield shocks), Cholesky", "Time-varying (DCC), stressed, factor", "Data supports one matrix; factor model offered as alternative; correlation stress in Section 7.9"],
+             ["Correlation", "One static 39x39 matrix (USD rate on 10-year-yield shocks), Cholesky, extended by the JPY rate factor (40 factors)", "Time-varying (DCC), stressed, factor", "Data supports one matrix; factor model offered as alternative; correlation stress in Section 7.9"],
              ["Equity factor model", "Optional PCA (k=5)", "Full rank only", "Robustness, dimension reduction; approximation disclosed"],
              ["Dates", "Pillar dates + trade event dates", "Monthly grid", "Industry convention, denser where risk moves, exact cash-flow dates"],
              ["Sampling", "Latin Hypercube", "Pseudo-random, antithetic, moment-matched, Sobol", "Best measured error on both test and real engine"],
@@ -1307,7 +1422,7 @@ def main():
              ["Model validation", "Martingale tests, VaR benchmark, Kupiec backtest, attribution, model-risk study, stress test", "Narrative stress test", "Quantified, out-of-sample where possible (Sections 7.3, 7.9, 7.10, 11)"],
              ["Pricing", "Reuse validated pricer library", "Vectorised reimplementation", "Correctness first; speed via multiprocessing"]],
             widths=[1.2, 2.0, 2.0, 2.6], font=7.2))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 9 validation
     add(P("11. Validation: how we know the engine is right", H1))
@@ -1317,19 +1432,20 @@ def main():
     add(P("11.2 Martingale / no-arbitrage test", H2))
     _mg = RN._j("martingale_results.json")
     add(P("Under the risk-neutral measure discounted asset prices must have no drift. With %s paths: the bank-account check E[exp(-integral r)] = P(0,T) holds to a maximum relative difference of %.2f bp across nodes (a small, understood trapezoid-integration effect of the time grid); the discounted 'gains process' of %d names (four USD-listed and two JPY-listed, the latter valued in USD as S / X) has all |z| below %.1f; and the JPY bank account valued in USD, B_JPY / (X B_USD), is a martingale with z = %+.2f, while ln USDJPY drifts by %+.4f over the horizon (down, as it must when USD rates exceed JPY rates). "
-          "This validates the drift terms in the engine itself, including the quanto correction and the JPY-rate drift, independent of any trade pricing. The earlier version of this test covered only the six highest-volatility names and so did not exercise the JPY drift; the USDJPY drift sign error found later (Section 12) was outside its reach." % (format(_mg["n_scenarios"], ","), _mg["bank_account_max_rel_bp"], len(_mg["equity_z"]), max(abs(z_) for z_ in _mg["equity_z"].values()) + 0.05, _mg["jpy_account_z"], _mg["usdjpy_mean_log_change"])))
+          "This validates the drift terms in the engine itself, including the quanto correction and the JPY-rate drift, independent of any trade pricing. An initial version of this test covered only the six highest-volatility names and did not exercise the JPY drift, which is why the USDJPY drift sign error (Section 12, defect 11) was not caught by it; the test now covers the JPY components." % (format(_mg["n_scenarios"], ","), _mg["bank_account_max_rel_bp"], len(_mg["equity_z"]), max(abs(z_) for z_ in _mg["equity_z"].values()) + 0.05, _mg["jpy_account_z"], _mg["usdjpy_mean_log_change"])))
     add(P("11.3 Parametric (delta-normal) VaR benchmark", H2))
     add(P("An independent standard method: portfolio dollar-deltas by bump-and-reprice with the same volatilities and correlations as the simulation, combined into a delta-normal VaR at the first simulated node (one day, the overnight pillar). The 99% delta-normal VaR is $12.6M against $12.1M from the Monte Carlo P&L distribution (ratio 1.04; accepted range 0.3-1.3). At this short horizon the book is close to linear in the risk factors, so close agreement is expected; a large discrepancy would have indicated a sign or scaling error in the deltas or the covariance."))
     add(P("11.4 Stress and sensitivity tests", H2))
-    add(P("The earlier directional test (a few bumps of volatility and the curve, one paragraph of results) has been replaced by the structured programme of Sections 7.9 (one-at-a-time model perturbations) and 7.10 (stress scenarios with stated data and inputs, by netting set, by trade and along the time path), which answers what the inputs were, how sensitive the outputs are across the path, and whether all products react."))
+    add(P("Stress and sensitivity testing is the structured programme of Sections 7.9 (one-at-a-time model perturbations) and 7.10 (stress scenarios with stated data and inputs, by netting set, by trade and along the time path), which answers what the inputs were, how sensitive the outputs are across the path, and whether all products react."))
     add(P("11.5 Statistical and unit tests", H2))
     import subprocess as _sp
-    _col = _sp.run([sys.executable, "-m", "pytest", "tests", "--collect-only", "-q"], capture_output=True, text=True, cwd=ROOT).stdout
+    _col = _sp.run([sys.executable, "-m", "pytest", "tests", "--collect-only", "-q"], capture_output=True, text=True, cwd=ROOT,
+                  env={**os.environ, "PYTHONPATH": os.path.join(ROOT, "src")}).stdout
     _ntests = int([l_ for l_ in _col.splitlines() if "tests collected" in l_ or "test collected" in l_][-1].split()[0])
     add(P("%d automated tests pass. They cover: Hull-White reproducing the curve at t=0 to 1e-9; the GBM martingale property; the 1/sqrt(N) error law; antithetic variance reduction; Cholesky recovering a target "
           "correlation; MPOR look-ahead spacing and formula; pillar dates and forced event dates; negative-rate behaviour of Hull-White; the PCA factor model (exact at full rank, monotone error, variance "
           "preservation); the BOJ TONA and MOF JGB loaders and the empirical JPY findings; the tail-convergence result; median PFE, CVA and the SA-CVA aggregation, the credit-spread proxy curves, and the Greeks machinery (bump helpers, t=0 Greeks against analytic values, exposure measures); "
-          "and, added in this version, the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), "
+          "and the close-out exposure convention (signed variation margin, netting before the positive part, settlement inside the window, the t-1bd node), the Bloomberg long-end splice, the JPY factor (curve fit, shock correlations, and the USDJPY and JPY-name martingale properties including a regression test for the drift sign), "
           "the long-end volatility fit, the G2++ model (curve fit, martingale property, calibration recovery, engine integration), DVA and FVA against closed forms, SA-CCR against hand calculations, the Kupiec and Christoffersen tests and both backtests, the stress-scenario helpers, the pathwise Greeks against central bumps, and the risky-bond sample." % _ntests))
     add(P("11.6 Greeks (sensitivities)", H2))
     add(P("Three delta estimators were compared on a call option: pathwise, bump-and-reprice with <b>common random numbers</b> (same draws in base and bumped runs) and bump-and-reprice with independent draws."))
@@ -1349,7 +1465,7 @@ def main():
     _avg = lambda name, key: np.mean([_r[t][name][key]["phases_mean_rate"] for t in ("5", "10", "20")]) * 100
     add(P("<b>What the backtest shows.</b> At the 99%% level the equity and FX quantiles are close to calibrated: the exceptions are %s against %s expected, and the Kupiec test does not reject for %s of the three netting sets at the 5%% level on the base offset (CPTY_B, with %d exceptions against %.1f, is the borderline case, consistent with the fat tails that geometric Brownian motion understates). At the 95%% level the model is conservative for CPTY_A and CPTY_C (mean exception rates %.1f%% and %.1f%% against 5%%): a Kupiec test is two-sided, so being too conservative can also fail it (%d of the 10 offsets reject for CPTY_A at this level). With about %d non-overlapping windows per series the test has limited power, which is why the counts, not only the p-values, are shown. "
           "On the rates leg both calibrations of sigma pass on average over 2020-2026, but they are not equivalent: the long-end fit gives mean exception rates of %.1f%% at the 95%% up-tail and %.1f%% at the 99%% up-tail (nominal 5%% and 1%%), while the overnight-SOFR calibration gives %.1f%% and %.1f%%, i.e. it was too wide on average, reflecting a calibration window that included the 2022-23 hiking cycle, and would be too narrow in a period such as the present, when SOFR is stable and long yields are not (its current value is %.0fbp against %.0fbp for the fit). The long-end fit is therefore the more stable calibration." % ("/".join(str(r_["x"]) for r_ in _eq99.values()), "/".join("%.1f" % r_["expected"] for r_ in _eq99.values()), sum(1 for r_ in _eq99.values() if r_["pass_5pct"]), _eq99["CPTY_B"]["x"], _eq99["CPTY_B"]["expected"], _eq95["CPTY_A"]["phases_mean_rate"] * 100, _eq95["CPTY_C"]["phases_mean_rate"] * 100, _eq95["CPTY_A"]["phases_rejecting"], _eq99["CPTY_A"]["n"], _avg("long_end_fit", "0.95_up"), _avg("long_end_fit", "0.99_up"), _avg("sofr_overnight", "0.95_up"), _avg("sofr_overnight", "0.99_up"), Bt["rates_config"]["sigma_now_sofr"] * 1e4, Bt["rates_config"]["sigma_now_fit"] * 1e4)))
-    add(PageBreak())
+    add(SB)
 
     # ---------- 10 bugs
     add(P("12. Defects identified and resolved", H1))
@@ -1381,7 +1497,8 @@ def main():
            "<b>Stress tests</b> are instantaneous shocks to the starting state with the base model's volatilities, correlations and mean reversion; they are not a projection. The 2008 and 2015 replays extend the historical price history back to 2007, but not every name traded that far back (Section 7.10 discloses coverage per scenario).",
            "<b>Backtests</b> have limited power at 99% (a few exceptions in about 240 windows) and test static positions, not the evolving book; the rates leg tests yield moves, not the book's rate exposure directly.",
            "<b>No wrong-way risk or credit dynamics of the counterparty itself</b>; this is exposure, not a loss estimate (that needs PD and LGD).",
-           "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data), re-based to our reference date; acceptable for shape and level, disclosed."]))
+           "<b>Bloomberg data is a single 2026-08-31 snapshot</b> (three days after the 2026-08-28 market data), re-based to our reference date; acceptable for shape and level, disclosed.",
+           "<b>Spot snapshot.</b> Equity and USDJPY spots are the last prices at the time of each run (2026-09-23 to 2026-09-27), not the 2026-08-28 closes (Section 3); the exposure results are conditional on that snapshot."]))
     add(P("14. Conclusions and recommendations", H1))
     _sc = Sx["scenarios"]
     _cw = max(_sc, key=lambda n_: abs(_sc[n_]["closeout"]["__portfolio__"]["MPE"] / Sx["base"]["closeout"]["__portfolio__"]["MPE"] - 1))
@@ -1390,21 +1507,21 @@ def main():
     _gt = RN._j("greeks_results.json")
     _pkn = RG.peak_node(_gt)
     add(B([f"The engine is validated (t=0 self-check, martingale tests including the JPY components, delta-normal VaR benchmark, Kupiec backtest, {_ntests} automated tests) and reproducible with a single command per stage.",
-           f"On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is {m(sp_['PFE'])} at {sp_['PFE_date']}, with peak EE of {m(sp_['EE'])} and peak median PFE of {m(sp_['MED'])} (Section 7.1). The earlier version of this work reported {m(RN._peaks(_old, '__portfolio__')['PFE'])} before the model corrections of Section 7.3.",
+           f"On the exposure definition in the brief (10-day close-out from the prior-day value), the portfolio MPE99 is {m(sp_['PFE'])} at {sp_['PFE_date']}, with peak EE of {m(sp_['EE'])} and peak median PFE of {m(sp_['MED'])} (Section 7.1). Before the model corrections of Section 7.3 the same calculation gave {m(RN._peaks(_old, '__portfolio__')['PFE'])}.",
            f"The portfolio MPE99 is {Ad['mpe_portfolio']/sum(Ad['mpe'].values())*100:.0f}% of the sum of the counterparty MPE99s: netting does not cross counterparties and the three books peak within about four weeks of each other, so there is little diversification (Section 7.2).",
            f"The uncollateralized level exposure, kept as a secondary view, has peak portfolio PFE99 of {m(mpe99)} at {D['rep_dates'][j_mpe]}, versus EE of {m(tot['EE'].max())} and median PFE of {m(tot['MED'].max())}; the spread between these three is the point of reporting all of them.",
            "Risk is short-dated (about four months) and concentrated: CPTY_C, through the single 500M bond forward, dominates the level exposure and the current exposure. On the close-out definition CPTY_C (the 10-day rate move of that forward) and the equity netting set CPTY_A are the two largest, with CPTY_B small.",
            f"CVA is about ${Xv['conventions']['closeout']['total']['CVA']/1e3:,.0f}k on the close-out exposure and ${Xv['conventions']['level']['total']['CVA']/1e3:,.0f}k on the uncollateralized level exposure at a BBB proxy; DVA is ${Xv['conventions']['closeout']['total']['DVA']/1e3:,.0f}k and FVA ${Xv['conventions']['closeout']['total']['FVA']/1e3:,.0f}k on assumed own credit and funding spreads; the SA-CVA requirement is ${Rc0['K_sa_cva']/1e6:.2f}M on the close-out exposure and ${RN._j('sa_cva_results_level.json')['K_sa_cva']/1e6:.2f}M (RWA ${RN._j('sa_cva_results_level.json')['RWA']/1e6:.1f}M) on the uncollateralized exposure, and the SA-CCR exposure at default {m(Sa['total']['EAD'])}.",
-           f"Greeks are complete for the book and for the exposure measures (Section 9). Their cost is dominated by the rate and volatility re-simulations; equity and FX Greeks cost a small fraction of naive bumping through subset repricing, and pathwise estimators give them in seconds. PFE99 at its peak date falls by about ${abs(_gt['equity_all']['delta']['__portfolio__']['PFE'][_pkn])/1e3:,.0f}k per +1% on all equities and moves by about ${abs(_gt['rate_parallel']['delta']['__portfolio__']['PFE'][_pkn])/1e3:,.0f}k per +1bp on USD rates.",
+           f"Greeks are complete for the book and for the exposure measures (Section 9). Their cost is dominated by the rate and volatility re-simulations; equity and FX Greeks cost a small fraction of naive bumping through subset repricing, and pathwise estimators give them in seconds. At its peak date the PFE99 {'rises' if _gt['equity_all']['delta']['__portfolio__']['PFE'][_pkn] > 0 else 'falls'} by about ${abs(_gt['equity_all']['delta']['__portfolio__']['PFE'][_pkn])/1e3:,.0f}k per +1% on all equities (the close-out exposure scales with the size of the positions) and {'rises' if _gt['rate_parallel']['delta']['__portfolio__']['PFE'][_pkn] > 0 else 'falls'} by about ${abs(_gt['rate_parallel']['delta']['__portfolio__']['PFE'][_pkn])/1e3:,.0f}k per +1bp on USD rates.",
            f"Stress: the largest portfolio move of the close-out MPE99 is {(_sc[_cw]['closeout']['__portfolio__']['MPE']/Sx['base']['closeout']['__portfolio__']['MPE']-1)*100:+.0f}% ({RN2.SHORT.get(_cw, _cw)}) against {(_sc[_lw]['level']['__portfolio__']['MPE']/Sx['base']['level']['__portfolio__']['MPE']-1)*100:+.0f}% ({RN2.SHORT.get(_lw, _lw)}) for the level exposure: the margined measure is much less sensitive to level shocks than the uncollateralized one, and sensitivity is product specific (Section 7.10).",
            "Backtest: the 99% quantiles of the equity and FX leg are close to calibrated (CPTY_B slightly light-tailed), and the long-end yield-vol calibration is more stable than the overnight-SOFR one (Section 11.7).",
            "We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.",
            "Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
            "What remains is data and scope, not engineering: real counterparty ratings or CDS, CSA terms, wrong-way risk, and the items in Section 15."]))
-    add(PageBreak())
+    add(SB)
 
     add(P("15. Remaining work and open questions", H1))
-    add(P("Everything in the plan that could be completed with the data and information available has been done and is reported above. What remains depends on information Capitolis holds, or is a longer-term refinement. It is listed here with what is needed, so the next session can decide which to take forward."))
+    add(P("Everything in the plan that could be completed with the data and information available has been done and is reported above. What remains depends on information Capitolis holds, or is a longer-term refinement. It is listed here with what is needed, so that Capitolis can decide which to take forward."))
     add(tbl([["Item", "Why it is open", "What is needed"],
              ["Real counterparty ratings or CDS for CPTY_A, CPTY_B, CPTY_C", "The counterparties are anonymised and no CDS quotes could be sourced; the BBB proxy drives every credit number (Section 8.3 shows the range)", "Names or ratings, or CDS quotes"],
              ["Credit support annexes (threshold, minimum transfer amount, initial margin)", "Not in the data; the two exposure definitions of Section 7 bracket the answer", "Terms per netting set"],
@@ -1414,10 +1531,12 @@ def main():
              ["Two-factor model as the default", "G2++ is implemented and compared (Sections 4.6, 7.9); its calibration is to realised yield covariance with a 16% fit error", "Calibration to the swaption cube and a decision on adoption"],
              ["Hybrid sampling for the PCA factor model", "Section 4.4 shows the factor model adds no speed and no accuracy as implemented", "Draw the systematic factors quasi-randomly and the idiosyncratic noise pseudo-randomly, then re-measure"],
              ["Stochastic volatility and skew", "Needs single-name option surfaces, which the data does not include", "Option data, or an index-basis assumption"],
+             ["Date-pinned market snapshot", "Equity and USDJPY spots are the last prices at run time (2026-09-23 to 27), not the 2026-08-28 closes (Section 3)", "Agree the reference snapshot; the simulations are then re-run on it (about a day of compute)"],
              ["Production hardening", "Vectorised pricers if scenario counts must exceed about 10,000; scheduling, monitoring and independent validation by Capitolis Risk", "Scope and infrastructure decisions"]],
             widths=[2.4, 3.6, 1.8], font=7.2))
-    add(P("The CVA questions to settle at the next session are listed at the end of Section 8.8."))
+    add(P("The CVA-specific decisions are listed at the end of Section 8.8."))
     add(PageBreak())
+    S0()
     add(P("Appendix A. Glossary", H1))
     add(tbl([["Term", "Meaning"],
              ["Counterparty credit risk (CCR)", "Loss risk if the other side of a derivative defaults while the contract is in our favour"],
@@ -1455,6 +1574,7 @@ def main():
              ["Stress scenario", "An instantaneous shock to today's market state, followed by the full exposure simulation from that state"],
              ["Risk-neutral measure", "Pricing measure in which discounted assets are martingales; drift = r - q"]],
             widths=[2.2, 5.5]))
+    S1()
     add(P("Appendix C. Data sources and lineage", H1))
     add(P("Every external input, where it came from, how it was obtained and what it is used for. Raw pulls are stored under data/raw/ (excluded from version control); licensed data is never redistributed."))
     add(tbl([["Input", "Source", "How obtained", "Used for", "Status"],
@@ -1462,8 +1582,8 @@ def main():
              ["Pricing library", "Capitolis: capitolis_pricers", "Supplied package (standard library only)", "All trade valuation (npv), curves, day counts", "Given; independently reviewed"],
              ["USD SOFR futures (SR3, SR1)", "CME Globex via Databento (dataset GLBX.MDP3)", "Paid API; key only in an environment variable", "USD discount curve (bootstrapped by us), Hull-White fit, futures-vol mean-reversion cross-check", "Live, validated against Treasury.gov"],
              ["Treasury par yield curve", "U.S. Treasury (treasury.gov)", "Public download", "Independent check of the SOFR curve", "Validation only"],
-             ["Equity spots, dividends, 3y price history (37 names)", "yfinance (Yahoo Finance)", "Public API, keyed by ISIN", "GBM start values and drift, realised volatility, correlation", "Live"],
-             ["USDJPY spot and 3y history", "yfinance", "Public API", "FX start value, volatility, correlation", "Live"],
+             ["Equity spots, dividends, 3y price history (37 names)", "yfinance (Yahoo Finance)", "Public API, keyed by ISIN", "GBM start values and drift, realised volatility, correlation", "Last price at run time (2026-09-23 to 27); history to 2026-08-28"],
+             ["USDJPY spot and 3y history", "yfinance", "Public API", "FX start value, volatility, correlation", "Last price at run time; history to 2026-08-28"],
              ["SOFR level history", "FRED (series SOFR)", "Public CSV", "Rate volatility; USD-JPY rate correlation", "From April 2018"],
              ["TONA (JPY overnight rate), 1998 to date", "Bank of Japan Time-Series Data Search API (DB FM01, series STRDCLUCON)", "Public API", "JPY rate volatility; USD-JPY correlation; negative-rate evidence", "Public"],
              ["JGB par yields 1Y-40Y, 1974 to date", "Japan Ministry of Finance", "Public CSV (browser-like request headers)", "Test of JPY mean reversion", "Public"],
@@ -1471,7 +1591,7 @@ def main():
              ["USD and JPY swaption cubes; USDJPY forward points", "Bloomberg one-time export, snapshot 2026-08-31", "Provided by the project team", "USD mean reversion; JPY cross-check; FX forwards", "Licensed: derived numbers only in the report"],
              ["Credit spreads by rating and maturity shape", "FRED: ICE BofA US option-adjusted spread indices", "Public CSV", "Counterparty credit spread proxy for CVA", "Public"],
              ["SA-CVA parameters and formulas", "BIS, Basel Framework MAR50 (July 2020 revisions)", "Public PDF", "Risk weights, correlations, aggregation", "Public"],
-             ["Equity sector, country, market cap", "yfinance", "Public API", "SA-CVA equity buckets", "Live"],
+             ["Equity sector, country, market cap", "yfinance", "Public API", "SA-CVA equity buckets", "Latest at run time"],
              ["Treasury constant-maturity yields 3M-30Y", "FRED (DGS3MO ... DGS30)", "Public CSV", "USD rate sigma, correlations, G2++, backtest, stress replays", "Public"],
              ["Long price history 2014-2026 (37 names) and USDJPY", "yfinance", "Public API, cached in data/raw", "Backtest and historical stress windows", "Public"],
              ["USD SOFR zero curve, long end", "Bloomberg one-time export, 2026-08-31", "Provided by the project team", "Spliced onto the futures curve beyond the last contract", "Licensed: derived numbers only"]],
@@ -1484,8 +1604,8 @@ def main():
              ["Two-factor rates", "G2++, exact joint transition, analytic bond price; calibrated to the realised covariance of 3M-30Y yield changes", "sigma, a, eta, b, rho; 16% relative fit error", "models/g2pp.py"],
              ["Mean reversion", "Regression of ln(vol) on tenor (vol decay); swaption cube preferred, futures and JGB as checks", "USD 0.0167; futures 0.0458; JPY: all routes negative, lower bound 0.001 used", "models/hw_calibration.py"],
              ["JPY factor", "Second Hull-White factor; curve bootstrapped from the JPY OIS par history; overnight volatility from the same file", "sigma 0.267%; a = 0.001; USD-JPY rate correlation -0.04 (not significant)", "models/calibration.py, market/jpy_ois.py"],
-             ["Equities and FX", "Correlated geometric Brownian motion, exact log step, drift r-q", "3y realised vols; JPY names via r_USD minus differential (about 2.6%)", "models/equity_fx.py"],
-             ["Correlation", "Static 39x39 matrix (616 aligned days), Cholesky; optional PCA factor model", "5 factors explain about 46% of variance", "models/equity_factor_model.py, simulation/engine.py"],
+             ["Equities and FX", "Correlated geometric Brownian motion, exact log step, drift r-q", "3y realised vols; JPY-listed names via the simulated JPY rate factor (quanto-corrected drift)", "models/equity_fx.py"],
+             ["Correlation", "Static 39x39 matrix (616 aligned days), Cholesky; optional PCA factor model", "5 factors explain about 47% of variance", "models/equity_factor_model.py, simulation/engine.py"],
              ["Random numbers", "Latin Hypercube sampling", "N = 5,000 recommended; 3,000 used for the figures", "simulation/random_numbers.py"],
              ["Dates", "Market pillar dates plus every trade event date", "42 nodes for this book", "simulation/engine.py"],
              ["Repricing", "Full repricing of every trade in every scenario and node, 8 worker processes", "About 90 ms per scenario", "simulation/parallel.py"],
@@ -1525,6 +1645,21 @@ def main():
              "python -m pytest tests                                    # all automated tests"))
     add(P("Key modules: src/risk_engine/models (rates, equity_fx, calibration, hw_calibration, equity_factor_model), simulation (engine, random_numbers, parallel), "
           "exposure (aggregate, collateral), market (sofr, boj, mof_jgb, bloomberg, vols, correlations).", SMALL))
+    add(P("Appendix F. Review feedback and where it is addressed", H1))
+    add(P("Eleven items were raised across two rounds of review. Each is closed in this report, with the evidence in the section shown."))
+    add(tbl([["#", "Feedback", "Addressed in", "Result"],
+             ["1", "Make the stress testing robust and structured", "Section 7.10", "13 scenarios (8 hypothetical, 5 historical replays), each a full re-run from the shocked state on the same random numbers, with stated data, by netting set, trade and time"],
+             ["2", "Explain the Greeks: method, cost, and a faster alternative", "Sections 9.1, 9.4, 11.6", "Bump-and-reprice with common random numbers; pathwise as the fast check for equity and FX; cost measured per method"],
+             ["3", "Improve the explainability of the PCA model and quantify its speed", "Sections 4.4, 7.8", "Factor-by-factor variance and economic reading; measured shock-step time (no speed gain) and accuracy cost"],
+             ["4", "Confirm what drives each counterparty", "Sections 7.2, 9.2", "Equity and DV01 table by netting set, rank correlations and tail dependence; the portfolio is close to A+C, not A+B"],
+             ["5", "Walk through the CVA calculation end to end", "Section 8.8", "Step-by-step CPTY_C table: exposure, spread, default probability, contribution"],
+             ["6", "Add more historical testing periods, including 2008", "Section 7.10", "2008 GFC and 2015 China devaluation replays on price history extended to 2007"],
+             ["7", "Can Latin Hypercube sampling be used to calculate a sensitivity directly?", "Section 9.8", "Yes for curve bumps: the exact rate Greek from the same simulated draws, validated to 1e-15"],
+             ["8", "Add KVA", "Section 8.6", "Parametric capital charge on the EPE profile, cost of capital swept 8% to 12%"],
+             ["9", "CVA sensitivities, not just a number", "Sections 8.3, 8.4", "Rating table, CVA01 and rate sensitivities by tenor, SA-CVA weighted sensitivities by risk class"],
+             ["10", "Compute DV01 through a par-instrument Jacobian", "Section 9.7", "Bumps of the curve's own native pillars; the 30y bucket carries 82% of the PFE99 DV01"],
+             ["11", "Validate with an independent Excel parametric test", "Section 5.6", "Formula-only workbook reproducing vols, the Hull-White yield-vol formula and an equity vega bump"]],
+            widths=[0.3, 2.8, 1.3, 4.0], font=7.4))
 
     doc.multiBuild(S)
     print("wrote", OUT_PDF)

@@ -47,7 +47,7 @@ def _peaks(S, ent):
 
 
 # ---------------------------------------------------------------- attribution and model risk
-ATTR = [("Earlier version (flat USD curve beyond 6.5y, SOFR-overnight sigma, no JPY factor, USDJPY drift sign error)", "spec_run", "spec_exposure_before_fixes.json"),
+ATTR = [("Initial model (flat USD curve beyond 6.5y, SOFR-overnight sigma, no JPY factor, USDJPY drift sign error)", "spec_run", "spec_exposure_before_fixes.json"),
         ("Corrected USDJPY drift only (no JPY factor, flat curve, SOFR sigma)", "spec_run_no_jpy_flat_sofr", "spec_exposure.json"),
         ("+ long-end volatility fit and 10-year-yield correlations", "spec_run_no_jpy_flat", "spec_exposure.json"),
         ("+ Bloomberg long end spliced onto the USD curve", "spec_run_no_jpy", "spec_exposure.json"),
@@ -64,7 +64,7 @@ def attribution(doc):
         S = json.load(open(path))
         rows.append([label] + [_m(_peaks(S, c)["PFE"]) for c in CP + ("__portfolio__",)])
         have += 1
-    out = [P("Every correction changes the numbers, so each was introduced one at a time on the same random numbers and the same scenario count (2,000 Latin Hypercube scenarios per row, except the first row, the 5,000-scenario run reported earlier). The table shows the maximum PFE99 (MPE) on the brief's close-out definition.")]
+    out = [P("Every correction changes the numbers, so each was introduced one at a time on the same random numbers and the same scenario count (2,000 Latin Hypercube scenarios per row, except the first row, which is a 5,000-scenario run). The table shows the maximum PFE99 (MPE) on the brief's close-out definition.")]
     out.append(tbl(rows, widths=[4.2, 0.9, 0.9, 0.9, 1.0], font=7.4))
     out.append(P("MPE99 within one year, USD millions. Rows are cumulative: each row contains the corrections of the rows above it. Monte Carlo noise between two runs of different size is a few percent, so only differences larger than that should be read as an effect of a correction.", SMALL))
     return out
@@ -122,7 +122,7 @@ def curve_splice(doc, calib, bf3_old=101.4e6, bf3_new=None):
     fig, old, new = fig_curve_splice(calib)
     npv = _j("npv_2026-08-28.json")["npv_by_trade"]
     bf3_new = npv["BF_0003"]
-    out = [P("The SOFR-futures curve ends at about %.1f years and was previously extrapolated flat in the zero rate. That understates the discounting of the long-dated Treasury underlying BF_0003 (maturity 2049): at 20 years the flat extrapolation gives a zero rate of %.2f%%, against %.2f%% on the spliced curve. Beyond the last futures pillar the curve now follows the forward structure of the Bloomberg USD SOFR zero curve (2026-08-31 snapshot, re-based to our 2026-08-28 reference date), joined continuously at the last futures pillar; inside the futures range nothing changes." % (old._t[-1], _z(old, calib, 20) * 100, _z(new, calib, 20) * 100))]
+    out = [P("The SOFR-futures curve ends at about %.1f years; extrapolating it flat in the zero rate understates the discounting of the long-dated Treasury underlying BF_0003 (maturity 2049): at 20 years the flat extrapolation gives a zero rate of %.2f%%, against %.2f%% on the spliced curve. Beyond the last futures pillar the curve follows the forward structure of the Bloomberg USD SOFR zero curve (2026-08-31 snapshot, re-based to our 2026-08-28 reference date), joined continuously at the last futures pillar; inside the futures range nothing changes." % (old._t[-1], _z(old, calib, 20) * 100, _z(new, calib, 20) * 100))]
     out.append(doc.figure(fig, "Zero-rate curve before and after splicing the long end. Inside the futures range the two coincide exactly."))
     out.append(P("The effect on the mark of BF_0003 is large because a 500M notional on a 22-year bond has a duration of about 13: its NPV moves from %s on the flat extrapolation to %s on the spliced curve, within half a percent of the $120.9M obtained by repricing on Bloomberg's own zero curve." % (_m(bf3_old), _m(bf3_new))))
     return out
@@ -150,7 +150,7 @@ def rates_vol(doc, calib):
     ax.set_ylabel("annual normal vol (bp)")
     ax.legend(fontsize=7)
     ax.set_title("What the USD rate volatility has to match")
-    out = [P("The USD Hull-White volatility was set equal to the realised volatility of the overnight SOFR fixing (%.0fbp). That number is small because the overnight rate moves in steps on Fed dates, and it says little about how far the 2- to 30-year yields, on which the book depends, move. Over the same three-year window the annual normal vol of Treasury yields was %s bp for the 2y to 30y tenors. In a one-factor Hull-White model the zero rate at tenor T has normal vol sigma (1 - exp(-aT))/(aT), so sigma is now fitted by least squares to the realised 2y-30y yield vols with the mean reversion held at its swaption-calibrated value: sigma = %.0fbp. The rate factor's correlations with equities and USDJPY are re-estimated on 10-year yield changes for the same reason (SOFR fixings correlate with nothing)." % (d["sofr_overnight_sigma"] * 1e4, "/".join("%.0f" % (v[t] * 1e4) for t in (2, 5, 10, 20, 30)), d["sigma"] * 1e4))]
+    out = [P("Setting the USD Hull-White volatility equal to the realised volatility of the overnight SOFR fixing (%.0fbp) understates the long end: that number is small because the overnight rate moves in steps on Fed dates, and it says little about how far the 2- to 30-year yields, on which the book depends, move. Over the same three-year window the annual normal vol of Treasury yields was %s bp for the 2y to 30y tenors. In a one-factor Hull-White model the zero rate at tenor T has normal vol sigma (1 - exp(-aT))/(aT), so sigma is fitted by least squares to the realised 2y-30y yield vols with the mean reversion held at its swaption-calibrated value: sigma = %.0fbp. The rate factor's correlations with equities and USDJPY are re-estimated on 10-year yield changes for the same reason (SOFR fixings correlate with nothing)." % (d["sofr_overnight_sigma"] * 1e4, "/".join("%.0f" % (v[t] * 1e4) for t in (2, 5, 10, 20, 30)), d["sigma"] * 1e4))]
     out.append(doc.figure(fig, "Realised yield volatility by tenor against the Hull-White implied shape for the two choices of sigma. The overnight-SOFR calibration lies well below the long-end moves; the fit tracks them."))
     return out
 
@@ -333,7 +333,7 @@ def convergence_closeout(doc):
     p = {r["N"]: r for r in R["results"]["__portfolio__"]["rows"]}
     est5 = p[2000]["rse_mpe_pct"] * (2000 / 5000) ** 0.5
     est10 = p[2000]["rse_mpe_pct"] * (2000 / 10000) ** 0.5
-    return [P("<b>Convergence of the close-out measures.</b> The study above concerns the level exposure of the earlier calibration. The same bootstrap on the 5,000-scenario close-out run (subsets drawn without replacement, corrected for the finite pool) gives the relative standard error of the PFE99 at the date of the portfolio peak (%s) and of the MPE itself, shown as PFE99 / MPE:" % R["peak_date"]),
+    return [P("<b>Convergence of the close-out measures.</b> The study above concerns the uncollateralized level exposure. The same bootstrap on the 5,000-scenario close-out run (subsets drawn without replacement, corrected for the finite pool) gives the relative standard error of the PFE99 at the date of the portfolio peak (%s) and of the MPE itself, shown as PFE99 / MPE:" % R["peak_date"]),
             tbl(rows, widths=[1.4, 1.2, 1.2, 1.2, 1.2, 1.2], font=7.4),
             P("On this definition the MPE99 of the portfolio has a relative standard error of about %.1f%% at N = 2,000, which extrapolates by the 1/sqrt(N) law to about %.1f%% at N = 5,000 and %.1f%% at N = 10,000. The close-out exposure is the tail of a 10-day move of a margined position, so it is noisier per scenario than the level exposure; the recommended counts are unchanged, but the precision to quote for the headline MPE at N = 5,000 is roughly %.1f%%." % (p[2000]["rse_mpe_pct"], est5, est10, est5))]
 
