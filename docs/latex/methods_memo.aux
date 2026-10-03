@@ -1,0 +1,56 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Risk-Factor Models: One Choice at Each Layer}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}USD interest rates: one-factor vs.\ two-factor Hull-White}{1}{subsection.1.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Realised yield-change volatility by tenor against the fitted two-factor model. The one-factor model's single decaying exponential cannot reproduce this hump either, but changes the headline number far less than the fitting effort would suggest.}}{2}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:g2fit}{{1}{2}{Realised yield-change volatility by tenor against the fitted two-factor model. The one-factor model's single decaying exponential cannot reproduce this hump either, but changes the headline number far less than the fitting effort would suggest}{figure.caption.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}JPY rates: a second, independent Hull-White factor vs.\ a constant differential}{2}{subsection.1.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Real Bank of Japan TONA history: negative or zero for most of 25 years. A model that floors at zero cannot represent this regime.}}{2}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:tona}{{2}{2}{Real Bank of Japan TONA history: negative or zero for most of 25 years. A model that floors at zero cannot represent this regime}{figure.caption.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Equity/FX correlation: full Cholesky matrix vs.\ PCA factor model}{3}{subsection.1.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Eigenvalue scree, cumulative variance explained, and reconstruction error vs.\ $k$. Five factors explain 47\% of variance; ten explain 62\%.}}{3}{figure.caption.3}\protected@file@percent }
+\newlabel{fig:pca}{{3}{3}{Eigenvalue scree, cumulative variance explained, and reconstruction error vs.\ $k$. Five factors explain 47\% of variance; ten explain 62\%}{figure.caption.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Calibration: Choosing Between Real-Data Routes}{3}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Mean reversion ($a$): swaption-implied vs.\ futures-implied}{3}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Rate volatility: realised long-end yield vol vs.\ realised overnight SOFR vol}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Implied vs.\ realised volatility: which is used where}{4}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Simulation Methodology}{4}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Sampling scheme: five methods compared}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Left: on the controlled benchmark, Latin Hypercube has $\sim $51x lower error than pseudo-random. Right: on the real engine the methods converge much closer, and no single method wins on both PFE99 and median PFE.}}{4}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:sampling}{{4}{4}{Left: on the controlled benchmark, Latin Hypercube has $\sim $51x lower error than pseudo-random. Right: on the real engine the methods converge much closer, and no single method wins on both PFE99 and median PFE}{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Exposure convention: close-out (the brief) vs.\ uncollateralized level}{5}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Scenario count: how many is enough}{5}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Sensitivities (Greeks): Methods Compared}{5}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Noise control: common random numbers}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Equity/FX bumps: exact path rescaling vs.\ naive resimulation}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Pathwise (closed-form) delta vs.\ bump-and-reprice}{5}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Rate/vol bumps: an exact method that reuses the same simulated draws}{6}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:lhs-sampling-greeks}{{4.4}{6}{Rate/vol bumps: an exact method that reuses the same simulated draws}{subsection.4.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Standard deviation of each Greek across seeds, by sampling scheme, relative to pseudo-random. No scheme wins consistently.}}{6}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:samplinggreeks}{{5}{6}{Standard deviation of each Greek across seeds, by sampling scheme, relative to pseudo-random. No scheme wins consistently}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Rate DV01: Two Independent Improvements}{6}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Zero-rate tenor grid vs.\ par-instrument (Jacobian) buckets}{6}{subsection.5.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Same total rate risk, different attribution across tenor.}}{7}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:dv01}{{6}{7}{Same total rate risk, different attribution across tenor}{figure.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Resimulated vs.\ exact-shift computation of the same buckets}{7}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Stress Testing Design}{7}{section.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Ratio of stressed to base portfolio PFE99 along the first year, close-out (left) and level (right) exposure.}}{8}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:stress}{{7}{8}{Ratio of stressed to base portfolio PFE99 along the first year, close-out (left) and level (right) exposure}{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Credit and Capital: CVA, DVA, FVA, KVA}{8}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Credit-spread source: CDS vs.\ rating-based bond-index proxy}{8}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Exposure convention for CVA: close-out vs.\ level}{8}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}KVA: capital-charge proxy, cost-of-capital swept, not assumed}{8}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Independent Validation}{8}{section.8}\protected@file@percent }
+\newlabel{sec:validation}{{8}{8}{Independent Validation}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Model Risk: What Actually Moves the Number}{9}{section.9}\protected@file@percent }
+\newlabel{sec:modelrisk}{{9}{9}{Model Risk: What Actually Moves the Number}{section.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Close-out exposure profile (EE, median PFE, PFE99) by counterparty and portfolio -- the baseline every trade-off in this memo is measured against.}}{10}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:exposure}{{8}{10}{Close-out exposure profile (EE, median PFE, PFE99) by counterparty and portfolio -- the baseline every trade-off in this memo is measured against}{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Attribution: Every Correction, One at a Time}{10}{section.10}\protected@file@percent }
+\newlabel{sec:attribution}{{10}{10}{Attribution: Every Correction, One at a Time}{section.10}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {11}Summary of Feedback-Driven Enhancements}{11}{section.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {12}Conclusions and Recommendations}{11}{section.12}\protected@file@percent }
+\gdef \@abspage@last{11}

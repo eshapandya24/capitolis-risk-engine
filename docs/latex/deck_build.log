@@ -1,0 +1,307 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(deck.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2025-12-24>
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamer.cls
+Document Class: beamer 2026/08/20 v3.78 A class for typesetting presentations
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasemodes.s
+ty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.sty
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasedecode.
+sty)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseoptions
+.sty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\keyval.sty
+)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.cfg))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/math\pgfmath.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfrcs.sty
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfutil-
+common.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfutil-
+latex.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfrcs.c
+ode.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf\pgf.revision.tex))
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfkeys.st
+y
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfkeys.
+code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfkeysl
+ibraryfiltered.code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmath.code.
+tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathutil.c
+ode.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathparser
+.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.basic.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.trigonometric.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.random.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.comparison.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.base.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.round.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.misc.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.integerarithmetics.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathcalc.c
+ode.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfloat.
+code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/extsizes\size9.clo)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/basiclayer\pgfcore.s
+ty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphics.cf
+g)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex.def)
+))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/systemlayer\pgfsys.s
+ty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+.code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgf.cf
+g)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+-pdftex.def
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+-common-pdf.def)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+softpath.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+protocol.code.tex))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.cfg)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.ltx))
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+.code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfint.code.t
+ex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+points.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathconstruct.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathusage.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+scopes.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+graphicstate.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+transformations.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+quick.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+objects.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathprocessing.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+arrows.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+shade.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+image.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+external.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+layers.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+transparency.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+patterns.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+rdf.code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\xxcolor.st
+y) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\atbegshi-ltx.sty
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hyperref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/kvdefinekeys\kvdefinek
+eys.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdfescape\pdfescape.st
+y (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdftexcmds\pdftexcmds.
+sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/infwarerr\infwarerr.st
+y))) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hycolor\hycolor.sty
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\nameref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/refcount\refcount.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/gettitlestring\gettitl
+estring.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions.sty)
+))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\stringenc.st
+y) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/intcalc\intcalc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\puenc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/url\url.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bigintcalc\bigintcalc.
+sty))
+
+Package hyperref Message: Stopped early.
+
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hpdftex.def
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/rerunfilecheck\rerunfile
+check.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/uniquecounter\uniqueco
+unter.sty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaserequire
+s.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasecompati
+bility.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasefont.st
+y (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amssymb.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amsfonts.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/sansmathaccent\sansmatha
+ccent.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfile.sty
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfile-hoo
+k.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlogo.sty)
+))))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetransla
+tor.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator.st
+y))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasemisc.st
+y)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetwoscre
+ens.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseoverlay
+.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetitle.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasesection
+.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframe.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseverbati
+m.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframesi
+ze.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframeco
+mponents.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasecolor.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenotes.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetoc.sty
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetemplat
+es.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseauxtemp
+lates.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseboxes.s
+ty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaselocalst
+ructure.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/tools\enumerate.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenavigat
+ion.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenavigat
+ionsymbols.tex))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetheorem
+s.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+For additional information on amsmath, use the `?' option.
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amscls\amsthm.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasethemes.
+sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerthemedefaul
+t.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerfontthemede
+fault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamercolorthemed
+efault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerinnerthemed
+efault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerouterthemed
+efault.sty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\inputenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\lmodern.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/ragged2e\ragged2e.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmss.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdft
+ex.def) (deck.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mki
+i
+[Loading MPS to PDF converter (version 2006.09.02).]
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-ba
+se.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/00miktex\epstopdf-sys.cf
+g)) (deck.out) (deck.out)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-ba
+sic-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-bi
+bliography-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-en
+vironment-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-mo
+nths-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-nu
+mbers-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-th
+eorem-dictionary-English.dict) (deck.nav) [1{C:/Users/ESHA/AppData/Local/MiKTeX
+/fonts/map/pdftex/pdftex.map}{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts
+/enc/dvips/lm/lm-ec.enc}]
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\ot1lmss.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omllmm.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omslmsy.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omxlmex.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd)
+[2{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathsy.enc
+}{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-rm.enc}{C:/
+Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathex.enc}{C:/U
+sers/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathit.enc}]
+[3] [4 <./figures/fig25.pdf>] [5 <./figures/fig26.pdf>] [6 <./figures/fig33.pdf
+>] [7 <./figures/fig_greeks_cost.pdf>] [8 <./figures/fig38.pdf>] [9] [10]
+[11] [12 <./figures/fig14.pdf>] [13] [14] [15 <./figures/fig_hist_scenarios.pdf
+>] [16] [17 <./figures/fig_kva_compare.pdf>] [18] [19 <./figures/fig_dv01_compa
+re.pdf>] [20] [21] [22] (deck.aux) )<C:/Users/ESHA/AppData/Local/Programs/MiKTe
+X/fonts/type1/public/lm/lmex10.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX
+/fonts/type1/public/lm/lmmi8.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/f
+onts/type1/public/lm/lmmi9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fon
+ts/type1/public/lm/lmss10.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/font
+s/type1/public/lm/lmss8.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/
+type1/public/lm/lmss9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/ty
+pe1/public/lm/lmssbx10.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/t
+ype1/public/lm/lmsso8.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/ty
+pe1/public/lm/lmsso9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/typ
+e1/public/lm/lmsy6.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/type1
+/public/lm/lmsy8.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/type1/p
+ublic/lm/lmsy9.pfb>
+Output written on deck.pdf (22 pages, 382938 bytes).
+Transcript written on deck.log.
+pdflatex: major issue: So far, you have not checked for MiKTeX updates.

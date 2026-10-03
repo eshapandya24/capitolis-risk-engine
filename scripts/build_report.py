@@ -732,7 +732,7 @@ def main():
     add(titlepage("Monte Carlo Counterparty Credit Risk Engine",
                   ("Short-form report: methods, decisions and results for the ESF derivatives book" if SHORT
                    else "Complete report: methodology, calibration and results for the ESF derivatives book"),
-                  "Prepared for Capitolis | Berkeley MFE Industry Project",
+                  "Prepared for Capitolis | Berkeley MFE Industry Project | github.com/eshapandya24/capitolis-risk-engine",
                   "Valuation date 2026-08-28 | October 2026"))
     add("\\section*{Abstract}\n")
     add(P("This report describes a Monte Carlo counterparty credit risk (CCR) engine for Capitolis' equity swap financing "
@@ -923,7 +923,7 @@ def main():
           "2026-08-28 valuation date. Equity and USDJPY spot prices are the last prices available when each run was executed (2026-09-23 to 2026-09-27, as retrieved from yfinance), "
           "not the 2026-08-28 closes. The exposure results are therefore conditional on that spot snapshot, and runs executed on different days differ slightly in their t = 0 marks "
           "(for example the book NPV of Section 9.2 differs from Section 7.4 by $2,634, 0.002% of the portfolio NPV, because the USDJPY snapshot moved by about 0.006% between the "
-          "headline run and the Greeks run). A re-run on date-pinned closes is listed under the open items of Section 15."))
+          "headline run and the Greeks run). A re-run on date-pinned closes is listed under future scope in Section 15."))
     Sx_old_bf3 = RN._j("spec_run", "spec_exposure_before_fixes.json")["per_trade"]["BF_0003"]["mtm_t0"]
     add(P("3.1 The USD curve", H2))
     add(P("Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its "
@@ -1517,11 +1517,11 @@ def main():
            "Backtest: the 99% quantiles of the equity and FX leg are close to calibrated (CPTY_B slightly light-tailed), and the long-end yield-vol calibration is more stable than the overnight-SOFR one (Section 11.7).",
            "We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.",
            "Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).",
-           "What remains is data and scope, not engineering: real counterparty ratings or CDS, CSA terms, wrong-way risk, and the items in Section 15."]))
+           "The future scope is data and decisions rather than engineering: real counterparty ratings or CDS, CSA terms, wrong-way risk, and the items in Section 15."]))
     add(SB)
 
-    add(P("15. Remaining work and open questions", H1))
-    add(P("Everything in the plan that could be completed with the data and information available has been done and is reported above. What remains depends on information Capitolis holds, or is a longer-term refinement. It is listed here with what is needed, so that Capitolis can decide which to take forward."))
+    add(P("15. Future scope and open questions", H1))
+    add(P("Everything in the plan that could be completed with the data and information available has been done and is reported above. The future scope below depends on information Capitolis holds, or is a longer-term refinement; each item is listed with what is needed to take it forward."))
     add(tbl([["Item", "Why it is open", "What is needed"],
              ["Real counterparty ratings or CDS for CPTY_A, CPTY_B, CPTY_C", "The counterparties are anonymised and no CDS quotes could be sourced; the BBB proxy drives every credit number (Section 8.3 shows the range)", "Names or ratings, or CDS quotes"],
              ["Credit support annexes (threshold, minimum transfer amount, initial margin)", "Not in the data; the two exposure definitions of Section 7 bracket the answer", "Terms per netting set"],
@@ -1632,6 +1632,7 @@ def main():
              ["tests/", "%d tests: engine, time grid, MPOR, negative rates, factor model, BOJ and MOF data, tail convergence, median PFE, CVA and SA-CVA, close-out exposure, curve splice, JPY factor, G2++, xVA, SA-CCR, backtests, stress, pathwise, risky bond" % _ntests]],
             widths=[1.2, 6.6]))
     add(P("Appendix B. Reproducing the results", H1))
+    add(P("Source code, data lineage and all scripts: <font face='Courier'>https://github.com/eshapandya24/capitolis-risk-engine</font> (branch data-collection)."))
     add(code("python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation, arrays for figures\n"
              "python scripts/build_report.py                            # this PDF\n"
              "python scripts/run_simulation.py --scenarios 3000         # printed EE/PFE99/MPE profiles\n"

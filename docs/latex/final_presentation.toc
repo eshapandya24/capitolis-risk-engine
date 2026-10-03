@@ -1,0 +1,8 @@
+\beamer@sectionintoc {1}{Part I: The Book and the Mandate}{4}{0}{1}
+\beamer@sectionintoc {2}{Part II: Risk Factors and Data}{7}{0}{2}
+\beamer@sectionintoc {3}{Part III: Risk-Factor Models and Calibration}{15}{0}{3}
+\beamer@sectionintoc {4}{Part IV: Simulation Methodology}{26}{0}{4}
+\beamer@sectionintoc {5}{Part V: Engine, Equations, and Headline Results}{31}{0}{5}
+\beamer@sectionintoc {6}{Part VI: Sensitivities, Stress, and Validation}{39}{0}{6}
+\beamer@sectionintoc {7}{Part VII: Credit and Capital (xVA)}{52}{0}{7}
+\beamer@sectionintoc {8}{Part VIII: Decision Register and Limitations}{57}{0}{8}

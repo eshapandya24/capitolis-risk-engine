@@ -1,0 +1,531 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(final_presentation.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2025-12-24>
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamer.cls
+Document Class: beamer 2026/08/20 v3.78 A class for typesetting presentations
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasemodes.s
+ty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.sty
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasedecode.
+sty)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseoptions
+.sty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\keyval.sty
+)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.cfg))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/math\pgfmath.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfrcs.sty
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfutil-
+common.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfutil-
+latex.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfrcs.c
+ode.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf\pgf.revision.tex))
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfkeys.st
+y
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfkeys.
+code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgfkeysl
+ibraryfiltered.code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmath.code.
+tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathutil.c
+ode.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathparser
+.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.basic.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.trigonometric.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.random.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.comparison.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.base.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.round.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.misc.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfuncti
+ons.integerarithmetics.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathcalc.c
+ode.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathfloat.
+code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/extsizes\size8.clo)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/basiclayer\pgfcore.s
+ty (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphics.cf
+g)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex.def)
+))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/systemlayer\pgfsys.s
+ty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+.code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgf.cf
+g)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+-pdftex.def
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+-common-pdf.def)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+softpath.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\pgfsys
+protocol.code.tex))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.cfg)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.ltx))
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+.code.tex
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfint.code.t
+ex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+points.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathconstruct.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathusage.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+scopes.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+graphicstate.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+transformations.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+quick.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+objects.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+pathprocessing.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+arrows.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+shade.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+image.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+external.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+layers.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+transparency.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+patterns.code.tex)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pgfcore
+rdf.code.tex)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\xxcolor.st
+y) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\atbegshi-ltx.sty
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hyperref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/kvdefinekeys\kvdefinek
+eys.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdfescape\pdfescape.st
+y (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdftexcmds\pdftexcmds.
+sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/infwarerr\infwarerr.st
+y))) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hycolor\hycolor.sty
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\nameref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/refcount\refcount.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/gettitlestring\gettitl
+estring.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions.sty)
+))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\stringenc.st
+y) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/intcalc\intcalc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\puenc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/url\url.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bigintcalc\bigintcalc.
+sty))
+
+Package hyperref Message: Stopped early.
+
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hpdftex.def
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/rerunfilecheck\rerunfile
+check.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/uniquecounter\uniqueco
+unter.sty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaserequire
+s.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasecompati
+bility.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasefont.st
+y (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amssymb.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\amsfonts.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/sansmathaccent\sansmatha
+ccent.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfile.sty
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfile-hoo
+k.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlogo.sty)
+))))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetransla
+tor.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator.st
+y))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasemisc.st
+y)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetwoscre
+ens.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseoverlay
+.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetitle.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasesection
+.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframe.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseverbati
+m.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframesi
+ze.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseframeco
+mponents.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasecolor.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenotes.s
+ty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetoc.sty
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetemplat
+es.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseauxtemp
+lates.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaseboxes.s
+ty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbaselocalst
+ructure.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/tools\enumerate.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenavigat
+ion.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasenavigat
+ionsymbols.tex))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasetheorem
+s.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+For additional information on amsmath, use the `?' option.
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amscls\amsthm.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerbasethemes.
+sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerthemedefaul
+t.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerfontthemede
+fault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamercolorthemed
+efault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerinnerthemed
+efault.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/beamer\beamerouterthemed
+efault.sty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\inputenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\lmodern.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/ragged2e\ragged2e.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmss.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdft
+ex.def) (final_presentation.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mki
+i
+[Loading MPS to PDF converter (version 2006.09.02).]
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-ba
+se.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/00miktex\epstopdf-sys.cf
+g)) (final_presentation.out) (final_presentation.out)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-ba
+sic-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-bi
+bliography-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-en
+vironment-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-mo
+nths-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-nu
+mbers-dictionary-English.dict)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/translator\translator-th
+eorem-dictionary-English.dict) (final_presentation.nav) [1{C:/Users/ESHA/AppDat
+a/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/ESHA/AppData/Local/Program
+s/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc}] (final_presentation.toc) [2] [3]
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\ot1lmss.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omllmm.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omslmsy.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omxlmex.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd)
+Underfull \hbox (badness 10000) in paragraph at lines 81--81
+[]|\T1/lmss/m/n/5 Oct'26 /
+
+Underfull \hbox (badness 10000) in paragraph at lines 81--81
+[]|\T1/lmss/m/n/5 UST 3.88%'28 /
+
+Underfull \hbox (badness 10000) in paragraph at lines 81--81
+[]|\T1/lmss/m/n/5 UST
+[4{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-rm.enc}]
+[5{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathex.enc
+}{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathsy.enc}
+{C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathit.enc} 
+<./figures/fig26.pdf>] [6]
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 Equity TRS on JPY
+
+Underfull \hbox (badness 1655) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 USD short rate (whole
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 Bond for-wards, bond
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+[]|\T1/lmss/bx/n/7 Hull-White one-factor
+
+Underfull \hbox (badness 3250) in paragraph at lines 115--115
+\T1/lmss/m/n/7 (equiv-a-lent to a 1-factor
+
+Underfull \hbox (badness 1448) in paragraph at lines 115--115
+\T1/lmss/m/n/7 alised long-end Trea-sury vol
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 CVA/DVA/FVA/KVA
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 Deterministic hazard-rate
+
+Underfull \hbox (badness 1831) in paragraph at lines 115--115
+[]|\T1/lmss/m/n/7 ICE BofA rating-index OAS
+[7] [8] [9]
+Underfull \hbox (badness 4739) in paragraph at lines 151--151
+[]|\T1/lmss/m/n/7 FRED Trea-sury CMT
+[10]
+Underfull \hbox (badness 4479) in paragraph at lines 164--164
+[]|\T1/lmss/m/n/7 Equity spots, div-i-dend yields, re-alised
+
+Underfull \hbox (badness 4726) in paragraph at lines 164--164
+[]|\T1/lmss/m/n/7 Real JPY OIS curve
+
+Underfull \hbox (badness 10000) in paragraph at lines 164--164
+\T1/lmss/m/n/7 (pub-lic JPY mar-ket
+[11]
+Underfull \hbox (badness 5504) in paragraph at lines 179--179
+[]|\T1/lmss/m/n/7 ICE BofA bond-index
+
+Underfull \hbox (badness 3579) in paragraph at lines 179--179
+[]|\T1/lmss/m/n/7 No CDS avail-able; this is the Basel
+
+Underfull \hbox (badness 2884) in paragraph at lines 179--179
+\T1/lmss/m/n/7 MAR50.32(3)-sanctioned fall-back -- real
+
+Underfull \hbox (badness 10000) in paragraph at lines 179--179
+[]|\T1/lmss/m/n/7 Bloomberg (li-censed):
+
+Underfull \hbox (badness 10000) in paragraph at lines 179--179
+\T1/lmss/m/n/7 long-end curve,
+
+Underfull \hbox (badness 10000) in paragraph at lines 179--179
+\T1/lmss/m/n/7 USD/JPY swap-tion
+[12]
+Underfull \hbox (badness 10000) in paragraph at lines 198--198
+[]|\T1/lmss/m/n/5 Yahoo Fi-nance US-D-JPY
+
+Overfull \hbox (4.22673pt too wide) in paragraph at lines 198--198
+[][] 
+[13] [14]
+Underfull \hbox (badness 10000) in paragraph at lines 218--218
+[]|\T1/lmss/bx/n/7 Hull-White 1F
+
+Underfull \hbox (badness 3536) in paragraph at lines 218--218
+\T1/lmss/m/n/7 (equiv. 1-factor
+
+Underfull \hbox (badness 10000) in paragraph at lines 218--218
+[]|\T1/lmss/m/n/7 Exact step, closed-form
+
+Underfull \hbox (badness 10000) in paragraph at lines 218--218
+\T1/lmss/m/sl/7 P\OT1/lmss/m/n/7 (\T1/lmss/m/sl/7 t\OML/lmm/m/it/7 ; \T1/lmss/m
+/sl/7 T\OT1/lmss/m/n/7 )$\T1/lmss/m/n/7 ; 2 pa-ram-e-ters;
+
+Underfull \hbox (badness 10000) in paragraph at lines 218--218
+[]|\T1/lmss/m/n/7 2-factor +
+
+Underfull \hbox (badness 5862) in paragraph at lines 218--218
+\T1/lmss/m/n/7 ram-e-ters, no closed-form
+
+Overfull \hbox (12.20126pt too wide) in paragraph at lines 218--218
+[][] 
+[15]
+Underfull \hbox (badness 10000) in paragraph at lines 236--236
+[]|[]\T1/lmss/m/n/7 rejected[] not built;
+
+Underfull \hbox (badness 10000) in paragraph at lines 236--236
+[]|\T1/lmss/m/n/7 FX: \T1/lmss/bx/n/7 GBM with
+
+Underfull \hbox (badness 10000) in paragraph at lines 236--236
+\T1/lmss/bx/n/7 quanto/rate-differential
+
+Underfull \hbox (badness 10000) in paragraph at lines 236--236
+[]|\T1/lmss/m/n/7 Credit: de-ter-min-is-tic
+
+Underfull \hbox (badness 10000) in paragraph at lines 236--236
+\T1/lmss/m/n/7 hazard-rate sur-vival
+[16] [17 <./figures/fig13.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 274--274
+[]|\T1/lmss/m/n/7 Step time
+
+Underfull \hbox (badness 10000) in paragraph at lines 274--274
+[]|\T1/lmss/m/n/7 Variance ex-
+
+Overfull \hbox (8.16368pt too wide) in paragraph at lines 274--274
+[][] 
+[18 <./figures/fig14.pdf>] [19] [20] [21 <./figures/fig_dv01_compare.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+[]|$\OML/lmm/m/it/7 ^^[[]\T1/lmss/m/n/7 1\OML/lmm/m/it/7 :\T1/lmss/m/n/7 21\OT1
+/lmss/m/n/7 %$\T1/lmss/m/n/7 ,
+
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+\T1/lmss/m/sl/7 a[]\T1/lmss/m/n/7 0\OML/lmm/m/it/7 :\T1/lmss/m/n/7 039$,
+
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+\OML/lmm/m/it/7 ^^Q[]\T1/lmss/m/n/7 1\OML/lmm/m/it/7 :\T1/lmss/m/n/7 44\OT1/lms
+s/m/n/7 %$\T1/lmss/m/n/7 , $\T1/lmss/m/sl/7 b[]\T1/lmss/m/n/7 1\OML/lmm/m/it/7 
+:\T1/lmss/m/n/7 5$
+
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+\T1/lmss/m/n/7 (at bound),
+
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+[]|\T1/lmss/m/n/7 Portfolio MPE99
+
+Underfull \hbox (badness 10000) in paragraph at lines 355--355
+[]|\T1/lmss/m/n/7 baseline
+
+Overfull \hbox (2.86035pt too wide) in paragraph at lines 355--355
+[][] 
+[22 <./figures/fig19.pdf>] [23 <./figures/fig16.pdf>]
+Underfull \hbox (badness 1043) in paragraph at lines 399--399
+\T1/lmss/m/n/7 sep-a-rately tuned (not
+
+Underfull \hbox (badness 4805) in paragraph at lines 399--399
+[]|\T1/lmss/m/n/7 One ex-tra sim-u-lated
+
+Underfull \hbox (badness 4316) in paragraph at lines 399--399
+[]|\T1/lmss/bx/n/7 Realised 2y--30y Trea-
+
+Underfull \hbox (badness 1424) in paragraph at lines 399--399
+[]|\T1/lmss/m/n/7 Matches the ac-tual 10bd long-yield move
+
+Underfull \hbox (badness 2359) in paragraph at lines 399--399
+[]|\T1/lmss/m/n/7 Slightly more model-
+
+Overfull \hbox (8.16368pt too wide) in paragraph at lines 399--399
+[][]  
+[24] [25] [26] [27] [28]
+Underfull \hbox (badness 10000) in paragraph at lines 479--479
+\T1/lmss/m/n/7 noise edge over
+
+Underfull \hbox (badness 10000) in paragraph at lines 479--479
+\T1/lmss/m/n/7 pseudo-random on
+
+Underfull \hbox (badness 10000) in paragraph at lines 479--479
+[]|$\T1/lmss/m/sl/7 N[]\T1/lmss/m/n/7 5[]000$ \T1/lmss/bx/n/7 stan-dard /
+
+Underfull \hbox (badness 1783) in paragraph at lines 479--479
+[]|$\OMS/lmsy/m/n/7 ^^X$\T1/lmss/m/n/7 1.4% resid-ual sam-
+
+Overfull \hbox (8.16368pt too wide) in paragraph at lines 479--479
+[][]  
+[29] [30] [31]
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmtt.fd) [32]
+[33 <./figures/fig11.pdf> <./figures/fig12.pdf>] [34 <./figures/fig25.pdf>]
+[35] [36 <./figures/fig28.pdf>] [37 <./figures/fig30.pdf> <./figures/fig31.pdf>
+] [38] [39 <./figures/fig_greeks_cost.pdf>]
+Underfull \hbox (badness 4886) in paragraph at lines 646--646
+[]|\T1/lmss/m/n/7 Pathwise (closed form,
+[40] [41] [42] [43 <./figures/fig_sampling_greeks.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+[]|\T1/lmss/m/n/7 EQ_DOWN/UP_30,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+\T1/lmss/m/n/7 RATES_UP/DOWN_200,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+\T1/lmss/m/n/7 FLIGHT_TO_QUALITY,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+[]|\T1/lmss/m/n/7 HIST_EQUITY_CRASH,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+\T1/lmss/m/n/7 HIST_RATES_SPIKE,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+\T1/lmss/m/n/7 HIST_YEN_SURGE,
+
+Underfull \hbox (badness 10000) in paragraph at lines 709--709
+\T1/lmss/m/n/7 HIST_GFC_2008,
+
+Overfull \hbox (4.09628pt too wide) in paragraph at lines 709--709
+\T1/lmss/m/n/7 HIST_CHINA_DEVAL_2015| 
+
+Overfull \hbox (8.11943pt too wide) in paragraph at lines 709--709
+ [][] 
+[44 <./figures/fig33.pdf>] [45] [46 <./figures/fig_hist_scenarios.pdf>]
+[47 <./figures/fig34.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 772--772
+[]|\T1/lmss/m/n/5 DV01 ad-di-tiv-ity (new, par-instrument
+[48] [49] [50] [51] [52 <./figures/fig36.pdf>] [53 <./figures/fig_kva_compare.p
+df>] [54 <./figures/fig37.pdf>] [55] [56]
+Underfull \hbox (badness 10000) in paragraph at lines 913--913
+[]|\T1/lmss/m/n/5 Hull-White 1F (1-factor
+
+Underfull \hbox (badness 10000) in paragraph at lines 913--913
+[]|\T1/lmss/m/n/5 Hull-White 1F, ded-i-cated
+
+Underfull \hbox (badness 1888) in paragraph at lines 913--913
+[]|\T1/lmss/m/n/5 Rate DV01 at-tri-bu-
+
+Underfull \hbox (badness 10000) in paragraph at lines 913--913
+[]|\T1/lmss/m/n/5 Par-instrument Ja-co-bian
+[57] [58] [59] [60] [61] [62] (final_presentation.aux) )
+(see the transcript file for additional information)<C:/Users/ESHA/AppData/Loca
+l/Programs/MiKTeX/fonts/type1/public/lm/lmex10.pfb><C:/Users/ESHA/AppData/Local
+/Programs/MiKTeX/fonts/type1/public/lm/lmmi10.pfb><C:/Users/ESHA/AppData/Local/
+Programs/MiKTeX/fonts/type1/public/lm/lmmi5.pfb><C:/Users/ESHA/AppData/Local/Pr
+ograms/MiKTeX/fonts/type1/public/lm/lmmi7.pfb><C:/Users/ESHA/AppData/Local/Prog
+rams/MiKTeX/fonts/type1/public/lm/lmmi8.pfb><C:/Users/ESHA/AppData/Local/Progra
+ms/MiKTeX/fonts/type1/public/lm/lmss10.pfb><C:/Users/ESHA/AppData/Local/Program
+s/MiKTeX/fonts/type1/public/lm/lmss8.pfb><C:/Users/ESHA/AppData/Local/Programs/
+MiKTeX/fonts/type1/public/lm/lmssbx10.pfb><C:/Users/ESHA/AppData/Local/Programs
+/MiKTeX/fonts/type1/public/lm/lmsso10.pfb><C:/Users/ESHA/AppData/Local/Programs
+/MiKTeX/fonts/type1/public/lm/lmsso8.pfb><C:/Users/ESHA/AppData/Local/Programs/
+MiKTeX/fonts/type1/public/lm/lmsy5.pfb><C:/Users/ESHA/AppData/Local/Programs/Mi
+KTeX/fonts/type1/public/lm/lmsy7.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKT
+eX/fonts/type1/public/lm/lmsy8.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX
+/fonts/type1/public/lm/lmtk10.pfb>
+Output written on final_presentation.pdf (62 pages, 825217 bytes).
+Transcript written on final_presentation.log.
+pdflatex: major issue: So far, you have not checked for MiKTeX updates.

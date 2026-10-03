@@ -1,0 +1,166 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(methods_memo.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2025-12-24>
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\article.cls
+Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\size10.clo))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/base\inputenc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\lmodern.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\keyval.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.cfg))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphics.cf
+g)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex.def)
+)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.cfg)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.ltx))
+ (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/colortbl\colortbl.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/tools\array.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/graphics\dvipsnam.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/booktabs\booktabs.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/float\float.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/caption\caption3.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/enumitem\enumitem.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+For additional information on amsmath, use the `?' option.
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.sty))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/fancyhdr\fancyhdr.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/titlesec\titlesec.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype-pdft
+ex.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/microtype\microtype.cfg)
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hyperref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/kvdefinekeys\kvdefinek
+eys.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdfescape\pdfescape.st
+y (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.sty)
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/pdftexcmds\pdftexcmds.
+sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/infwarerr\infwarerr.st
+y))) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hycolor\hycolor.sty
+) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\nameref.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/refcount\refcount.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/gettitlestring\gettitl
+estring.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions.sty)
+))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/stringenc\stringenc.st
+y) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\pd1enc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/intcalc\intcalc.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\puenc.def)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/url\url.sty)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bitset\bitset.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/bigintcalc\bigintcalc.
+sty)))
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/hyperref\hpdftex.def
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/rerunfilecheck\rerunfile
+check.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/generic/uniquecounter\uniqueco
+unter.sty))) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmr.fd
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-pdft
+ex.def) (methods_memo.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/context/base/mkii\supp-pdf.mki
+i
+[Loading MPS to PDF converter (version 2006.09.02).]
+)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/epstopdf-pkg\epstopdf-ba
+se.sty
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/00miktex\epstopdf-sys.cf
+g)) (C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/microtype\mt-cmr.cfg
+) (methods_memo.out) (methods_memo.out)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\ot1lmr.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omllmm.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omslmsy.fd)
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\omxlmex.fd) [1{C:/Use
+rs/ESHA/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users/ESHA/AppData
+/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ec.enc}{C:/Users/ESHA/AppData/Loca
+l/Programs/MiKTeX/fonts/enc/dvips/lm/lm-mathit.enc}{C:/Users/ESHA/AppData/Local
+/Programs/MiKTeX/fonts/enc/dvips/lm/lm-rm.enc}{C:/Users/ESHA/AppData/Local/Prog
+rams/MiKTeX/fonts/enc/dvips/lm/lm-mathsy.enc}] [2 <./figures/fig19.pdf> <./figu
+res/fig16.pdf>]
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 137.
+
+
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `math shift' on input line 137.
+
+[3 <./figures/fig14.pdf>] [4 <./figures/fig21.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 201--201
+[]|\T1/lmr/bx/n/9 (+20) Est. time (8
+[5] [6 <./figures/fig_sampling_greeks.pdf>] [7 <./figures/fig_dv01_compare.pdf>
+]
+Underfull \hbox (badness 10000) in paragraph at lines 343--343
+[]|\T1/lmr/m/n/9 (+20) Discounted as-set paths
+
+Underfull \hbox (badness 1502) in paragraph at lines 343--343
+\T1/lmr/m/n/9 (+20) should av-er-age to to-day's
+
+Underfull \hbox (badness 10000) in paragraph at lines 344--344
+[]|\T1/lmr/m/n/9 (+20) Parametric VaR
+
+Underfull \hbox (badness 1874) in paragraph at lines 344--344
+[]|\T1/lmr/m/n/9 (+20) $11.4M vs. $11.7M (ra-tio
+
+Underfull \hbox (badness 10000) in paragraph at lines 345--345
+[]|\T1/lmr/m/n/9 (+20) Kupiec back-test
+
+Underfull \hbox (badness 5592) in paragraph at lines 345--345
+[]|\T1/lmr/m/n/9 (+20) Historical ex-ceedances vs.
+
+Underfull \hbox (badness 10000) in paragraph at lines 346--346
+[]|\T1/lmr/m/n/9 (+20) Excel para-met-ric
+[8 <./figures/fig33.pdf>]
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\t1lmtt.fd) [9]
+Underfull \hbox (badness 10000) in paragraph at lines 384--385
+[]|\T1/lmr/bx/n/9 (+20) Portfolio
+[10 <./figures/fig25.pdf>]
+(C:\Users\ESHA\AppData\Local\Programs\MiKTeX\tex/latex/lm\ts1lmr.fd) [11{C:/Use
+rs/ESHA/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-ts1.enc}]
+(methods_memo.aux) )
+(see the transcript file for additional information)<C:/Users/ESHA/AppData/Loca
+l/Programs/MiKTeX/fonts/type1/public/lm/lmbx10.pfb><C:/Users/ESHA/AppData/Local
+/Programs/MiKTeX/fonts/type1/public/lm/lmbx12.pfb><C:/Users/ESHA/AppData/Local/
+Programs/MiKTeX/fonts/type1/public/lm/lmbx9.pfb><C:/Users/ESHA/AppData/Local/Pr
+ograms/MiKTeX/fonts/type1/public/lm/lmmi10.pfb><C:/Users/ESHA/AppData/Local/Pro
+grams/MiKTeX/fonts/type1/public/lm/lmmi12.pfb><C:/Users/ESHA/AppData/Local/Prog
+rams/MiKTeX/fonts/type1/public/lm/lmmi9.pfb><C:/Users/ESHA/AppData/Local/Progra
+ms/MiKTeX/fonts/type1/public/lm/lmr10.pfb><C:/Users/ESHA/AppData/Local/Programs
+/MiKTeX/fonts/type1/public/lm/lmr12.pfb><C:/Users/ESHA/AppData/Local/Programs/M
+iKTeX/fonts/type1/public/lm/lmr6.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKT
+eX/fonts/type1/public/lm/lmr7.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/
+fonts/type1/public/lm/lmr9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fon
+ts/type1/public/lm/lmri10.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/font
+s/type1/public/lm/lmri9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/
+type1/public/lm/lmsy10.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/t
+ype1/public/lm/lmsy6.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/typ
+e1/public/lm/lmsy7.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/type1
+/public/lm/lmsy9.pfb><C:/Users/ESHA/AppData/Local/Programs/MiKTeX/fonts/type1/p
+ublic/lm/lmtt10.pfb>
+Output written on methods_memo.pdf (11 pages, 597164 bytes).
+Transcript written on methods_memo.log.
+pdflatex: major issue: So far, you have not checked for MiKTeX updates.

@@ -43,7 +43,7 @@
 {\Large Short-form report: methods, decisions and results for the ESF derivatives book\par}
 \vspace{0.6em}
 {\color{navy}\rule{\linewidth}{1.2pt}}\\[2em]
-{\large Prepared for Capitolis \textbar{} Berkeley MFE Industry Project\par}
+{\large Prepared for Capitolis \textbar{} Berkeley MFE Industry Project \textbar{} github.com/eshapandya24/capitolis-risk-engine\par}
 \vspace{0.4em}
 {\normalsize Valuation date 2026-08-28 \textbar{} October 2026\par}
 \end{titlepage}
@@ -173,7 +173,7 @@ JGB par yields 1Y-40Y & Japan Ministry of Finance, daily from 1974 & JPY mean-re
 \bottomrule
 \end{longtable}}
 
-\textbf{Data timestamps.} The USD curve (SOFR futures settlement of 2026-08-28), the volatilities, correlations, calibrations and every historical series are as of the 2026-08-28 valuation date. Equity and USDJPY spot prices are the last prices available when each run was executed (2026-09-23 to 2026-09-27, as retrieved from yfinance), not the 2026-08-28 closes. The exposure results are therefore conditional on that spot snapshot, and runs executed on different days differ slightly in their t = 0 marks (for example the book NPV of Section 9.2 differs from Section 7.4 by \$2,634, 0.002\% of the portfolio NPV, because the USDJPY snapshot moved by about 0.006\% between the headline run and the Greeks run). A re-run on date-pinned closes is listed under the open items of Section 15.
+\textbf{Data timestamps.} The USD curve (SOFR futures settlement of 2026-08-28), the volatilities, correlations, calibrations and every historical series are as of the 2026-08-28 valuation date. Equity and USDJPY spot prices are the last prices available when each run was executed (2026-09-23 to 2026-09-27, as retrieved from yfinance), not the 2026-08-28 closes. The exposure results are therefore conditional on that spot snapshot, and runs executed on different days differ slightly in their t = 0 marks (for example the book NPV of Section 9.2 differs from Section 7.4 by \$2,634, 0.002\% of the portfolio NPV, because the USDJPY snapshot moved by about 0.006\% between the headline run and the Greeks run). A re-run on date-pinned closes is listed under future scope in Section 15.
 
 \subsection{The USD curve}
 Databento provides the futures, not a ready OIS curve, so we build one: each 3-month SOFR future price gives an implied forward rate (100 - price) for its reference quarter; chaining consecutive quarters multiplies discount factors. The futures end about 6.5 years out. Beyond the last contract the curve follows the forward structure of the Bloomberg USD SOFR zero curve (below); a flat extrapolation was rejected after it was found to understate the long-dated bond forward (defect 10, Section 12). Two real bugs in the futures bootstrap were found by cross-checking with the Treasury curve (Section 12). The curve is the starting point of the Hull-White model and the discount curve at t=0.
@@ -1669,10 +1669,10 @@ Each defect was identified by checking against an independent source, a hand cal
 \item Backtest: the 99\% quantiles of the equity and FX leg are close to calibrated (CPTY\_B slightly light-tailed), and the long-end yield-vol calibration is more stable than the overnight-SOFR one (Section 11.7).
 \item We recommend confirming with Capitolis whether any trade is margined, and on what terms; that fact matters more than any further modelling refinement.
 \item Use Latin Hypercube sampling with N = 5,000 for reporting, N = 1,000 for iteration and N = 10,000 for limit sign-off (Section 5.5).
-\item What remains is data and scope, not engineering: real counterparty ratings or CDS, CSA terms, wrong-way risk, and the items in Section 15.
+\item The future scope is data and decisions rather than engineering: real counterparty ratings or CDS, CSA terms, wrong-way risk, and the items in Section 15.
 \end{itemize}
-\section{Remaining work and open questions}
-Everything in the plan that could be completed with the data and information available has been done and is reported above. What remains depends on information Capitolis holds, or is a longer-term refinement. It is listed here with what is needed, so that Capitolis can decide which to take forward.
+\section{Future scope and open questions}
+Everything in the plan that could be completed with the data and information available has been done and is reported above. The future scope below depends on information Capitolis holds, or is a longer-term refinement; each item is listed with what is needed to take it forward.
 
 {\scriptsize\setlength{\LTpre}{4pt}\setlength{\LTpost}{6pt}
 \begin{longtable}{>{\raggedright\arraybackslash}p{\dimexpr 0.3077\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.4615\linewidth-2\tabcolsep\relax}>{\raggedright\arraybackslash}p{\dimexpr 0.2308\linewidth-2\tabcolsep\relax}}
@@ -1772,6 +1772,8 @@ scripts/ & run\_simulation, run\_mpor\_comparison, run\_sa\_cva, generate\_repor
 \end{longtable}}
 
 \section{Reproducing the results}
+Source code, data lineage and all scripts: \texttt{https://github.com/eshapandya24/capitolis-risk-engine} (branch data-collection).
+
 {\fontsize{7.2}{8.8}\selectfont
 \begin{verbatim}
 python scripts/generate_report_data.py --scenarios 3000   # ~15 min: simulation, arrays for figures
